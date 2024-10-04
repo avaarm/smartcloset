@@ -1,34 +1,55 @@
-// components/ AddItem.js
-import React, {useState} from 'react';
-import {View, Button, Image, Text} from 'react-native';
-import { launchImageLibrary, launchImagelibrary} from 'react-native-image-picker';
+import React, { useState } from 'react';
+import { View, Text, TextInput, Button, StyleSheet } from 'react-native';
 
 const AddItem = () => {
-    const [photo, setPhoto] = useState[null];
+  // State to hold the new item
+  const [item, setItem] = useState('');
 
-    const handleChoosePhoto = () => {
-        launchImageLibrary({}, response => {
-            if (response.assets && response.assets.length >0) {
-                setPhoto(response.assets[0]);
-            }
-        });
-    };
+  // Function to handle adding item
+  const handleAddItem = () => {
+    if (item.trim()) {
+      console.log('Item added:', item);
+      // Reset input field after adding the item
+      setItem('');
+    } else {
+      console.log('Item cannot be empty');
+    }
+  };
 
-    return (
-        <View style={{ flex:1, justifyContent: 'center', alignItems: 'center'}}>
-            <Button title='Choose Photo' onPress={handleChoosePhoto}/>
-            {photo && (
-                <> 
-                <Image 
-                source={{ uri:photo.uri}}
-                style={{ width:200, height: 200, marginTop: 10}}
-                />
-                <Text>{photo.fileName}</Text>
-                </>
-            )}
-        </View>
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Add New Item</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Enter item name"
+        value={item}
+        onChangeText={setItem} // Updates the state when text changes
+      />
+      <Button title="Add Item" onPress={handleAddItem} />
+    </View>
+  );
+};
 
-    )
-}
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  input: {
+    width: '100%',
+    padding: 10,
+    borderColor: 'gray',
+    borderWidth: 1,
+    marginBottom: 20,
+    borderRadius: 5,
+  },
+});
 
 export default AddItem;
