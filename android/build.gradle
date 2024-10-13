@@ -7,6 +7,12 @@ buildscript {
         ndkVersion = "26.1.10909125"
         kotlinVersion = "1.9.24"
     }
+        // Other configurations...
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(8) // Use the appropriate JDK version
+        }
+    }
     repositories {
         google()
         mavenCentral()
