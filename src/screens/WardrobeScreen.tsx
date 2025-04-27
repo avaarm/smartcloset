@@ -1,11 +1,28 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, Text } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, FlatList, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { ClothingItem, ClothingCategory, Season } from '../types';
 import ClothingCard from '../components/ClothingCard';
+import { getWardrobeItems, saveWardrobeItems } from '../utils/storage';
 
 const WardrobeScreen = () => {
   const [items, setItems] = useState<ClothingItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadWardrobeItems();
+  }, []);
+
+  const loadWardrobeItems = async () => {
+    try {
+      const savedItems = await getWardrobeItems();
+      setItems(savedItems);
+    } catch (error) {
+      console.error('Error loading wardrobe items:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAddItem = async () => {
     const result = await launchImageLibrary({
@@ -25,9 +42,19 @@ const WardrobeScreen = () => {
         isWishlist: false,
       };
 
-      setItems([...items, newItem]);
+      const updatedItems = [...items, newItem];
+      setItems(updatedItems);
+      await saveWardrobeItems(updatedItems);
     }
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color="#6200ee" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -37,6 +64,11 @@ const WardrobeScreen = () => {
         keyExtractor={item => item.id}
         numColumns={2}
         contentContainerStyle={styles.grid}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>No items in your wardrobe yet</Text>
+          </View>
+        }
       />
       <TouchableOpacity style={styles.addButton} onPress={handleAddItem}>
         <Text style={styles.addButtonText}>Add Item</Text>
@@ -49,8 +81,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   grid: {
     padding: 8,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    marginTop: 50,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
   },
   addButton: {
     position: 'absolute',
