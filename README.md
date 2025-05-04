@@ -1,6 +1,25 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# SmartCloset
 
-# Getting Started
+A React Native mobile application that helps you manage your wardrobe, create outfits, and make mindful fashion choices. Built with React Native and TypeScript for iOS and Android platforms.
+
+## Features
+
+- 📸 Clothing Inventory Management
+  - Add items with retailer images
+  - Upload your own photos
+  - Organize by categories
+- 👔 Outfit Suggestion System
+  - Get personalized outfit recommendations
+  - Mix and match from your existing wardrobe
+- 💭 Wishlist Management
+  - Track potential purchases
+  - Make informed buying decisions
+- 🌟 Smart Features
+  - Reduce overpurchasing
+  - Track wear frequency
+  - Organize by seasons and occasions
+
+## Getting Started
 
 >**Note**: Make sure you have completed the [React Native - Environment Setup](https://reactnative.dev/docs/environment-setup) instructions till "Creating a new application" step, before proceeding.
 
@@ -46,9 +65,59 @@ If everything is set up _correctly_, you should see your new app running in your
 
 This is one way to run your app — you can also run it directly from within Android Studio and Xcode respectively.
 
-## Step 3: Modifying your App
+## Project Structure
 
-Now that you have successfully run the app, let's modify it.
+```
+smartcloset/
+├── src/               # Source files
+│   ├── components/    # Reusable UI components
+│   ├── screens/      # Screen components
+│   ├── navigation/   # Navigation configuration
+│   ├── services/     # API and business logic
+│   └── utils/        # Helper functions and utilities
+├── ios/              # iOS native code
+├── android/          # Android native code
+└── __tests__/        # Test files
+```
+
+## Development
+
+### Prerequisites
+
+- Node.js >= 14
+- npm or yarn
+- iOS: XCode and CocoaPods
+- Android: Android Studio and SDK
+
+### Environment Setup
+
+1. Install dependencies:
+   ```bash
+   npm install
+   # or
+   yarn install
+   ```
+
+2. iOS specific setup:
+   ```bash
+   cd ios && pod install && cd ..
+   ```
+
+### Running in Development
+
+Follow the steps in the 'Getting Started' section above to run the app in development mode.
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 1. Open `App.tsx` in your text editor of choice and edit some lines.
 2. For **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Developer Menu** (<kbd>Ctrl</kbd> + <kbd>M</kbd> (on Window and Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (on macOS)) to see your changes!
