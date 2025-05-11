@@ -1,9 +1,33 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { View, StyleSheet, FlatList, TouchableOpacity, Text } from 'react-native';
 import ClothingItem from '../components/ClothingItem';
-import { sampleClothes, ClothingItem as ClothingItemType } from '../data/sampleClothes';
+import { ClothingItem as ClothingItemType } from '../data/sampleClothes';
+import { getClothingItems } from '../services/storage';
 
-const WardrobeScreen = ({ navigation }) => {
+type WardrobeScreenProps = {
+  navigation: NativeStackNavigationProp<any, 'WardrobeMain'>;
+};
+
+const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
+  const [clothes, setClothes] = useState<ClothingItemType[]>([]);
+
+  useEffect(() => {
+    const loadClothes = async () => {
+      const items = await getClothingItems();
+      setClothes(items);
+    };
+    loadClothes();
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', async () => {
+      const items = await getClothingItems();
+      setClothes(items);
+    });
+
+    return unsubscribe;
+  }, [navigation]);
   const renderItem = ({ item }: { item: ClothingItemType }) => (
     <ClothingItem item={item} />
   );
@@ -11,7 +35,7 @@ const WardrobeScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <FlatList
-        data={sampleClothes}
+        data={clothes}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         numColumns={2}
