@@ -1237,7 +1237,7 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
-  - react-native-image-picker (7.1.2):
+  - react-native-image-picker (7.2.3):
     - DoubleConversion
     - glog
     - hermes-engine
@@ -1522,6 +1522,8 @@ PODS:
     - React-utils (= 0.75.3)
   - RNCAsyncStorage (2.1.2):
     - React-Core
+  - RNCPicker (2.11.0):
+    - React-Core
   - RNScreens (4.10.0):
     - DoubleConversion
     - glog
@@ -1538,6 +1540,27 @@ PODS:
     - React-NativeModulesApple
     - React-RCTFabric
     - React-RCTImage
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - Yoga
+  - RNVectorIcons (10.2.0):
+    - DoubleConversion
+    - glog
+    - hermes-engine
+    - RCT-Folly (= 2024.01.01.00)
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-NativeModulesApple
+    - React-RCTFabric
     - React-rendererdebug
     - React-utils
     - ReactCodegen
@@ -1614,7 +1637,9 @@ DEPENDENCIES:
   - ReactCodegen (from `build/generated/ios`)
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
   - "RNCAsyncStorage (from `../node_modules/@react-native-async-storage/async-storage`)"
+  - "RNCPicker (from `../node_modules/@react-native-picker/picker`)"
   - RNScreens (from `../node_modules/react-native-screens`)
+  - RNVectorIcons (from `../node_modules/react-native-vector-icons`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
 SPEC REPOS:
@@ -1751,8 +1776,12 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon"
   RNCAsyncStorage:
     :path: "../node_modules/@react-native-async-storage/async-storage"
+  RNCPicker:
+    :path: "../node_modules/@react-native-picker/picker"
   RNScreens:
     :path: "../node_modules/react-native-screens"
+  RNVectorIcons:
+    :path: "../node_modules/react-native-vector-icons"
   Yoga:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
@@ -1792,7 +1821,7 @@ SPEC CHECKSUMS:
   React-logger: 7e56c9eceafd7f45e98c16cb42ff3c9966c67119
   React-Mapbuffer: e68dd904f0f3a84dd35989288ed3bcf5e37f9737
   React-microtasksnativemodule: ca8806e64625be04b8f3d9f31f66508d02c42555
-  react-native-image-picker: bbb75c48aa8514be4659cafd6df65932556bee13
+  react-native-image-picker: 130fad649d07e4eec8faaed361d3bba570e1e5ff
   react-native-safe-area-context: 9d72abf6d8473da73033b597090a80b709c0b2f1
   React-nativeconfig: 4a9543185905fe41014c06776bf126083795aed9
   React-NativeModulesApple: f6b6dc0998c945dd113858f1fc12e5e5f0da0990
@@ -1821,7 +1850,9 @@ SPEC CHECKSUMS:
   ReactCodegen: 3d11bcf0cac47a77042a3476a1c2f7058bfd6880
   ReactCommon: c65f7049a542669dcc7bff6b7a8071a039c7d0dd
   RNCAsyncStorage: b9f5f78da5d16a853fe3dc22e8268d932fc45a83
+  RNCPicker: 124b4fb5859ba1a3fd53a91e16d1e7a0fc016e59
   RNScreens: 578cbc135e908cfc3e4739ce12a42fdb1d798ca6
+  RNVectorIcons: 182892e7d1a2f27b52d3c627eca5d2665a22ee28
   SocketRocket: abac6f5de4d4d62d24e11868d7a2f427e0ef940d
   Yoga: 4ef80d96a5534f0e01b3055f17d1e19a9fc61b63
 
