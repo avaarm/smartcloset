@@ -1,77 +1,27 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
-import { launchImageLibrary } from 'react-native-image-picker';
-import { ClothingItem, ClothingCategory, Season } from '../types';
-import ClothingCard from '../components/ClothingCard';
-import { getWardrobeItems, saveWardrobeItems } from '../utils/storage';
+import React from 'react';
+import { View, StyleSheet, FlatList, TouchableOpacity, Text } from 'react-native';
+import ClothingItem from '../components/ClothingItem';
+import { sampleClothes, ClothingItem as ClothingItemType } from '../data/sampleClothes';
 
-const WardrobeScreen = () => {
-  const [items, setItems] = useState<ClothingItem[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadWardrobeItems();
-  }, []);
-
-  const loadWardrobeItems = async () => {
-    try {
-      const savedItems = await getWardrobeItems();
-      setItems(savedItems);
-    } catch (error) {
-      console.error('Error loading wardrobe items:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAddItem = async () => {
-    const result = await launchImageLibrary({
-      mediaType: 'photo',
-      quality: 0.8,
-    });
-
-    if (result.assets && result.assets[0]) {
-      const newItem: ClothingItem = {
-        id: Date.now().toString(),
-        name: 'New Item',
-        category: ClothingCategory.TOPS,
-        userImage: result.assets[0].uri,
-        color: 'black', // Default value, will be editable
-        season: [Season.SPRING], // Default value, will be editable
-        dateAdded: new Date().toISOString(),
-        isWishlist: false,
-      };
-
-      const updatedItems = [...items, newItem];
-      setItems(updatedItems);
-      await saveWardrobeItems(updatedItems);
-    }
-  };
-
-  if (loading) {
-    return (
-      <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color="#6200ee" />
-      </View>
-    );
-  }
+const WardrobeScreen = ({ navigation }) => {
+  const renderItem = ({ item }: { item: ClothingItemType }) => (
+    <ClothingItem item={item} />
+  );
 
   return (
     <View style={styles.container}>
       <FlatList
-        data={items}
-        renderItem={({ item }) => <ClothingCard item={item} />}
-        keyExtractor={item => item.id}
+        data={sampleClothes}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id}
         numColumns={2}
-        contentContainerStyle={styles.grid}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No items in your wardrobe yet</Text>
-          </View>
-        }
+        contentContainerStyle={styles.listContent}
       />
-      <TouchableOpacity style={styles.addButton} onPress={handleAddItem}>
-        <Text style={styles.addButtonText}>Add Item</Text>
+      <TouchableOpacity 
+        style={styles.addButton}
+        onPress={() => navigation.navigate('AddClothing')}
+      >
+        <Text style={styles.addButtonText}>+</Text>
       </TouchableOpacity>
     </View>
   );
@@ -80,34 +30,22 @@ const WardrobeScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f5f5f5',
   },
-  centered: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  grid: {
+  listContent: {
     padding: 8,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    marginTop: 50,
-  },
-  emptyStateText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
   },
   addButton: {
     position: 'absolute',
-    bottom: 20,
     right: 20,
-    backgroundColor: '#6200ee',
-    padding: 16,
+    bottom: 20,
+    width: 60,
+    height: 60,
     borderRadius: 30,
-    elevation: 4,
+    backgroundColor: '#6200ee',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -115,7 +53,8 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     color: 'white',
-    fontWeight: '600',
+    fontSize: 32,
+    fontWeight: '300',
   },
 });
 
