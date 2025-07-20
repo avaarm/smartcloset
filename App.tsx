@@ -34,31 +34,39 @@ const App = (): React.JSX.Element => {
     <NavigationContainer>
       <Tab.Navigator
         screenOptions={{
-          tabBarActiveTintColor: '#007AFF',
-          tabBarInactiveTintColor: '#8E8E93',
+          tabBarActiveTintColor: '#FF385C',
+          tabBarInactiveTintColor: '#9CA3AF',
           tabBarStyle: {
             height: Platform.OS === 'ios' ? 88 : 60,
             paddingBottom: Platform.OS === 'ios' ? 30 : 8,
             paddingTop: 8,
             backgroundColor: '#ffffff',
-            borderTopWidth: 0.5,
-            borderTopColor: '#C5C5C7',
+            borderTopWidth: 0,
+            elevation: 10,
+            shadowColor: 'rgba(0, 0, 0, 0.1)',
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 8,
           },
           tabBarLabelStyle: {
-            fontSize: 11,
+            fontSize: 12,
             fontWeight: '500',
+            marginBottom: 4,
           },
           headerStyle: {
-            backgroundColor: '#f8f8f8',
-            shadowColor: '#000000',
-            shadowOffset: { width: 0, height: 0.5 },
-            shadowOpacity: 0.15,
-            shadowRadius: 0,
+            backgroundColor: '#FFFFFF',
+            shadowColor: 'rgba(0, 0, 0, 0.05)',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.25,
+            shadowRadius: 4,
+            elevation: 2,
+            borderBottomWidth: 0,
           },
-          headerTintColor: '#007AFF',
+          headerTintColor: '#111827',
           headerTitleStyle: {
-            fontSize: 17,
+            fontSize: 18,
             fontWeight: '600',
+            color: '#111827',
           },
         }}
       >

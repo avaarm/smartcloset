@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Platform, ScrollView, ActivityIndicator } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useCallback } from 'react';
 import * as ImagePicker from 'react-native-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { saveClothingItem } from '../services/storage';
-import { ClothingCategory, Season } from '../types/clothing';
+import { ClothingCategory, Season, Occasion } from '../types/clothing';
+import { analyzeClothingImage, isConfidentPrediction, RecognitionResult } from '../services/imageRecognition';
 
 type AddClothingScreenProps = {
   navigation: NativeStackNavigationProp<any, 'AddClothing'>;
@@ -20,6 +21,11 @@ const AddClothingScreen = ({ navigation }: AddClothingScreenProps) => {
   const [imageUri, setImageUri] = useState('');
   const [color, setColor] = useState('');
   const [season, setSeason] = useState<Season | null>(null);
+  const [occasion, setOccasion] = useState<Occasion | null>(null);
+  
+  // AI recognition states
+  const [analyzing, setAnalyzing] = useState(false);
+  const [recognitionResult, setRecognitionResult] = useState<RecognitionResult | null>(null);
 
   const onCategoryChange = useCallback((value: ClothingCategory) => {
     setCategory(value);
@@ -38,9 +44,36 @@ const AddClothingScreen = ({ navigation }: AddClothingScreenProps) => {
         return;
       }
       if (response.assets && response.assets[0].uri) {
-        setImageUri(response.assets[0].uri);
+        const uri = response.assets[0].uri;
+        setImageUri(uri);
+        analyzeImage(uri);
       }
     });
+  };
+  
+  const analyzeImage = async (uri: string) => {
+    setAnalyzing(true);
+    try {
+      const result = await analyzeClothingImage(uri);
+      setRecognitionResult(result);
+      
+      // Autofill fields based on confident predictions
+      if (result.category && isConfidentPrediction(result, 'category')) {
+        setCategory(result.category);
+      }
+      
+      if (result.brand && isConfidentPrediction(result, 'brand')) {
+        setBrand(result.brand);
+      }
+      
+      if (result.occasion && isConfidentPrediction(result, 'occasion')) {
+        setOccasion(result.occasion as Occasion);
+      }
+    } catch (error) {
+      console.error('Error analyzing image:', error);
+    } finally {
+      setAnalyzing(false);
+    }
   };
 
   const handleSave = async () => {
@@ -57,7 +90,8 @@ const AddClothingScreen = ({ navigation }: AddClothingScreenProps) => {
         brand,
         imageUrl: imageUri,
         color,
-        season: season || undefined
+        season: season || undefined,
+        occasion: occasion || undefined
       });
       navigation.goBack();
     } catch (error) {
@@ -70,13 +104,22 @@ const AddClothingScreen = ({ navigation }: AddClothingScreenProps) => {
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <Text style={styles.sectionHeader}>Photo</Text>
-        <TouchableOpacity style={styles.imageContainer} onPress={pickImage}>
+        <TouchableOpacity style={styles.imageContainer} onPress={pickImage} disabled={analyzing}>
           {imageUri ? (
-            <Image source={{ uri: imageUri }} style={styles.image} />
+            <View style={{width: '100%', height: '100%'}}>
+              <Image source={{ uri: imageUri }} style={styles.image} />
+              {analyzing && (
+                <View style={styles.analyzeOverlay}>
+                  <ActivityIndicator size="large" color="#FFFFFF" />
+                  <Text style={styles.analyzeText}>Analyzing image...</Text>
+                </View>
+              )}
+            </View>
           ) : (
             <View style={styles.placeholder}>
               <Icon name="camera-outline" size={40} color="#007AFF" />
               <Text style={styles.placeholderText}>Add Photo</Text>
+              <Text style={styles.aiHintText}>AI will analyze your photo</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -134,6 +177,47 @@ const AddClothingScreen = ({ navigation }: AddClothingScreenProps) => {
             <Picker.Item label="Winter" value="winter" />
           </Picker>
         </View>
+        
+        <Text style={[styles.sectionHeader, { marginTop: 8 }]}>Occasion</Text>
+        <View style={styles.pickerContainer}>
+          <Picker
+            selectedValue={occasion || undefined}
+            onValueChange={(value) => setOccasion(value)}
+            style={styles.picker}
+          >
+            <Picker.Item label="Select Occasion" value={null} />
+            <Picker.Item label="Casual" value="casual" />
+            <Picker.Item label="Formal" value="formal" />
+            <Picker.Item label="Business" value="business" />
+            <Picker.Item label="Sports" value="sports" />
+            <Picker.Item label="Party" value="party" />
+            <Picker.Item label="Everyday" value="everyday" />
+          </Picker>
+        </View>
+        
+        {recognitionResult && (
+          <View style={styles.aiSuggestionContainer}>
+            <Text style={styles.aiSuggestionTitle}>AI Suggestions</Text>
+            {recognitionResult.category && (
+              <Text style={styles.aiSuggestion}>
+                Category: {recognitionResult.category} 
+                ({Math.round((recognitionResult.confidence.category || 0) * 100)}% confidence)
+              </Text>
+            )}
+            {recognitionResult.brand && (
+              <Text style={styles.aiSuggestion}>
+                Brand: {recognitionResult.brand} 
+                ({Math.round((recognitionResult.confidence.brand || 0) * 100)}% confidence)
+              </Text>
+            )}
+            {recognitionResult.occasion && (
+              <Text style={styles.aiSuggestion}>
+                Occasion: {recognitionResult.occasion} 
+                ({Math.round((recognitionResult.confidence.occasion || 0) * 100)}% confidence)
+              </Text>
+            )}
+          </View>
+        )}
 
         <TouchableOpacity 
           style={styles.saveButton}
@@ -231,6 +315,47 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 17,
     fontWeight: '600',
+  },
+  analyzeOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  analyzeText: {
+    color: '#FFFFFF',
+    marginTop: 10,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  aiHintText: {
+    fontSize: 12,
+    color: '#007AFF',
+    marginTop: 4,
+  },
+  aiSuggestionContainer: {
+    backgroundColor: '#F0F8FF',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 16,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
+  },
+  aiSuggestionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  aiSuggestion: {
+    fontSize: 14,
+    color: '#555',
+    marginBottom: 4,
   },
 });
 
