@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Ionicons';
+import HomeScreen from './src/screens/HomeScreen';
 import WardrobeScreen from './src/screens/WardrobeScreen';
 import OutfitScreen from './src/screens/OutfitScreen';
 import WishlistScreen from './src/screens/WishlistScreen';
@@ -70,6 +71,18 @@ const App = (): React.JSX.Element => {
           },
         }}
       >
+        <Tab.Screen 
+          name="Home" 
+          component={HomeScreen}
+          options={{
+            title: 'Home',
+            tabBarLabel: 'Home',
+            headerShown: false,
+            tabBarIcon: ({ color, size }) => (
+              <Icon name="home-outline" size={24} color={color} />
+            )
+          }}
+        />
         <Tab.Screen 
           name="Wardrobe" 
           component={WardrobeStack}
