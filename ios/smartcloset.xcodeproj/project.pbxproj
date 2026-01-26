@@ -405,6 +405,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = smartcloset/Info.plist;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -431,6 +432,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = smartcloset/Info.plist;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -523,10 +525,11 @@
 				);
 				OTHER_LDFLAGS = (
 					"$(inherited)",
-					" ",
+					"-ObjC",
 				);
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
 				USE_HERMES = true;
 			};
@@ -599,10 +602,11 @@
 				);
 				OTHER_LDFLAGS = (
 					"$(inherited)",
-					" ",
+					"-ObjC",
 				);
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				USE_HERMES = true;
 				VALIDATE_PRODUCT = YES;
 			};

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -8,7 +8,15 @@ import WardrobeScreen from './src/screens/WardrobeScreen';
 import OutfitScreen from './src/screens/OutfitScreen';
 import WishlistScreen from './src/screens/WishlistScreen';
 import AddClothingScreen from './src/screens/AddClothingScreen';
-import { StatusBar, Platform } from 'react-native';
+import ItemDetailsScreen from './src/screens/ItemDetailsScreen';
+import CreateOutfitScreen from './src/screens/CreateOutfitScreen';
+import OutfitDetailsScreen from './src/screens/OutfitDetailsScreen';
+import ManualOutfitBuilderScreen from './src/screens/ManualOutfitBuilderScreen';
+import OutfitAnalyticsScreen from './src/screens/OutfitAnalyticsScreen';
+import SplashScreen from './src/components/SplashScreen';
+import { StatusBar, Platform, ActivityIndicator, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import SignInScreen from './src/screens/SignInScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -26,11 +34,126 @@ const WardrobeStack = () => {
         component={AddClothingScreen}
         options={{ title: 'Add New Item' }}
       />
+      <Stack.Screen 
+        name="ItemDetails" 
+        component={ItemDetailsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="CreateOutfit" 
+        component={CreateOutfitScreen}
+        options={{ headerShown: false }}
+      />
+    </Stack.Navigator>
+  );
+};
+
+const HomeStack = () => {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen 
+        name="HomeMain" 
+        component={HomeScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="ItemDetails" 
+        component={ItemDetailsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="CreateOutfit" 
+        component={CreateOutfitScreen}
+        options={{ headerShown: false }}
+      />
+    </Stack.Navigator>
+  );
+};
+
+const OutfitStack = () => {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen 
+        name="OutfitMain" 
+        component={OutfitScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="OutfitDetails" 
+        component={OutfitDetailsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="ManualOutfitBuilder" 
+        component={ManualOutfitBuilderScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="OutfitAnalytics" 
+        component={OutfitAnalyticsScreen}
+        options={{ headerShown: false }}
+      />
     </Stack.Navigator>
   );
 };
 
 const App = (): React.JSX.Element => {
+  const [showSplash, setShowSplash] = useState(true);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isSignedIn, setIsSignedIn] = useState(false);
+
+  const loadAuthState = async () => {
+    try {
+      const storedFlag = await AsyncStorage.getItem('smartcloset_hasSignedIn');
+      setIsSignedIn(storedFlag === 'true');
+    } catch (error) {
+      console.warn('Failed to load auth state', error);
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  const handleSplashComplete = () => {
+    setShowSplash(false);
+    loadAuthState();
+  };
+
+  const handleAccountSignIn = async () => {
+    try {
+      await AsyncStorage.setItem('smartcloset_hasSignedIn', 'true');
+      setIsSignedIn(true);
+    } catch (error) {
+      console.warn('Failed to persist auth state', error);
+      setIsSignedIn(true);
+    }
+  };
+
+  const handleGuestContinue = () => {
+    // Unlock app for this session only; do not persist flag
+    setIsSignedIn(true);
+  };
+
+  if (showSplash) {
+    return <SplashScreen onAnimationComplete={handleSplashComplete} />;
+  }
+
+  if (isAuthLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#D4A5A5" />
+      </View>
+    );
+  }
+
+  if (!isSignedIn) {
+    return (
+      <SignInScreen
+        onAccountSignIn={handleAccountSignIn}
+        onGuestContinue={handleGuestContinue}
+      />
+    );
+  }
+
   return (
     <NavigationContainer>
       <Tab.Navigator
@@ -73,7 +196,7 @@ const App = (): React.JSX.Element => {
       >
         <Tab.Screen 
           name="Home" 
-          component={HomeScreen}
+          component={HomeStack}
           options={{
             title: 'Home',
             tabBarLabel: 'Home',
@@ -96,10 +219,11 @@ const App = (): React.JSX.Element => {
         />
         <Tab.Screen 
           name="Outfits" 
-          component={OutfitScreen}
+          component={OutfitStack}
           options={{
             title: 'Outfit Suggestions',
             tabBarLabel: 'Outfits',
+            headerShown: false,
             tabBarIcon: ({ color, size }) => (
               <Icon name="albums-outline" size={24} color={color} />
             )

@@ -1,20 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Image,
   FlatList,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Ionicons';
 import LinearGradient from 'react-native-linear-gradient';
-import WeatherWidget from '../components/WeatherWidget';
+import StyleWidget from '../components/StyleWidget';
 import { ClothingItem } from '../types';
+import theme from '../styles/theme';
 
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -24,6 +25,19 @@ const HomeScreen: React.FC = () => {
     totalItems: 0,
     outfits: 0,
     wishlist: 0,
+  });
+  
+  // Animation values
+  const scrollY = new Animated.Value(0);
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, 100],
+    outputRange: [1, 0.8],
+    extrapolate: 'clamp',
+  });
+  const headerTranslate = scrollY.interpolate({
+    inputRange: [0, 100],
+    outputRange: [0, -10],
+    extrapolate: 'clamp',
   });
 
   useEffect(() => {
@@ -73,8 +87,7 @@ const HomeScreen: React.FC = () => {
   };
 
   const handleItemPress = (item: ClothingItem) => {
-    // Navigate to item details (this would need to be implemented)
-    // navigation.navigate('ItemDetails', { item });
+    (navigation as any).navigate('ItemDetails', { item });
   };
 
   const renderFeatureCard = (
@@ -85,15 +98,12 @@ const HomeScreen: React.FC = () => {
   ) => {
     return (
       <TouchableOpacity style={styles.featureCardContainer} onPress={onPress}>
-        <LinearGradient
-          colors={colors}
-          style={styles.featureCard}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <Icon name={icon} size={28} color="#FFFFFF" />
+        <View style={styles.featureCard}>
+          <View style={styles.featureIconContainer}>
+            <Icon name={icon} size={24} color={theme.colors.mediumGray} />
+          </View>
           <Text style={styles.featureCardTitle}>{title}</Text>
-        </LinearGradient>
+        </View>
       </TouchableOpacity>
     );
   };
@@ -105,7 +115,7 @@ const HomeScreen: React.FC = () => {
         onPress={() => handleItemPress(item)}
       >
         <Image
-          source={{ uri: item.imageUri || item.userImage }}
+          source={{ uri: item.retailerImage || item.userImage || 'https://via.placeholder.com/100x120' }}
           style={styles.recentItemImage}
           resizeMode="cover"
         />
@@ -124,15 +134,48 @@ const HomeScreen: React.FC = () => {
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.header}>
-        <Text style={styles.greeting}>{getGreeting()}</Text>
-        <Text style={styles.tagline}>What will you wear today?</Text>
-      </View>
+    <Animated.ScrollView 
+      style={styles.container} 
+      showsVerticalScrollIndicator={false}
+      onScroll={Animated.event(
+        [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+        { useNativeDriver: true }
+      )}
+      scrollEventThrottle={16}
+    >
+      <Animated.View 
+        style={[
+          styles.header,
+          { 
+            opacity: headerOpacity,
+            transform: [{ translateY: headerTranslate }] 
+          }
+        ]}
+      >
+        <View style={styles.headerTopRow}>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.greeting}>{getGreeting()}</Text>
+            <Text style={styles.tagline}>What will you wear today?</Text>
+          </View>
+          <TouchableOpacity style={styles.authButton} onPress={() => {}}>
+            <Text style={styles.authButtonText}>Sign in / Sign up</Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
 
-      <WeatherWidget onOutfitSuggestionPress={handleOutfitSuggestionPress} />
+      <StyleWidget onOutfitSuggestionPress={handleOutfitSuggestionPress} />
 
-      <View style={styles.statsContainer}>
+      <Animated.View 
+        style={[styles.statsContainer, {
+          transform: [{
+            translateY: scrollY.interpolate({
+              inputRange: [0, 100, 200],
+              outputRange: [0, -5, -10],
+              extrapolate: 'clamp'
+            })
+          }]
+        }]}
+      >
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{stats.totalItems}</Text>
           <Text style={styles.statLabel}>Items</Text>
@@ -147,33 +190,33 @@ const HomeScreen: React.FC = () => {
           <Text style={styles.statValue}>{stats.wishlist}</Text>
           <Text style={styles.statLabel}>Wishlist</Text>
         </View>
-      </View>
+      </Animated.View>
 
       <Text style={styles.sectionTitle}>Features</Text>
       <View style={styles.featureCardsContainer}>
         {renderFeatureCard(
-          'Wardrobe',
+          'My Wardrobe',
           'shirt-outline',
-          ['#6200EE', '#3700B3'],
+          ['#8B8B8B', '#A8A8A8'],
           () => navigation.navigate('Wardrobe' as never)
         )}
         {renderFeatureCard(
           'Outfits',
-          'albums-outline',
-          ['#03DAC6', '#018786'],
+          'people-outline',
+          ['#6B6B6B', '#888888'],
           () => navigation.navigate('Outfits' as never)
         )}
         {renderFeatureCard(
           'Wishlist',
           'heart-outline',
-          ['#FF385C', '#E00031'],
+          ['#5A5A5A', '#777777'],
           () => navigation.navigate('Wishlist' as never)
         )}
         {renderFeatureCard(
           'Add Item',
           'add-circle-outline',
-          ['#FF9800', '#F57C00'],
-          () => navigation.navigate('Wardrobe' as never, { screen: 'AddClothing' } as never)
+          ['#4A4A4A', '#666666'],
+          () => navigation.navigate('Wardrobe' as never)
         )}
       </View>
 
@@ -202,167 +245,208 @@ const HomeScreen: React.FC = () => {
           <Text style={styles.emptyStateText}>No items in your wardrobe yet</Text>
           <TouchableOpacity
             style={styles.addItemButton}
-            onPress={() => navigation.navigate('Wardrobe' as never, { screen: 'AddClothing' } as never)}
+            onPress={() => navigation.navigate('Wardrobe' as never)}
           >
             <Text style={styles.addItemButtonText}>Add Your First Item</Text>
           </TouchableOpacity>
         </View>
       )}
-    </ScrollView>
+    </Animated.ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: theme.colors.background,
   },
   header: {
-    paddingHorizontal: 16,
-    paddingTop: 24,
-    paddingBottom: 8,
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 16,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerTextContainer: {
+    flex: 1,
+    paddingRight: 12,
   },
   greeting: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
+    fontSize: 32,
+    fontWeight: '300',
+    color: theme.colors.text,
     marginBottom: 4,
+    letterSpacing: -0.5,
   },
   tagline: {
-    fontSize: 16,
-    color: '#6B7280',
+    fontSize: 15,
+    fontWeight: '400',
+    color: theme.colors.mediumGray,
+    letterSpacing: 0,
+  },
+  authButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.lightGray,
+    backgroundColor: '#FFFFFF',
+  },
+  authButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.colors.text,
+    letterSpacing: 0.5,
   },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    marginHorizontal: 16,
-    marginVertical: 16,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    marginHorizontal: 20,
+    marginVertical: 20,
+    borderRadius: 16,
+    padding: 20,
+    ...theme.shadows.subtle,
   },
   statItem: {
     flex: 1,
     alignItems: 'center',
   },
   statValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
+    fontSize: 28,
+    fontWeight: '300',
+    color: theme.colors.text,
+    marginBottom: 4,
   },
   statLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 4,
+    fontSize: 11,
+    color: theme.colors.mediumGray,
+    fontWeight: '500',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   statDivider: {
     width: 1,
-    height: 30,
-    backgroundColor: '#E5E7EB',
+    height: 40,
+    backgroundColor: theme.colors.lightGray,
+    opacity: 0.3,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#111827',
-    marginHorizontal: 16,
-    marginBottom: 12,
+    color: theme.colors.mediumGray,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    marginTop: 8,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
   },
   featureCardsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     marginBottom: 24,
   },
   featureCardContainer: {
     width: '48%',
-    marginBottom: 16,
-    borderRadius: 12,
+    marginBottom: 12,
+    borderRadius: 16,
     overflow: 'hidden',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
   },
   featureCard: {
-    padding: 16,
-    height: 100,
+    backgroundColor: '#FFFFFF',
+    padding: 24,
+    height: 140,
     justifyContent: 'center',
     alignItems: 'center',
+    ...theme.shadows.subtle,
+  },
+  featureIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: theme.colors.mutedBackground,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   featureCardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginTop: 8,
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.colors.text,
+    textAlign: 'center',
+    letterSpacing: 0,
   },
   recentItemsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingRight: 16,
-    marginBottom: 8,
+    paddingRight: 20,
+    marginBottom: 12,
   },
   viewAllText: {
-    fontSize: 14,
-    color: '#6200EE',
-    fontWeight: '500',
+    fontSize: 13,
+    color: theme.colors.accent,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   recentItemsContainer: {
-    marginBottom: 24,
+    marginBottom: 32,
   },
   recentItemsList: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
   },
   recentItemCard: {
-    width: 100,
-    marginRight: 12,
+    width: 120,
+    marginRight: 16,
     alignItems: 'center',
   },
   recentItemImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 8,
-    backgroundColor: '#E5E7EB',
+    width: 120,
+    height: 160,
+    borderRadius: 12,
+    backgroundColor: theme.colors.mutedBackground,
   },
   recentItemName: {
-    fontSize: 14,
-    color: '#111827',
+    fontSize: 13,
+    fontWeight: '400',
+    color: theme.colors.text,
     marginTop: 8,
     textAlign: 'center',
   },
   emptyStateContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
-    marginHorizontal: 16,
+    padding: 40,
+    marginHorizontal: 20,
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 16,
     marginBottom: 24,
+    ...theme.shadows.subtle,
   },
   emptyStateText: {
-    fontSize: 16,
-    color: '#6B7280',
+    fontSize: 15,
+    fontWeight: '400',
+    color: theme.colors.mediumGray,
     marginTop: 12,
-    marginBottom: 16,
+    marginBottom: 20,
   },
   addItemButton: {
-    backgroundColor: '#6200EE',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    backgroundColor: theme.colors.text,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 24,
   },
   addItemButtonText: {
     color: '#FFFFFF',
     fontWeight: '600',
-    fontSize: 14,
+    fontSize: 13,
+    letterSpacing: 0.5,
   },
   loader: {
     marginVertical: 24,

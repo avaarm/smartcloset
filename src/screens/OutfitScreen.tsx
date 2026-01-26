@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, StatusBar, Image } from 'react-native';
+import { View, StyleSheet, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, StatusBar, Image, Alert } from 'react-native';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import LinearGradient from 'react-native-linear-gradient';
 import { getClothingItems } from '../services/storage';
 import OutfitCard from '../components/OutfitCard';
 import { generateOutfitSuggestions, Outfit, saveOutfit, getSavedOutfits, deleteSavedOutfit } from '../services/outfitService';
+import { WearTrackingService } from '../services/wearTrackingService';
+import { WeatherOutfitService } from '../services/weatherOutfitService';
+import { WeatherData } from '../types/weather';
+import theme from '../styles/theme';
 
 const Tab = createMaterialTopTabNavigator();
 
@@ -15,6 +18,9 @@ const SuggestionsTab = () => {
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [weatherTips, setWeatherTips] = useState<string[]>([]);
+  const [useWeatherMode, setUseWeatherMode] = useState(true);
 
   const generateOutfits = useCallback(async () => {
     try {
@@ -23,17 +29,34 @@ const SuggestionsTab = () => {
       
       if (clothingItems.length < 2) {
         setOutfits([]);
+        setWeather(null);
+        setWeatherTips([]);
         return;
       }
       
-      const suggestions = generateOutfitSuggestions(clothingItems, 5);
-      setOutfits(suggestions);
+      if (useWeatherMode) {
+        try {
+          const weatherRec = await WeatherOutfitService.getWeatherBasedRecommendations(clothingItems, 5);
+          setOutfits(weatherRec.recommendedOutfits);
+          setWeather(weatherRec.weather);
+          setWeatherTips(weatherRec.tips);
+        } catch (weatherError) {
+          console.error('Weather service failed, falling back to regular suggestions:', weatherError);
+          const suggestions = generateOutfitSuggestions(clothingItems, 5);
+          setOutfits(suggestions);
+          setWeather(null);
+          setWeatherTips([]);
+        }
+      } else {
+        const suggestions = generateOutfitSuggestions(clothingItems, 5);
+        setOutfits(suggestions);
+      }
     } catch (error) {
       console.error('Error generating outfits:', error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [useWeatherMode]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -75,6 +98,47 @@ const SuggestionsTab = () => {
           )}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
+          ListHeaderComponent={
+            weather && useWeatherMode ? (
+              <View style={styles.weatherSection}>
+                <View style={styles.weatherHeader}>
+                  <Icon 
+                    name={WeatherOutfitService.getWeatherIcon(weather.condition)} 
+                    size={32} 
+                    color={theme.colors.accent} 
+                  />
+                  <View style={styles.weatherInfo}>
+                    <Text style={styles.weatherTemp}>{weather.temperature}°F</Text>
+                    <Text style={styles.weatherCondition}>{weather.condition}</Text>
+                    <Text style={styles.weatherLocation}>{weather.location}</Text>
+                  </View>
+                  <TouchableOpacity 
+                    style={styles.weatherToggle}
+                    onPress={() => setUseWeatherMode(false)}
+                  >
+                    <Text style={styles.weatherToggleText}>Show All</Text>
+                  </TouchableOpacity>
+                </View>
+                {weatherTips.length > 0 && (
+                  <View style={styles.tipsContainer}>
+                    {weatherTips.map((tip, index) => (
+                      <Text key={index} style={styles.tipText}>{tip}</Text>
+                    ))}
+                  </View>
+                )}
+              </View>
+            ) : !useWeatherMode ? (
+              <View style={styles.weatherSection}>
+                <TouchableOpacity 
+                  style={styles.weatherModeButton}
+                  onPress={() => setUseWeatherMode(true)}
+                >
+                  <Icon name="partly-sunny-outline" size={20} color={theme.colors.accent} />
+                  <Text style={styles.weatherModeText}>Show Weather-Based Suggestions</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null
+          }
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -86,11 +150,6 @@ const SuggestionsTab = () => {
         />
       ) : (
         <View style={styles.emptyState}>
-          <Image 
-            source={{uri: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?q=80&w=1974'}} 
-            style={styles.emptyStateImage} 
-            resizeMode="contain"
-          />
           <Text style={styles.emptyStateTitle}>No Outfit Suggestions</Text>
           <Text style={styles.emptyStateText}>
             Add at least 2 clothing items to your wardrobe to get outfit suggestions.
@@ -99,12 +158,7 @@ const SuggestionsTab = () => {
             style={styles.refreshButton}
             onPress={onRefresh}
           >
-            <LinearGradient
-              colors={['#FF385C', '#FF5A5F']}
-              style={styles.refreshButtonGradient}
-            >
-              <Text style={styles.refreshButtonText}>Create Outfits</Text>
-            </LinearGradient>
+            <Text style={styles.refreshButtonText}>Create Outfits</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -149,6 +203,20 @@ const SavedOutfitsTab = () => {
     }
   };
 
+  const handleMarkAsWorn = async (outfit: Outfit) => {
+    try {
+      await WearTrackingService.markOutfitWorn(outfit);
+      Alert.alert(
+        'Success!',
+        'Outfit marked as worn. All items have been updated.',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error marking outfit as worn:', error);
+      Alert.alert('Error', 'Failed to mark outfit as worn. Please try again.');
+    }
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
@@ -167,6 +235,7 @@ const SavedOutfitsTab = () => {
               outfit={item}
               saved={true}
               onDelete={() => handleDeleteOutfit(item.id)}
+              onMarkAsWorn={() => handleMarkAsWorn(item)}
             />
           )}
           keyExtractor={(item) => item.id}
@@ -182,11 +251,6 @@ const SavedOutfitsTab = () => {
         />
       ) : (
         <View style={styles.emptyState}>
-          <Image 
-            source={{uri: 'https://images.unsplash.com/photo-1516762689617-e1cffcef479d?q=80&w=2011'}} 
-            style={styles.emptyStateImage} 
-            resizeMode="contain"
-          />
           <Text style={styles.emptyStateTitle}>No Saved Outfits</Text>
           <Text style={styles.emptyStateText}>
             Save outfit suggestions to view them here.
@@ -195,12 +259,7 @@ const SavedOutfitsTab = () => {
             style={styles.refreshButton}
             onPress={() => navigation.navigate('Suggestions')}
           >
-            <LinearGradient
-              colors={['#FF385C', '#FF5A5F']}
-              style={styles.refreshButtonGradient}
-            >
-              <Text style={styles.refreshButtonText}>Browse Suggestions</Text>
-            </LinearGradient>
+            <Text style={styles.refreshButtonText}>Browse Suggestions</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -209,22 +268,34 @@ const SavedOutfitsTab = () => {
 };
 
 const OutfitScreen = () => {
+  const navigation = useNavigation<any>();
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Outfit Ideas</Text>
-        <TouchableOpacity style={styles.refreshAllButton}>
-          <Icon name="refresh-outline" size={18} color="#FF385C" />
-          <Text style={styles.refreshAllText}>Refresh All</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity 
+            style={styles.headerButton}
+            onPress={() => navigation.navigate('OutfitAnalytics')}
+          >
+            <Icon name="stats-chart-outline" size={20} color={theme.colors.accent} />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.headerButton}
+            onPress={() => navigation.navigate('ManualOutfitBuilder')}
+          >
+            <Icon name="add-circle-outline" size={20} color={theme.colors.accent} />
+          </TouchableOpacity>
+        </View>
       </View>
       <Tab.Navigator
         screenOptions={{
-          tabBarActiveTintColor: '#FF385C',
-          tabBarInactiveTintColor: '#9CA3AF',
+          tabBarActiveTintColor: theme.colors.accent,
+          tabBarInactiveTintColor: theme.colors.mediumGray,
           tabBarIndicatorStyle: {
-            backgroundColor: '#FF385C',
+            backgroundColor: theme.colors.accent,
             height: 3,
             borderRadius: 3,
           },
@@ -236,9 +307,9 @@ const OutfitScreen = () => {
           tabBarStyle: {
             elevation: 0,
             shadowOpacity: 0,
-            backgroundColor: '#FFFFFF',
+            backgroundColor: theme.colors.cardBackground,
             borderBottomWidth: 1,
-            borderBottomColor: '#F3F4F6',
+            borderBottomColor: theme.colors.lightGray,
           },
         }}
       >
@@ -264,92 +335,154 @@ const OutfitScreen = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.colors.background,
   },
   header: {
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    paddingTop: 60,
+    paddingBottom: 20,
+    borderBottomWidth: 0,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
+    fontSize: 32,
+    fontWeight: '300',
+    color: theme.colors.text,
     letterSpacing: -0.5,
+    flex: 1,
   },
-  refreshAllButton: {
+  headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
   },
-  refreshAllText: {
-    color: '#FF385C',
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 4,
+  headerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.colors.mutedBackground,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.lightGray,
   },
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.colors.background,
   },
   centered: {
     justifyContent: 'center',
     alignItems: 'center',
   },
   listContent: {
-    padding: 16,
+    padding: theme.spacing.medium,
   },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
+    padding: theme.spacing.xlarge,
   },
-  emptyStateImage: {
-    width: 200,
-    height: 200,
-    marginBottom: 16,
-  },
+
   emptyStateTitle: {
-    fontSize: 22,
-    fontWeight: '600',
-    marginTop: 8,
+    fontSize: 20,
+    fontWeight: '300',
+    marginTop: 12,
     marginBottom: 8,
-    color: '#111827',
+    color: theme.colors.text,
+    letterSpacing: 0,
   },
   emptyStateText: {
-    fontSize: 16,
-    color: '#6B7280',
+    fontSize: 15,
+    fontWeight: '400',
+    color: theme.colors.mediumGray,
     textAlign: 'center',
     marginBottom: 24,
     maxWidth: '80%',
+    lineHeight: 22,
   },
   refreshButton: {
-    width: '80%',
-    height: 50,
-    borderRadius: 25,
-    overflow: 'hidden',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  refreshButtonGradient: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: theme.colors.text,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 24,
   },
   refreshButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  weatherSection: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.lightGray,
+  },
+  weatherHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  weatherInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  weatherTemp: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: theme.colors.text,
+  },
+  weatherCondition: {
+    fontSize: 14,
+    color: theme.colors.mediumGray,
+    textTransform: 'capitalize',
+  },
+  weatherLocation: {
+    fontSize: 12,
+    color: theme.colors.mediumGray,
+    marginTop: 2,
+  },
+  weatherToggle: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: theme.colors.mutedBackground,
+    borderWidth: 1,
+    borderColor: theme.colors.lightGray,
+  },
+  weatherToggleText: {
+    fontSize: 12,
+    color: theme.colors.text,
+    fontWeight: '500',
+  },
+  tipsContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.lightGray,
+  },
+  tipText: {
+    fontSize: 13,
+    color: theme.colors.text,
+    marginBottom: 6,
+    lineHeight: 18,
+  },
+  weatherModeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 8,
+  },
+  weatherModeText: {
+    fontSize: 14,
+    color: theme.colors.accent,
+    fontWeight: '500',
   },
 });
 

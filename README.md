@@ -1,22 +1,32 @@
 # SmartCloset
 
-A modern wardrobe management app that helps you organize your clothing, create outfits, and make mindful fashion choices. Built with React Native and TypeScript for iOS and Android platforms.
+A modern wardrobe management app that helps you organize your clothing, create outfits, track how you wear your clothes, and make mindful fashion choices. Built with React Native and TypeScript for iOS and Android.
 
 ## Features
 
-- 📸 **Clothing Inventory Management**
+- **Clothing Inventory Management**
   - Add items with retailer images or your own photos
   - Organize by categories, seasons, and occasions
-  - Track wear frequency and usage patterns
+  - Store rich details like cost, purchase date, tags, notes, favorites, and more
 
-- 👔 **Outfit Suggestion System**
-  - Get personalized outfit recommendations
-  - Mix and match from your existing wardrobe
-  - Save favorite combinations
+- **Outfit Suggestion System**
+  - Generate outfit suggestions based on your existing wardrobe
+  - Season‑aware filtering of clothing items
+  - Save favorite outfit combinations for quick access
 
-- 💭 **Wishlist Management**
-  - Track potential purchases
-  - Make informed buying decisions
+- **Wear Tracking**
+  - Mark clothing items and outfits as worn
+  - Track wear counts and last worn dates
+  - See cost‑per‑wear over time
+
+- **Wardrobe Analytics & Insights**
+  - Category and season breakdowns of your wardrobe
+  - Most‑worn and least‑worn items
+  - Unworn item alerts and best‑value pieces
+
+- **Wishlist Management**
+  - Track potential purchases in a dedicated wishlist
+  - Make more intentional buying decisions
   - Reduce overpurchasing through better wardrobe visibility
 
 ## Tech Stack
@@ -24,8 +34,8 @@ A modern wardrobe management app that helps you organize your clothing, create o
 - React Native with TypeScript
 - React Navigation (Stack & Tab navigation)
 - React Native Vector Icons
-- Local storage for data persistence
-- Native camera integration
+- Async storage and local persistence for wardrobe data
+- Native camera & image picker integration
 
 ## Project Structure
 
@@ -34,9 +44,9 @@ smartcloset/
 ├── src/
 │   ├── components/    # Reusable UI components
 │   ├── screens/       # Main screen components
-│   ├── assets/       # Images and static assets
-│   ├── data/         # Data models and storage
-│   ├── services/     # Business logic
+│   ├── assets/        # Images and static assets
+│   ├── data/          # Sample data and data helpers
+│   ├── services/      # Domain logic (outfits, stats, wear tracking, storage)
 │   ├── types/        # TypeScript type definitions
 │   └── utils/        # Helper functions
 ├── ios/              # iOS native code
@@ -90,13 +100,17 @@ smartcloset/
    npm run android
    ```
 
-## Development
+## Development Tips
 
-- iOS hot reload: Press Cmd + R in simulator
-- Android hot reload: Press R twice
-- Access dev menu: 
-  - iOS: Cmd + D
-  - Android: Cmd + M (macOS) or Ctrl + M (Windows/Linux)
+- iOS hot reload: press `Cmd + R` in the simulator
+- Android hot reload: double‑press `R` in the emulator
+- Dev menu:
+  - iOS: `Cmd + D` (simulator) or shake device
+  - Android: `Cmd + M` / `Ctrl + M` or shake device
+
+If you see **"No bundle URL present"** in iOS:
+- Ensure Metro is running (`npm start` or `npx react-native start`)
+- Reload the app (`Cmd + R`) or stop and re‑run `npm run ios`
 
 ## Contributing
 

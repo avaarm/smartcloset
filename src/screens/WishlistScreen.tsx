@@ -1,24 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, Text, ActivityIndicator, SafeAreaView, StatusBar, Image } from 'react-native';
-import { launchImageLibrary } from 'react-native-image-picker';
-import { ClothingItem, ClothingCategory, Season } from '../types';
-import ClothingCard from '../components/ClothingCard';
-import { getWishlistItems, saveWishlistItems } from '../utils/storage';
+import { View, StyleSheet, FlatList, TouchableOpacity, Text, ActivityIndicator, SafeAreaView, StatusBar, Image, Alert, TextInput, Modal } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { ClothingItem as ClothingItemType } from '../types';
+import { getClothingItems, saveClothingItem, deleteClothingItem } from '../services/storage';
+import ClothingItem from '../components/ClothingItem';
 import Icon from 'react-native-vector-icons/Ionicons';
 import LinearGradient from 'react-native-linear-gradient';
+import theme from '../styles/theme';
+import { sampleClothes } from '../data/sampleClothes';
 
 const WishlistScreen = () => {
-  const [items, setItems] = useState<ClothingItem[]>([]);
+  const navigation = useNavigation();
+  const [items, setItems] = useState<ClothingItemType[]>([]);
   const [loading, setLoading] = useState(true);
+  const [budget, setBudget] = useState(0);
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [budgetInput, setBudgetInput] = useState('');
 
   useEffect(() => {
     loadWishlistItems();
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadWishlistItems();
+    });
+    return unsubscribe;
+  }, [navigation]);
+
   const loadWishlistItems = async () => {
     try {
-      const savedItems = await getWishlistItems();
-      setItems(savedItems);
+      const allItems = await getClothingItems();
+      const wishlistItems = allItems.filter(item => item.isWishlist === true);
+      setItems(wishlistItems);
     } catch (error) {
       console.error('Error loading wishlist items:', error);
     } finally {
@@ -26,34 +40,101 @@ const WishlistScreen = () => {
     }
   };
 
-  const handleAddItem = async () => {
-    const result = await launchImageLibrary({
-      mediaType: 'photo',
-      quality: 0.8,
-    });
+  const handleAddSampleData = async () => {
+    Alert.alert(
+      'Load Sample Data',
+      'This will add sample wishlist items to your collection. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Load',
+          onPress: async () => {
+            try {
+              // Take first 5 items from sample data and mark as wishlist
+              const wishlistSamples = sampleClothes.slice(0, 5).map(item => ({
+                ...item,
+                id: `wishlist-${Date.now()}-${item.id}`,
+                isWishlist: true,
+                dateAdded: new Date().toISOString(),
+              }));
 
-    if (result.assets && result.assets[0]) {
-      const newItem: ClothingItem = {
-        id: Date.now().toString(),
-        name: 'Wishlist Item',
-        category: ClothingCategory.TOPS,
-        userImage: result.assets[0].uri,
-        color: 'black',
-        season: [Season.SPRING],
-        dateAdded: new Date().toISOString(),
-        isWishlist: true,
-      };
+              for (const item of wishlistSamples) {
+                await saveClothingItem(item);
+              }
 
-      const updatedItems = [...items, newItem];
-      setItems(updatedItems);
-      await saveWishlistItems(updatedItems);
+              await loadWishlistItems();
+              Alert.alert('Success', 'Sample wishlist items added!');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to load sample data');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleMoveToWardrobe = async (item: ClothingItemType) => {
+    Alert.alert(
+      'Move to Wardrobe',
+      `Move "${item.name}" to your wardrobe?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Move',
+          onPress: async () => {
+            try {
+              await deleteClothingItem(item.id);
+              const updatedItem = { ...item, isWishlist: false };
+              await saveClothingItem(updatedItem);
+              await loadWishlistItems();
+              Alert.alert('Success', 'Item moved to wardrobe!');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to move item');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteItem = async (id: string) => {
+    try {
+      await deleteClothingItem(id);
+      await loadWishlistItems();
+    } catch (error) {
+      Alert.alert('Error', 'Failed to delete item');
     }
   };
+
+  const handleEditItem = (item: ClothingItemType) => {
+    (navigation as any).navigate('AddClothing', { item });
+  };
+
+  const handleSaveBudget = () => {
+    const amount = parseFloat(budgetInput);
+    if (!isNaN(amount) && amount >= 0) {
+      setBudget(amount);
+      setShowBudgetModal(false);
+      setBudgetInput('');
+    } else {
+      Alert.alert('Invalid Amount', 'Please enter a valid budget amount');
+    }
+  };
+
+  const renderItem = ({ item }: { item: ClothingItemType }) => (
+    <ClothingItem
+      item={item}
+      onPress={() => (navigation as any).navigate('ItemDetails', { item })}
+      onEdit={handleEditItem}
+      onDelete={handleDeleteItem}
+      showActions={true}
+    />
+  );
 
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color="#6200ee" />
+        <ActivityIndicator size="large" color={theme.colors.accent} />
       </View>
     );
   }
@@ -62,58 +143,122 @@ const WishlistScreen = () => {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Wishlist</Text>
-        <TouchableOpacity style={styles.sortButton}>
-          <Icon name="options-outline" size={20} color="#111827" />
-        </TouchableOpacity>
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.headerTitle}>My Wishlist</Text>
+            <Text style={styles.headerSubtitle}>{items.length} items</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.sampleButton}
+            onPress={handleAddSampleData}
+          >
+            <Icon name="download-outline" size={20} color={theme.colors.accent} />
+          </TouchableOpacity>
+        </View>
       </View>
       <View style={styles.container}>
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#FF385C" />
+            <ActivityIndicator size="large" color={theme.colors.accent} />
           </View>
         ) : (
           <FlatList
             data={items}
-            renderItem={({ item }) => <ClothingCard item={item} />}
+            renderItem={renderItem}
             keyExtractor={item => item.id}
             numColumns={2}
             contentContainerStyle={styles.grid}
             showsVerticalScrollIndicator={false}
-            ListHeaderComponent={items.length > 0 ? (
-              <View style={styles.statsContainer}>
-                <View style={styles.statCard}>
-                  <Text style={styles.statNumber}>{items.length}</Text>
-                  <Text style={styles.statLabel}>Items</Text>
+            ListHeaderComponent={
+              <View>
+                <View style={styles.statsContainer}>
+                  <View style={styles.statCard}>
+                    <Icon name="heart" size={24} color={theme.colors.accent} />
+                    <Text style={styles.statNumber}>{items.length}</Text>
+                    <Text style={styles.statLabel}>Items</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.statCard}
+                    onPress={() => setShowBudgetModal(true)}
+                  >
+                    <Icon name="wallet" size={24} color={theme.colors.accent} />
+                    <Text style={styles.statNumber}>${budget}</Text>
+                    <Text style={styles.statLabel}>Budget</Text>
+                    <Icon name="pencil" size={14} color={theme.colors.mediumGray} style={{ marginTop: 4 }} />
+                  </TouchableOpacity>
                 </View>
-                <View style={styles.statCard}>
-                  <Text style={styles.statNumber}>$0</Text>
-                  <Text style={styles.statLabel}>Budget</Text>
-                </View>
+                {items.length > 0 && (
+                  <View style={styles.actionsBar}>
+                    <Text style={styles.actionsText}>Long press items to edit or delete</Text>
+                  </View>
+                )}
               </View>
-            ) : null}
+            }
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <Image 
-                  source={{uri: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?q=80&w=2070'}} 
-                  style={styles.emptyStateImage} 
-                  resizeMode="contain"
-                />
+                <Icon name="heart-outline" size={80} color={theme.colors.lightGray} />
                 <Text style={styles.emptyStateTitle}>Your wishlist is empty</Text>
-                <Text style={styles.emptyStateText}>Add items you're considering to purchase</Text>
+                <Text style={styles.emptyStateText}>
+                  Add items you're considering to purchase
+                </Text>
+                <TouchableOpacity
+                  style={styles.sampleDataButton}
+                  onPress={handleAddSampleData}
+                >
+                  <Text style={styles.sampleDataButtonText}>Load Sample Items</Text>
+                </TouchableOpacity>
               </View>
             }
           />
         )}
-        <TouchableOpacity style={styles.addButton} onPress={handleAddItem}>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => (navigation as any).navigate('AddClothing', { isWishlist: true })}
+        >
           <LinearGradient
-            colors={['#FF385C', '#FF5A5F']}
+            colors={theme.colors.gradient.primary}
             style={styles.addButtonGradient}
           >
             <Icon name="add" size={24} color="#FFFFFF" />
           </LinearGradient>
         </TouchableOpacity>
       </View>
+
+      {/* Budget Modal */}
+      <Modal
+        visible={showBudgetModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowBudgetModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Set Budget</Text>
+              <TouchableOpacity onPress={() => setShowBudgetModal(false)}>
+                <Icon name="close" size={24} color={theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalDescription}>
+              Set a budget to track your wishlist spending
+            </Text>
+            <View style={styles.inputContainer}>
+              <Text style={styles.currencySymbol}>$</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="0.00"
+                keyboardType="decimal-pad"
+                value={budgetInput}
+                onChangeText={setBudgetInput}
+                placeholderTextColor={theme.colors.mediumGray}
+              />
+            </View>
+            <TouchableOpacity style={styles.saveButton} onPress={handleSaveBudget}>
+              <Text style={styles.saveButtonText}>Save Budget</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -130,54 +275,75 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    paddingTop: 60,
+    paddingBottom: 20,
+    borderBottomWidth: 0,
+  },
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
+    fontSize: 32,
+    fontWeight: '300',
+    color: theme.colors.text,
+    marginBottom: 4,
     letterSpacing: -0.5,
   },
-  sortButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F9FAFB',
+  headerSubtitle: {
+    fontSize: 14,
+    color: theme.colors.mediumGray,
+    fontWeight: '400',
+  },
+  sampleButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme.colors.mutedBackground,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
   },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
   },
   statCard: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
     width: '48%',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
+    ...theme.shadows.subtle,
   },
   statNumber: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#111827',
+    fontSize: 28,
+    fontWeight: '300',
+    color: theme.colors.text,
+    marginTop: 8,
     marginBottom: 4,
   },
   statLabel: {
-    fontSize: 14,
-    color: '#6B7280',
+    fontSize: 11,
+    color: theme.colors.mediumGray,
+    fontWeight: '500',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  actionsBar: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: theme.colors.mutedBackground,
+    marginHorizontal: 20,
+    marginBottom: 12,
+    borderRadius: 12,
+  },
+  actionsText: {
+    fontSize: 13,
+    color: theme.colors.mediumGray,
+    textAlign: 'center',
   },
   loadingContainer: {
     flex: 1,
@@ -189,30 +355,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   grid: {
-    padding: 12,
+    padding: theme.spacing.small,
   },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-    marginTop: 50,
-  },
-  emptyStateImage: {
-    width: 200,
-    height: 200,
-    marginBottom: 16,
+    padding: 40,
+    marginTop: 80,
   },
   emptyStateTitle: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: '#111827',
+    fontSize: 20,
+    fontWeight: '300',
+    color: theme.colors.text,
+    marginTop: 20,
     marginBottom: 8,
   },
   emptyStateText: {
-    fontSize: 16,
-    color: '#6B7280',
+    fontSize: 15,
+    fontWeight: '400',
+    color: theme.colors.mediumGray,
     textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  sampleDataButton: {
+    backgroundColor: theme.colors.accent,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 24,
+    marginTop: 12,
+  },
+  sampleDataButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   addButton: {
     position: 'absolute',
@@ -221,21 +399,74 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    backgroundColor: 'transparent',
+    overflow: 'hidden',
+    ...theme.shadows.card,
   },
   addButtonGradient: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  modalDescription: {
+    fontSize: 14,
+    color: theme.colors.mediumGray,
+    marginBottom: 24,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.mutedBackground,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    marginBottom: 20,
+  },
+  currencySymbol: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginRight: 8,
+  },
+  input: {
+    flex: 1,
+    fontSize: 24,
+    fontWeight: '300',
+    color: theme.colors.text,
+    paddingVertical: 16,
+  },
+  saveButton: {
+    backgroundColor: theme.colors.accent,
+    borderRadius: 24,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });
 
