@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ClothingItem } from '../data/sampleClothes';
+import { ClothingItem } from '../types';
 
 const STORAGE_KEY = '@smartcloset_items';
 
@@ -21,6 +21,19 @@ export const getClothingItems = async (): Promise<ClothingItem[]> => {
   } catch (error) {
     console.error('Error getting clothing items:', error);
     return [];
+  }
+};
+
+export const updateClothingItem = async (updatedItem: ClothingItem): Promise<void> => {
+  try {
+    const existingItems = await getClothingItems();
+    const updatedItems = existingItems.map(item => 
+      item.id === updatedItem.id ? updatedItem : item
+    );
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedItems));
+  } catch (error) {
+    console.error('Error updating clothing item:', error);
+    throw error;
   }
 };
 

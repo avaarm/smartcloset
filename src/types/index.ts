@@ -9,9 +9,18 @@ export interface ClothingItem {
   season: Season[];
   dateAdded: string;
   isWishlist: boolean;
+  wearCount?: number;
+  lastWorn?: string;
+  cost?: number;
+  purchaseDate?: string;
+  notes?: string;
+  tags?: string[];
+  favorite?: boolean;
 }
 
-export enum ClothingCategory {
+export type ClothingCategory = 'tops' | 'bottoms' | 'dresses' | 'outerwear' | 'shoes' | 'accessories';
+
+export enum ClothingCategoryEnum {
   TOPS = 'tops',
   BOTTOMS = 'bottoms',
   DRESSES = 'dresses',
@@ -20,7 +29,9 @@ export enum ClothingCategory {
   ACCESSORIES = 'accessories'
 }
 
-export enum Season {
+export type Season = 'spring' | 'summer' | 'fall' | 'winter';
+
+export enum SeasonEnum {
   SPRING = 'spring',
   SUMMER = 'summer',
   FALL = 'fall',
@@ -33,4 +44,29 @@ export interface Outfit {
   items: string[]; // Array of ClothingItem ids
   season: Season[];
   occasion?: string;
+  dateCreated: string;
+  lastWorn?: string;
+  wearCount?: number;
+  favorite?: boolean;
+  notes?: string;
+}
+
+export interface WardrobeStats {
+  totalItems: number;
+  itemsByCategory: Record<ClothingCategory, number>;
+  itemsBySeason: Record<Season, number>;
+  totalValue: number;
+  mostWornItem?: ClothingItem;
+  leastWornItem?: ClothingItem;
+  averageWearCount: number;
+  wishlistCount: number;
+}
+
+export interface OutfitHistory {
+  id: string;
+  outfitId: string;
+  dateWorn: string;
+  occasion?: string;
+  rating?: number;
+  notes?: string;
 }

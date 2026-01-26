@@ -1,5 +1,4 @@
-import { ClothingItem } from '../data/sampleClothes';
-import { Season } from '../types/clothing';
+import { ClothingItem, Season } from '../types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Define outfit structure
@@ -38,7 +37,7 @@ export const generateOutfitSuggestions = (items: ClothingItem[], count: number =
   // Helper function to check if seasons overlap
   const seasonsOverlap = (item1: ClothingItem, item2: ClothingItem): boolean => {
     if (!item1.season || !item2.season) return true;
-    return item1.season.some(season => item2.season.includes(season));
+    return item1.season.some((season: Season) => item2.season!.includes(season));
   };
   
   // Generate outfits based on current season

@@ -6,22 +6,32 @@ import { useCallback } from 'react';
 import * as ImagePicker from 'react-native-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { saveClothingItem } from '../services/storage';
+import { saveClothingItem, updateClothingItem } from '../services/storage';
 import { ClothingCategory, Season, Occasion } from '../types/clothing';
 import { analyzeClothingImage, isConfidentPrediction, RecognitionResult } from '../services/imageRecognition';
 
 type AddClothingScreenProps = {
   navigation: NativeStackNavigationProp<any, 'AddClothing'>;
+  route: {
+    params?: {
+      editItem?: any;
+      item?: any;
+      isWishlist?: boolean;
+    };
+  };
 };
 
-const AddClothingScreen = ({ navigation }: AddClothingScreenProps) => {
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState<ClothingCategory>('tops');
-  const [brand, setBrand] = useState('');
-  const [imageUri, setImageUri] = useState('');
-  const [color, setColor] = useState('');
-  const [season, setSeason] = useState<Season | null>(null);
-  const [occasion, setOccasion] = useState<Occasion | null>(null);
+const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
+  const editItem = route.params?.editItem || route.params?.item;
+  const isWishlist = route.params?.isWishlist || editItem?.isWishlist || false;
+  const isEditing = !!editItem;
+  const [name, setName] = useState(editItem?.name || '');
+  const [category, setCategory] = useState<ClothingCategory>(editItem?.category || 'tops');
+  const [brand, setBrand] = useState(editItem?.brand || '');
+  const [imageUri, setImageUri] = useState(editItem?.userImage || editItem?.imageUrl || editItem?.retailerImage || '');
+  const [color, setColor] = useState(editItem?.color || '');
+  const [season, setSeason] = useState<Season | null>(editItem?.season?.[0] || null);
+  const [occasion, setOccasion] = useState<Occasion | null>(editItem?.occasion || null);
   
   // AI recognition states
   const [analyzing, setAnalyzing] = useState(false);
@@ -83,16 +93,27 @@ const AddClothingScreen = ({ navigation }: AddClothingScreenProps) => {
     }
 
     try {
-      await saveClothingItem({
-        id: '', // Will be set in storage service
+      const itemData: any = {
+        id: isEditing ? editItem.id : '', // Keep existing ID when editing
         name,
         category,
         brand,
-        imageUrl: imageUri,
+        userImage: imageUri,
         color,
-        season: season || undefined,
-        occasion: occasion || undefined
-      });
+        occasion: occasion || undefined,
+        isWishlist: isWishlist,
+        dateAdded: isEditing ? editItem.dateAdded : new Date().toISOString(),
+      };
+      
+      if (season) {
+        itemData.season = [season];
+      }
+      
+      if (isEditing) {
+        await updateClothingItem(itemData);
+      } else {
+        await saveClothingItem(itemData);
+      }
       navigation.goBack();
     } catch (error) {
       console.error('Error saving item:', error);
@@ -102,6 +123,13 @@ const AddClothingScreen = ({ navigation }: AddClothingScreenProps) => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Icon name="arrow-back" size={24} color="#000" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{isEditing ? 'Edit Item' : 'Add Item'}</Text>
+        <View style={styles.headerSpacer} />
+      </View>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <Text style={styles.sectionHeader}>Photo</Text>
         <TouchableOpacity style={styles.imageContainer} onPress={pickImage} disabled={analyzing}>
@@ -139,13 +167,14 @@ const AddClothingScreen = ({ navigation }: AddClothingScreenProps) => {
             selectedValue={category}
             onValueChange={onCategoryChange}
             style={styles.picker}
+            itemStyle={{ color: '#1A1A1A', fontSize: 16 }}
           >
-            <Picker.Item label="Tops" value="tops" />
-            <Picker.Item label="Bottoms" value="bottoms" />
-            <Picker.Item label="Dresses" value="dresses" />
-            <Picker.Item label="Outerwear" value="outerwear" />
-            <Picker.Item label="Shoes" value="shoes" />
-            <Picker.Item label="Accessories" value="accessories" />
+            <Picker.Item label="Tops" value="tops" color="#1A1A1A" />
+            <Picker.Item label="Bottoms" value="bottoms" color="#1A1A1A" />
+            <Picker.Item label="Dresses" value="dresses" color="#1A1A1A" />
+            <Picker.Item label="Outerwear" value="outerwear" color="#1A1A1A" />
+            <Picker.Item label="Shoes" value="shoes" color="#1A1A1A" />
+            <Picker.Item label="Accessories" value="accessories" color="#1A1A1A" />
           </Picker>
         </View>
 
@@ -169,12 +198,13 @@ const AddClothingScreen = ({ navigation }: AddClothingScreenProps) => {
             selectedValue={season || undefined}
             onValueChange={onSeasonChange}
             style={styles.picker}
+            itemStyle={{ color: '#1A1A1A', fontSize: 16 }}
           >
-            <Picker.Item label="Select Season" value={null} />
-            <Picker.Item label="Spring" value="spring" />
-            <Picker.Item label="Summer" value="summer" />
-            <Picker.Item label="Fall" value="fall" />
-            <Picker.Item label="Winter" value="winter" />
+            <Picker.Item label="Select Season" value={null} color="#8B8B8B" />
+            <Picker.Item label="Spring" value="spring" color="#1A1A1A" />
+            <Picker.Item label="Summer" value="summer" color="#1A1A1A" />
+            <Picker.Item label="Fall" value="fall" color="#1A1A1A" />
+            <Picker.Item label="Winter" value="winter" color="#1A1A1A" />
           </Picker>
         </View>
         
@@ -184,14 +214,15 @@ const AddClothingScreen = ({ navigation }: AddClothingScreenProps) => {
             selectedValue={occasion || undefined}
             onValueChange={(value) => setOccasion(value)}
             style={styles.picker}
+            itemStyle={{ color: '#1A1A1A', fontSize: 16 }}
           >
-            <Picker.Item label="Select Occasion" value={null} />
-            <Picker.Item label="Casual" value="casual" />
-            <Picker.Item label="Formal" value="formal" />
-            <Picker.Item label="Business" value="business" />
-            <Picker.Item label="Sports" value="sports" />
-            <Picker.Item label="Party" value="party" />
-            <Picker.Item label="Everyday" value="everyday" />
+            <Picker.Item label="Select Occasion" value={null} color="#8B8B8B" />
+            <Picker.Item label="Casual" value="casual" color="#1A1A1A" />
+            <Picker.Item label="Formal" value="formal" color="#1A1A1A" />
+            <Picker.Item label="Business" value="business" color="#1A1A1A" />
+            <Picker.Item label="Sports" value="sports" color="#1A1A1A" />
+            <Picker.Item label="Party" value="party" color="#1A1A1A" />
+            <Picker.Item label="Everyday" value="everyday" color="#1A1A1A" />
           </Picker>
         </View>
         
@@ -223,7 +254,7 @@ const AddClothingScreen = ({ navigation }: AddClothingScreenProps) => {
           style={styles.saveButton}
           onPress={handleSave}
         >
-          <Text style={styles.saveButtonText}>Save Item</Text>
+          <Text style={styles.saveButtonText}>{isEditing ? 'Update Item' : 'Save Item'}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -231,13 +262,37 @@ const AddClothingScreen = ({ navigation }: AddClothingScreenProps) => {
 };
 
 const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#F5F3F0',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5',
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    color: '#000',
+    letterSpacing: 0.3,
+  },
+  headerSpacer: {
+    width: 40,
+  },
   sectionHeader: {
     fontSize: 13,
-    color: '#8E8E93',
-    marginBottom: 8,
-    marginLeft: 16,
-    fontWeight: '500',
+    color: '#8B8B8B',
+    marginBottom: 12,
+    marginLeft: 4,
+    fontWeight: '600',
     textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   scrollContent: {
     padding: 16,
@@ -249,16 +304,20 @@ const styles = StyleSheet.create({
   },
   pickerContainer: {
     borderWidth: 1,
-    borderColor: '#C5C5C7',
-    borderRadius: 8,
+    borderColor: '#E8E6E3',
+    borderRadius: 12,
     marginBottom: 16,
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
     overflow: 'hidden',
-    height: Platform.OS === 'ios' ? 44 : 50,
+    height: Platform.OS === 'ios' ? 50 : 50,
+    justifyContent: 'center',
   },
   picker: {
-    height: Platform.OS === 'ios' ? 44 : 50,
+    height: Platform.OS === 'ios' ? 50 : 50,
     width: '100%',
+    color: '#1A1A1A',
+    fontSize: 16,
+    fontWeight: '500',
   },
   container: {
     flex: 1,

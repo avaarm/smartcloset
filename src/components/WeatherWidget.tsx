@@ -260,25 +260,27 @@ const WeatherWidget: React.FC<WeatherWidgetProps> = ({
   const weatherIcon = getWeatherIcon(weatherCondition);
 
   return (
-    <TouchableOpacity 
-      style={styles.container} 
-      onPress={toggleExpanded}
-      activeOpacity={0.9}
-    >
+    <View style={styles.container}>
       <LinearGradient
         colors={gradientColors}
         style={styles.gradientContainer}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
-        <View style={styles.headerRow}>
-          <View style={styles.weatherInfo}>
-            <Text style={styles.location}>{weather.location}</Text>
-            <View style={styles.temperatureContainer}>
-              <Text style={styles.temperature}>{weather.temperature}°C</Text>
-              <Image source={{ uri: weatherIcon }} style={styles.weatherIcon} />
+        <TouchableOpacity 
+          style={styles.headerContainer}
+          onPress={toggleExpanded}
+          activeOpacity={0.9}
+        >
+          <View style={styles.headerRow}>
+            <View style={styles.weatherInfo}>
+              <Text style={styles.location}>{weather.location}</Text>
+              <View style={styles.temperatureContainer}>
+                <Text style={styles.temperature}>{weather.temperature}°C</Text>
+                <Image source={{ uri: weatherIcon }} style={styles.weatherIcon} />
+              </View>
+              <Text style={styles.condition}>{weather.condition}</Text>
             </View>
-            <Text style={styles.condition}>{weather.condition}</Text>
           </View>
           <View style={styles.weatherDetails}>
             <View style={styles.detailItem}>
@@ -290,7 +292,7 @@ const WeatherWidget: React.FC<WeatherWidgetProps> = ({
               <Text style={styles.detailText}>{weather.windSpeed} mph</Text>
             </View>
           </View>
-        </View>
+        </TouchableOpacity>
 
         {expanded && (
           <View style={styles.outfitSuggestionContainer}>
@@ -330,7 +332,14 @@ const WeatherWidget: React.FC<WeatherWidgetProps> = ({
             
             <TouchableOpacity
               style={styles.createOutfitButton}
-              onPress={onOutfitSuggestionPress}
+              onPress={() => {
+                console.log('Create Outfit button pressed');
+                if (onOutfitSuggestionPress) {
+                  onOutfitSuggestionPress();
+                } else {
+                  console.log('onOutfitSuggestionPress is undefined');
+                }
+              }}
               activeOpacity={0.7}
             >
               <Text style={styles.createOutfitButtonText}>Create Outfit</Text>
@@ -347,7 +356,7 @@ const WeatherWidget: React.FC<WeatherWidgetProps> = ({
           />
         </View>
       </LinearGradient>
-    </TouchableOpacity>
+    </View>
   );
 };
 
@@ -362,6 +371,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+  },
+  headerContainer: {
+    paddingBottom: 8,
   },
   gradientContainer: {
     padding: 16,

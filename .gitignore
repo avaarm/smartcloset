@@ -72,3 +72,74 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# Environment variables and secrets
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env*.local
+*.env
+
+# API Keys and Configuration
+config/secrets.js
+config/keys.js
+src/config/api-keys.ts
+src/config/secrets.ts
+secrets.json
+credentials.json
+
+# AWS
+.aws/
+aws-exports.js
+
+# Google Cloud
+google-services.json
+GoogleService-Info.plist
+gcloud-key.json
+
+# Firebase
+firebase-debug.log
+.firebase/
+
+# Sensitive data
+*.pem
+*.p12
+*.key
+*.cert
+*.crt
+*.mobileprovision
+*.provisionprofile
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Backup files
+*.backup
+*.bak
+*.tmp
+
+# User-specific files
+.user
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
