@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { View, StyleSheet, FlatList, TouchableOpacity, Text, SafeAreaView, StatusBar, ActivityIndicator, Image } from 'react-native';
+import { View, StyleSheet, FlatList, TouchableOpacity, Text, SafeAreaView, StatusBar, ActivityIndicator, Image, TextInput } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import ClothingItem from '../components/ClothingItem';
 import { ClothingItem as ClothingItemType } from '../types';
-import { getClothingItems, deleteClothingItem } from '../services/storage';
+import { getClothingItems, deleteClothingItem, resetStorage } from '../services/storage';
 import Icon from 'react-native-vector-icons/Ionicons';
 import FilterModal, { FilterOptions } from '../components/FilterModal';
 import { ClothingCategory, Season } from '../types';
@@ -18,6 +18,7 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
   const [clothes, setClothes] = useState<ClothingItemType[]>([]);
   const [loading, setLoading] = useState(true);
   const [showFilterModal, setShowFilterModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<FilterOptions>({
     categories: [],
     seasons: [],
@@ -63,6 +64,16 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
     (navigation as any).navigate('ItemDetails', { item });
   };
 
+  const handleResetStorage = async () => {
+    try {
+      await resetStorage();
+      const items = await getClothingItems();
+      setClothes(items);
+    } catch (error) {
+      console.error('Error resetting storage:', error);
+    }
+  };
+
   const handleApplyFilters = (newFilters: FilterOptions) => {
     setFilters(newFilters);
   };
@@ -70,6 +81,18 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
   // Filter and sort clothes
   const filteredAndSortedClothes = useMemo(() => {
     let result = [...clothes];
+
+    // Apply search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter((item) =>
+        item.name.toLowerCase().includes(query) ||
+        item.brand?.toLowerCase().includes(query) ||
+        item.color?.toLowerCase().includes(query) ||
+        item.tags?.some(tag => tag.toLowerCase().includes(query)) ||
+        item.retailer?.toLowerCase().includes(query)
+      );
+    }
 
     // Apply category filter
     if (filters.categories.length > 0) {
@@ -136,30 +159,59 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
               {filteredAndSortedClothes.length} of {clothes.length} items
             </Text>
           </View>
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
-              activeFiltersCount > 0 && styles.filterButtonActive,
-            ]}
-            onPress={() => setShowFilterModal(true)}
-          >
-            <Icon
-              name="options-outline"
-              size={20}
-              color={activeFiltersCount > 0 ? '#FFFFFF' : '#111827'}
-            />
-            {activeFiltersCount > 0 && (
-              <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{activeFiltersCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity
+              style={styles.loadDataButton}
+              onPress={handleResetStorage}
+            >
+              <Icon name="refresh-outline" size={18} color="#8B7FD9" />
+              <Text style={styles.loadDataText}>Load Sample</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.filterButton,
+                activeFiltersCount > 0 && styles.filterButtonActive,
+              ]}
+              onPress={() => setShowFilterModal(true)}
+            >
+              <Icon
+                name="options-outline"
+                size={20}
+                color={activeFiltersCount > 0 ? '#FFFFFF' : '#111827'}
+              />
+              {activeFiltersCount > 0 && (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{activeFiltersCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
+      
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <Icon name="search-outline" size={20} color="#9CA3AF" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search by name, brand, color, or tags..."
+          placeholderTextColor="#9CA3AF"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+            <Icon name="close-circle" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+        )}
+      </View>
+
       <View style={styles.container}>
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#FF385C" />
+            <ActivityIndicator size="large" color="#8B7FD9" />
           </View>
         ) : filteredAndSortedClothes.length > 0 ? (
           <FlatList
@@ -199,7 +251,7 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
           onPress={() => navigation.navigate('AddClothing')}
         >
           <LinearGradient
-            colors={['#FF385C', '#FF5A5F']}
+            colors={['#8B7FD9', '#A599E9']}
             style={styles.addButtonGradient}
           >
             <Icon name="add" size={24} color="#FFFFFF" />
@@ -250,6 +302,27 @@ const styles = StyleSheet.create({
     color: theme.colors.mediumGray,
     fontWeight: '400',
   },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  loadDataButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F3F0FF',
+    borderWidth: 1,
+    borderColor: '#8B7FD9',
+    gap: 4,
+  },
+  loadDataText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#8B7FD9',
+  },
   filterButton: {
     width: 44,
     height: 44,
@@ -278,6 +351,28 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    marginHorizontal: 16,
+    marginVertical: 12,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 48,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1F1B2E',
+    paddingVertical: 0,
+  },
+  clearButton: {
+    padding: 4,
   },
   featuredSection: {
     paddingHorizontal: 16,

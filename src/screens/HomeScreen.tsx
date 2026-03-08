@@ -157,7 +157,7 @@ const HomeScreen: React.FC = () => {
             <Text style={styles.greeting}>{getGreeting()}</Text>
             <Text style={styles.tagline}>What will you wear today?</Text>
           </View>
-          <TouchableOpacity style={styles.authButton} onPress={() => {}}>
+          <TouchableOpacity style={styles.authButton} onPress={() => (navigation as any).navigate('SignIn')}>
             <Text style={styles.authButtonText}>Sign in / Sign up</Text>
           </TouchableOpacity>
         </View>

@@ -95,7 +95,7 @@ export const generateOutfitSuggestions = (items: ClothingItem[], count: number =
         
         // Create outfit object
         const outfit: Outfit = {
-          id: Date.now().toString() + i,
+          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${i}`,
           name: `${currentSeason.charAt(0).toUpperCase() + currentSeason.slice(1)} Outfit`,
           items: outfitItems,
           season: [currentSeason],
@@ -140,7 +140,7 @@ export const generateOutfitSuggestions = (items: ClothingItem[], count: number =
         
         // Create outfit object
         const outfit: Outfit = {
-          id: Date.now().toString() + i + 'dress',
+          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}-dress-${i}`,
           name: `${dress.color || ''} Dress Outfit`,
           items: outfitItems,
           season: [currentSeason],

@@ -15,6 +15,8 @@ interface Props {
 
 const ClothingItem: React.FC<Props> = ({ item, onEdit, onDelete, onPress, showActions = false }) => {
   const [scaleAnim] = useState(new Animated.Value(1));
+  const [imageError, setImageError] = useState(false);
+  
   const handleDelete = () => {
     Alert.alert(
       'Delete Item',
@@ -61,7 +63,11 @@ const ClothingItem: React.FC<Props> = ({ item, onEdit, onDelete, onPress, showAc
       disabled={!onPress}
     >
       <Animated.View style={[styles.container, { transform: [{ scale: scaleAnim }] }]}>
-        <Image source={{ uri: item.userImage || item.retailerImage || 'https://via.placeholder.com/100x120' }} style={styles.image} />
+        <Image 
+          source={{ uri: imageError ? 'https://via.placeholder.com/100x120' : (item.userImage || item.retailerImage || 'https://via.placeholder.com/100x120') }} 
+          style={styles.image}
+          onError={() => setImageError(true)}
+        />
         {item.season && item.season.length > 0 && (
           <View style={styles.seasonBadge}>
             <Icon name="sunny-outline" size={12} color="#FFFFFF" />
