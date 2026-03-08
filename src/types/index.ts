@@ -16,6 +16,7 @@ export interface ClothingItem {
   notes?: string;
   tags?: string[];
   favorite?: boolean;
+  retailer?: string;
 }
 
 export type ClothingCategory = 'tops' | 'bottoms' | 'dresses' | 'outerwear' | 'shoes' | 'accessories';

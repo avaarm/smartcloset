@@ -63,7 +63,7 @@ export class WearTrackingService {
 
       // Create outfit history entry
       const historyEntry: OutfitHistory = {
-        id: Date.now().toString(),
+        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         outfitId: outfit.id,
         dateWorn: new Date().toISOString(),
         occasion,

@@ -5,27 +5,30 @@
 
 export const theme = {
   colors: {
-    background: '#FAFAF9', // Warm white background
+    background: '#F8F7FF', // Soft lavender white background
     cardBackground: '#FFFFFF', // Pure white for cards
-    text: '#1A1A1A', // Rich black for primary text
-    primary: '#D4A5A5', // Primary brand color (same as accent)
-    accent: '#D4A5A5', // Dusty rose accent
-    accentDark: '#B88B8B', // Deeper rose for hover states
-    textSecondary: '#8B8B8B', // Secondary text color
-    lightGray: '#E8E6E3', // Soft gray for borders
-    mediumGray: '#8B8B8B', // Medium gray for secondary text
-    darkGray: '#4A4A4A', // Dark gray for emphasis
-    shadowColor: '#000000',
-    mutedBackground: '#F5F3F0', // Warm beige for sections
-    categoryTag: '#E8E6E3', // Neutral beige for tags
-    success: '#7CB342', // Green for success states
-    warning: '#FFA726', // Orange for warnings
-    error: '#EF5350', // Red for errors
+    text: '#1F1B2E', // Deep purple-black for primary text
+    primary: '#8B7FD9', // Vibrant purple - primary brand color
+    accent: '#8B7FD9', // Vibrant purple accent
+    accentDark: '#6B5FB9', // Deeper purple for hover states
+    accentLight: '#A599E9', // Lighter purple for subtle accents
+    textSecondary: '#6B7280', // Cool gray for secondary text
+    lightGray: '#E5E7EB', // Soft gray for borders
+    mediumGray: '#9CA3AF', // Medium gray for secondary text
+    darkGray: '#374151', // Dark gray for emphasis
+    shadowColor: '#8B7FD9',
+    mutedBackground: '#F3F4F6', // Light gray for sections
+    categoryTag: '#EDE9FE', // Light purple for tags
+    success: '#10B981', // Modern green for success states
+    warning: '#F59E0B', // Amber for warnings
+    error: '#EF4444', // Modern red for errors
+    info: '#3B82F6', // Blue for info
     gradient: {
-      primary: ['#D4A5A5', '#E8B4B8'],
-      secondary: ['#F5F3F0', '#FAFAF9'],
-      dark: ['#4A4A4A', '#1A1A1A'],
-      luxury: ['#C9A9A6', '#D4B5B3', '#E8C5C3'],
+      primary: ['#8B7FD9', '#A599E9'],
+      secondary: ['#F3F4F6', '#F8F7FF'],
+      dark: ['#6B5FB9', '#4C3F99'],
+      luxury: ['#8B7FD9', '#9D8FE3', '#AFA3ED'],
+      accent: ['#A599E9', '#C4B5FD'],
     },
   },
   typography: {

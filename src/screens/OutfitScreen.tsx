@@ -80,7 +80,7 @@ const SuggestionsTab = () => {
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color="#8B7FD9" />
       </View>
     );
   }
@@ -143,8 +143,8 @@ const SuggestionsTab = () => {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={['#007AFF']}
-              tintColor="#007AFF"
+              colors={['#8B7FD9']}
+              tintColor="#8B7FD9"
             />
           }
         />
@@ -220,7 +220,7 @@ const SavedOutfitsTab = () => {
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color="#8B7FD9" />
       </View>
     );
   }
@@ -244,8 +244,8 @@ const SavedOutfitsTab = () => {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={['#007AFF']}
-              tintColor="#007AFF"
+              colors={['#8B7FD9']}
+              tintColor="#8B7FD9"
             />
           }
         />

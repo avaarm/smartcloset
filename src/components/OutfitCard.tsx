@@ -37,7 +37,7 @@ const OutfitCard: React.FC<OutfitCardProps> = ({ outfit, onSave, onDelete, onMar
           </TouchableOpacity>
         ) : (
           <TouchableOpacity onPress={onSave} style={styles.actionButton}>
-            <Icon name="bookmark-outline" size={22} color="#007AFF" />
+            <Icon name="bookmark-outline" size={22} color="#8B7FD9" />
           </TouchableOpacity>
         )}
       </View>

@@ -241,7 +241,7 @@ const WeatherWidget: React.FC<WeatherWidgetProps> = ({
   if (error) {
     return (
       <View style={styles.errorContainer}>
-        <Icon name="cloud-offline-outline" size={40} color="#FF385C" />
+        <Icon name="cloud-offline-outline" size={40} color="#8B7FD9" />
         <Text style={styles.errorText}>{error}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={fetchWeatherData}>
           <Text style={styles.retryButtonText}>Retry</Text>
@@ -508,12 +508,12 @@ const styles = StyleSheet.create({
   errorText: {
     marginTop: 8,
     fontSize: 14,
-    color: '#FF385C',
+    color: '#8B7FD9',
     textAlign: 'center',
   },
   retryButton: {
     marginTop: 16,
-    backgroundColor: '#FF385C',
+    backgroundColor: '#8B7FD9',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,

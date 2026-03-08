@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -48,6 +48,22 @@ const WardrobeStack = () => {
   );
 };
 
+const SignInNavigable = ({ navigation }: any) => {
+  const handleSignIn = () => {
+    AsyncStorage.setItem('smartcloset_hasSignedIn', 'true').catch(() => {});
+    navigation.goBack();
+  };
+  const handleGuest = () => {
+    navigation.goBack();
+  };
+  return (
+    <SignInScreen
+      onAccountSignIn={handleSignIn}
+      onGuestContinue={handleGuest}
+    />
+  );
+};
+
 const HomeStack = () => {
   return (
     <Stack.Navigator>
@@ -55,6 +71,11 @@ const HomeStack = () => {
         name="HomeMain" 
         component={HomeScreen}
         options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="SignIn" 
+        component={SignInNavigable}
+        options={{ headerShown: false, presentation: 'modal' }}
       />
       <Stack.Screen 
         name="ItemDetails" 
@@ -97,41 +118,54 @@ const OutfitStack = () => {
   );
 };
 
+const WishlistStack = () => {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen 
+        name="WishlistMain" 
+        component={WishlistScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="AddClothing" 
+        component={AddClothingScreen}
+        options={{ title: 'Add to Wishlist' }}
+      />
+      <Stack.Screen 
+        name="ItemDetails" 
+        component={ItemDetailsScreen}
+        options={{ headerShown: false }}
+      />
+    </Stack.Navigator>
+  );
+};
+
 const App = (): React.JSX.Element => {
   const [showSplash, setShowSplash] = useState(true);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isSignedIn, setIsSignedIn] = useState(false);
 
-  const loadAuthState = async () => {
-    try {
-      const storedFlag = await AsyncStorage.getItem('smartcloset_hasSignedIn');
-      setIsSignedIn(storedFlag === 'true');
-    } catch (error) {
-      console.warn('Failed to load auth state', error);
-    } finally {
-      setIsAuthLoading(false);
+  useEffect(() => {
+    if (!showSplash) {
+      AsyncStorage.getItem('smartcloset_hasSignedIn')
+        .then(value => setIsSignedIn(value === 'true'))
+        .catch(() => {})
+        .finally(() => setIsAuthLoading(false));
     }
-  };
+  }, [showSplash]);
 
-  const handleSplashComplete = () => {
+  const handleSplashComplete = useCallback(() => {
     setShowSplash(false);
-    loadAuthState();
-  };
+  }, []);
 
-  const handleAccountSignIn = async () => {
-    try {
-      await AsyncStorage.setItem('smartcloset_hasSignedIn', 'true');
-      setIsSignedIn(true);
-    } catch (error) {
-      console.warn('Failed to persist auth state', error);
-      setIsSignedIn(true);
-    }
-  };
-
-  const handleGuestContinue = () => {
-    // Unlock app for this session only; do not persist flag
+  const handleAccountSignIn = useCallback(() => {
     setIsSignedIn(true);
-  };
+    AsyncStorage.setItem('smartcloset_hasSignedIn', 'true').catch(() => {});
+  }, []);
+
+  const handleGuestContinue = useCallback(() => {
+    setIsSignedIn(true);
+  }, []);
 
   if (showSplash) {
     return <SplashScreen onAnimationComplete={handleSplashComplete} />;
@@ -140,7 +174,7 @@ const App = (): React.JSX.Element => {
   if (isAuthLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#D4A5A5" />
+        <ActivityIndicator size="large" color="#8B7FD9" />
       </View>
     );
   }
@@ -158,7 +192,7 @@ const App = (): React.JSX.Element => {
     <NavigationContainer>
       <Tab.Navigator
         screenOptions={{
-          tabBarActiveTintColor: '#FF385C',
+          tabBarActiveTintColor: '#8B7FD9',
           tabBarInactiveTintColor: '#9CA3AF',
           tabBarStyle: {
             height: Platform.OS === 'ios' ? 88 : 60,
@@ -167,7 +201,7 @@ const App = (): React.JSX.Element => {
             backgroundColor: '#ffffff',
             borderTopWidth: 0,
             elevation: 10,
-            shadowColor: 'rgba(0, 0, 0, 0.1)',
+            shadowColor: 'rgba(139, 127, 217, 0.15)',
             shadowOffset: { width: 0, height: -2 },
             shadowOpacity: 0.1,
             shadowRadius: 8,
@@ -179,18 +213,18 @@ const App = (): React.JSX.Element => {
           },
           headerStyle: {
             backgroundColor: '#FFFFFF',
-            shadowColor: 'rgba(0, 0, 0, 0.05)',
+            shadowColor: 'rgba(139, 127, 217, 0.1)',
             shadowOffset: { width: 0, height: 1 },
             shadowOpacity: 0.25,
             shadowRadius: 4,
             elevation: 2,
             borderBottomWidth: 0,
           },
-          headerTintColor: '#111827',
+          headerTintColor: '#1F1B2E',
           headerTitleStyle: {
             fontSize: 18,
             fontWeight: '600',
-            color: '#111827',
+            color: '#1F1B2E',
           },
         }}
       >
@@ -231,10 +265,11 @@ const App = (): React.JSX.Element => {
         />
         <Tab.Screen 
           name="Wishlist" 
-          component={WishlistScreen}
+          component={WishlistStack}
           options={{
             title: 'My Wishlist',
             tabBarLabel: 'Wishlist',
+            headerShown: false,
             tabBarIcon: ({ color, size }) => (
               <Icon name="heart-outline" size={24} color={color} />
             )

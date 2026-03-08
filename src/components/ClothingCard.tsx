@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, Image, StyleSheet, Pressable } from 'react-native';
 import { ClothingItem } from '../types';
 
@@ -8,12 +8,15 @@ interface ClothingCardProps {
 }
 
 const ClothingCard = ({ item, onPress }: ClothingCardProps) => {
+  const [imageError, setImageError] = useState(false);
+  
   return (
     <Pressable onPress={onPress} style={styles.card}>
       <Image
-        source={{ uri: item.retailerImage || item.userImage }}
+        source={{ uri: imageError ? 'https://via.placeholder.com/150' : (item.retailerImage || item.userImage || 'https://via.placeholder.com/150') }}
         style={styles.image}
         resizeMode="cover"
+        onError={() => setImageError(true)}
       />
       <View style={styles.details}>
         <Text style={styles.name}>{item.name}</Text>
