@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,22 +7,160 @@ import {
   StatusBar,
   SafeAreaView,
   Alert,
+  ActivityIndicator,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import {
+  signInWithGoogle,
+  signInWithApple,
+  signInWithEmail,
+  signUpWithEmail,
+} from '../services/authService';
 
 type SignInScreenProps = {
-  onAccountSignIn: () => void;
+  onSignInComplete?: () => void;
   onGuestContinue: () => void;
 };
 
-const SignInScreen: React.FC<SignInScreenProps> = ({ onAccountSignIn, onGuestContinue }) => {
-  const handleSignIn = (provider: string) => {
-    Alert.alert(
-      'Signed In',
-      `You've signed in with ${provider}.`,
-      [{ text: 'OK', onPress: onAccountSignIn }],
-    );
+const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestContinue }) => {
+  const [loading, setLoading] = useState(false);
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    try {
+      await signInWithGoogle();
+      onSignInComplete?.();
+    } catch (error: any) {
+      Alert.alert('Sign-In Error', error.message || 'Failed to sign in with Google');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const handleAppleSignIn = async () => {
+    setLoading(true);
+    try {
+      await signInWithApple();
+      onSignInComplete?.();
+    } catch (error: any) {
+      Alert.alert('Sign-In Error', error.message || 'Failed to sign in with Apple');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEmailSubmit = async () => {
+    if (!email || !password) {
+      Alert.alert('Missing Fields', 'Please enter your email and password.');
+      return;
+    }
+    setLoading(true);
+    try {
+      if (isRegistering) {
+        await signUpWithEmail(email, password, name);
+        Alert.alert('Check Your Email', 'We sent you a confirmation link. You can now sign in.');
+        setIsRegistering(false);
+      } else {
+        await signInWithEmail(email, password);
+        onSignInComplete?.();
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Authentication failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (showEmailForm) {
+    return (
+      <View style={styles.root}>
+        <StatusBar barStyle="light-content" />
+        <SafeAreaView style={styles.safeArea}>
+          <KeyboardAvoidingView
+            style={styles.emailFormContainer}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
+            <TouchableOpacity onPress={() => setShowEmailForm(false)} style={styles.backButton}>
+              <Icon name="arrow-back" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+
+            <Text style={styles.brandTitle}>
+              {isRegistering ? 'Create Account' : 'Welcome Back'}
+            </Text>
+            <Text style={styles.subtitle}>
+              {isRegistering
+                ? 'Sign up with your email address'
+                : 'Sign in to your account'}
+            </Text>
+
+            {isRegistering && (
+              <TextInput
+                style={styles.textInput}
+                placeholder="Name"
+                placeholderTextColor="rgba(255,255,255,0.4)"
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="words"
+              />
+            )}
+            <TextInput
+              style={styles.textInput}
+              placeholder="Email"
+              placeholderTextColor="rgba(255,255,255,0.4)"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <TextInput
+              style={styles.textInput}
+              placeholder="Password"
+              placeholderTextColor="rgba(255,255,255,0.4)"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+
+            <TouchableOpacity
+              style={[styles.emailButton, loading && styles.disabledButton]}
+              onPress={handleEmailSubmit}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.emailButtonText}>
+                  {isRegistering ? 'Sign Up' : 'Sign In'}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setIsRegistering(!isRegistering)}
+              style={styles.toggleContainer}
+            >
+              <Text style={styles.footerText}>
+                {isRegistering
+                  ? 'Already have an account? '
+                  : "Don't have an account? "}
+              </Text>
+              <Text style={styles.footerLink}>
+                {isRegistering ? 'Sign In' : 'Sign Up'}
+              </Text>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.root}>
@@ -36,23 +174,39 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onAccountSignIn, onGuestCon
         </View>
 
         <View style={styles.buttonsContainer}>
-          <TouchableOpacity style={styles.socialButton} onPress={() => handleSignIn('Apple')}>
+          <TouchableOpacity
+            style={[styles.socialButton, loading && styles.disabledButton]}
+            onPress={handleAppleSignIn}
+            disabled={loading}
+          >
             <Icon name="logo-apple" size={20} color="#111" />
             <Text style={styles.socialLabel}>Continue with Apple</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.socialButton} onPress={() => handleSignIn('Google')}>
+          <TouchableOpacity
+            style={[styles.socialButton, loading && styles.disabledButton]}
+            onPress={handleGoogleSignIn}
+            disabled={loading}
+          >
             <Icon name="logo-google" size={20} color="#111" />
             <Text style={styles.socialLabel}>Continue with Google</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.emailButton} onPress={() => handleSignIn('Email')}>
+          <TouchableOpacity
+            style={[styles.emailButton, loading && styles.disabledButton]}
+            onPress={() => { setShowEmailForm(true); setIsRegistering(true); }}
+            disabled={loading}
+          >
             <Text style={styles.emailButtonText}>Register with Email</Text>
           </TouchableOpacity>
 
+          {loading && (
+            <ActivityIndicator color="#8B7FD9" style={{ marginTop: 16 }} />
+          )}
+
           <View style={styles.footerTextContainer}>
             <Text style={styles.footerText}>Already have an account? </Text>
-            <TouchableOpacity onPress={() => handleSignIn('Email')}>
+            <TouchableOpacity onPress={() => { setShowEmailForm(true); setIsRegistering(false); }}>
               <Text style={styles.footerLink}>Log in</Text>
             </TouchableOpacity>
           </View>
@@ -146,6 +300,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'rgba(255,255,255,0.5)',
     textDecorationLine: 'underline',
+  },
+  emailFormContainer: {
+    flex: 1,
+    paddingHorizontal: 24,
+    justifyContent: 'center',
+  },
+  backButton: {
+    position: 'absolute',
+    top: 16,
+    left: 0,
+    padding: 8,
+  },
+  textInput: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#FFFFFF',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 24,
   },
 });
 

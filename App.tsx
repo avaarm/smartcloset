@@ -15,8 +15,10 @@ import ManualOutfitBuilderScreen from './src/screens/ManualOutfitBuilderScreen';
 import OutfitAnalyticsScreen from './src/screens/OutfitAnalyticsScreen';
 import SplashScreen from './src/components/SplashScreen';
 import { StatusBar, Platform, ActivityIndicator, View } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import SignInScreen from './src/screens/SignInScreen';
+import { supabase } from './src/config/supabase';
+import { configureGoogleSignIn } from './src/services/authService';
+import { Session } from '@supabase/supabase-js';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -49,17 +51,13 @@ const WardrobeStack = () => {
 };
 
 const SignInNavigable = ({ navigation }: any) => {
-  const handleSignIn = () => {
-    AsyncStorage.setItem('smartcloset_hasSignedIn', 'true').catch(() => {});
-    navigation.goBack();
-  };
-  const handleGuest = () => {
+  const handleDone = () => {
     navigation.goBack();
   };
   return (
     <SignInScreen
-      onAccountSignIn={handleSignIn}
-      onGuestContinue={handleGuest}
+      onSignInComplete={handleDone}
+      onGuestContinue={handleDone}
     />
   );
 };
@@ -143,14 +141,27 @@ const WishlistStack = () => {
 const App = (): React.JSX.Element => {
   const [showSplash, setShowSplash] = useState(true);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [isSignedIn, setIsSignedIn] = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
+  const [isGuest, setIsGuest] = useState(false);
 
   useEffect(() => {
     if (!showSplash) {
-      AsyncStorage.getItem('smartcloset_hasSignedIn')
-        .then(value => setIsSignedIn(value === 'true'))
-        .catch(() => {})
-        .finally(() => setIsAuthLoading(false));
+      configureGoogleSignIn();
+
+      // Check for existing session
+      supabase.auth.getSession().then(({ data: { session: s } }) => {
+        setSession(s);
+        setIsAuthLoading(false);
+      });
+
+      // Listen for auth state changes
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        (_event, s) => {
+          setSession(s);
+        },
+      );
+
+      return () => subscription.unsubscribe();
     }
   }, [showSplash]);
 
@@ -158,14 +169,11 @@ const App = (): React.JSX.Element => {
     setShowSplash(false);
   }, []);
 
-  const handleAccountSignIn = useCallback(() => {
-    setIsSignedIn(true);
-    AsyncStorage.setItem('smartcloset_hasSignedIn', 'true').catch(() => {});
+  const handleGuestContinue = useCallback(() => {
+    setIsGuest(true);
   }, []);
 
-  const handleGuestContinue = useCallback(() => {
-    setIsSignedIn(true);
-  }, []);
+  const isSignedIn = !!session || isGuest;
 
   if (showSplash) {
     return <SplashScreen onAnimationComplete={handleSplashComplete} />;
@@ -182,7 +190,6 @@ const App = (): React.JSX.Element => {
   if (!isSignedIn) {
     return (
       <SignInScreen
-        onAccountSignIn={handleAccountSignIn}
         onGuestContinue={handleGuestContinue}
       />
     );
