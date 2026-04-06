@@ -19,9 +19,10 @@ import {
   signInWithEmail,
   signUpWithEmail,
 } from '../services/authService';
+import { Session } from '@supabase/supabase-js';
 
 type SignInScreenProps = {
-  onSignInComplete?: () => void;
+  onSignInComplete?: (session: Session) => void;
   onGuestContinue: () => void;
 };
 
@@ -36,8 +37,8 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
-      await signInWithGoogle();
-      onSignInComplete?.();
+      const result = await signInWithGoogle();
+      if (result.session) onSignInComplete?.(result.session);
     } catch (error: any) {
       Alert.alert('Sign-In Error', error.message || 'Failed to sign in with Google');
     } finally {
@@ -48,8 +49,8 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
   const handleAppleSignIn = async () => {
     setLoading(true);
     try {
-      await signInWithApple();
-      onSignInComplete?.();
+      const result = await signInWithApple();
+      if (result.session) onSignInComplete?.(result.session);
     } catch (error: any) {
       Alert.alert('Sign-In Error', error.message || 'Failed to sign in with Apple');
     } finally {
@@ -65,12 +66,18 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
     setLoading(true);
     try {
       if (isRegistering) {
-        await signUpWithEmail(email, password, name);
-        Alert.alert('Check Your Email', 'We sent you a confirmation link. You can now sign in.');
-        setIsRegistering(false);
+        const result = await signUpWithEmail(email, password, name);
+        if (result.session) {
+          onSignInComplete?.(result.session);
+        } else {
+          Alert.alert('Check Your Email', 'We sent you a confirmation link. You can now sign in.');
+          setIsRegistering(false);
+        }
       } else {
-        await signInWithEmail(email, password);
-        onSignInComplete?.();
+        const result = await signInWithEmail(email, password);
+        if (result.session) {
+          onSignInComplete?.(result.session);
+        }
       }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Authentication failed');

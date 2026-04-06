@@ -1,5 +1,6 @@
 import { ClothingItem, Season } from '../types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../config/supabase';
 
 // Define outfit structure
 export interface Outfit {
@@ -10,6 +11,17 @@ export interface Outfit {
   occasion?: string;
   createdAt: string;
 }
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const getAuthUserId = async (): Promise<string | null> => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user?.id ?? null;
+  } catch {
+    return null;
+  }
+};
 
 /**
  * Generate outfit suggestions based on available clothing items
@@ -156,38 +168,113 @@ export const generateOutfitSuggestions = (items: ClothingItem[], count: number =
   return outfits;
 };
 
-// Storage key for saved outfits
+// Storage key for saved outfits (guest fallback)
 const SAVED_OUTFITS_KEY = '@smartcloset_saved_outfits';
 
-// Function to save an outfit to AsyncStorage
+// ─── Guest-mode AsyncStorage fallback ────────────────────────────────────────
+
+const getLocalOutfits = async (): Promise<Outfit[]> => {
+  const outfits = await AsyncStorage.getItem(SAVED_OUTFITS_KEY);
+  return outfits ? JSON.parse(outfits) : [];
+};
+
+const saveLocalOutfit = async (outfit: Outfit): Promise<void> => {
+  const savedOutfits = await getLocalOutfits();
+  await AsyncStorage.setItem(SAVED_OUTFITS_KEY, JSON.stringify([...savedOutfits, outfit]));
+};
+
+const deleteLocalOutfit = async (outfitId: string): Promise<void> => {
+  const savedOutfits = await getLocalOutfits();
+  await AsyncStorage.setItem(
+    SAVED_OUTFITS_KEY,
+    JSON.stringify(savedOutfits.filter(o => o.id !== outfitId)),
+  );
+};
+
+// ─── DB mapping ──────────────────────────────────────────────────────────────
+
+const mapDbToOutfit = (row: any, items: ClothingItem[]): Outfit => ({
+  id: row.id,
+  name: row.name,
+  items,
+  season: row.season || [],
+  occasion: row.occasion,
+  createdAt: row.date_created || row.created_at,
+});
+
+// ─── Public API ──────────────────────────────────────────────────────────────
+
 export const saveOutfit = async (outfit: Outfit): Promise<void> => {
   try {
-    const savedOutfits = await getSavedOutfits();
-    const updatedOutfits = [...savedOutfits, outfit];
-    await AsyncStorage.setItem(SAVED_OUTFITS_KEY, JSON.stringify(updatedOutfits));
+    const userId = await getAuthUserId();
+    if (!userId) return saveLocalOutfit(outfit);
+
+    const itemIds = outfit.items.map(item => item.id);
+    const { error } = await supabase.from('outfits').insert({
+      user_id: userId,
+      name: outfit.name,
+      item_ids: itemIds,
+      season: outfit.season || [],
+      occasion: outfit.occasion,
+    });
+    if (error) throw error;
   } catch (error) {
     console.error('Error saving outfit:', error);
     throw error;
   }
 };
 
-// Function to get saved outfits from AsyncStorage
 export const getSavedOutfits = async (): Promise<Outfit[]> => {
   try {
-    const outfits = await AsyncStorage.getItem(SAVED_OUTFITS_KEY);
-    return outfits ? JSON.parse(outfits) : [];
+    const userId = await getAuthUserId();
+    if (!userId) return getLocalOutfits();
+
+    const { data: outfitRows, error } = await supabase
+      .from('outfits')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    if (!outfitRows || outfitRows.length === 0) return [];
+
+    // Collect all unique item IDs across all outfits
+    const allItemIds = [...new Set(outfitRows.flatMap((o: any) => o.item_ids || []))];
+    let itemsMap: Record<string, ClothingItem> = {};
+
+    if (allItemIds.length > 0) {
+      const { data: itemRows } = await supabase
+        .from('clothing_items')
+        .select('*')
+        .in('id', allItemIds);
+      if (itemRows) {
+        const { mapDbToClothingItem } = require('./storage');
+        for (const row of itemRows) {
+          itemsMap[row.id] = mapDbToClothingItem ? mapDbToClothingItem(row) : row;
+        }
+      }
+    }
+
+    return outfitRows.map((row: any) => {
+      const items = (row.item_ids || [])
+        .map((id: string) => itemsMap[id])
+        .filter(Boolean);
+      return mapDbToOutfit(row, items);
+    });
   } catch (error) {
     console.error('Error getting saved outfits:', error);
     return [];
   }
 };
 
-// Function to delete a saved outfit
 export const deleteSavedOutfit = async (outfitId: string): Promise<void> => {
   try {
-    const savedOutfits = await getSavedOutfits();
-    const updatedOutfits = savedOutfits.filter(outfit => outfit.id !== outfitId);
-    await AsyncStorage.setItem(SAVED_OUTFITS_KEY, JSON.stringify(updatedOutfits));
+    const userId = await getAuthUserId();
+    if (!userId) return deleteLocalOutfit(outfitId);
+
+    const { error } = await supabase
+      .from('outfits')
+      .delete()
+      .eq('id', outfitId);
+    if (error) throw error;
   } catch (error) {
     console.error('Error deleting saved outfit:', error);
     throw error;

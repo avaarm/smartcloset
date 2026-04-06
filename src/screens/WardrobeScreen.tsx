@@ -1,20 +1,38 @@
+/**
+ * WardrobeScreen — grid view of the user's wardrobe with search + filter.
+ *
+ * Uses the 21st.dev-style design system: clean type, minimal chrome,
+ * solid accent FAB (no gradients), themed via useTheme.
+ */
+
 import React, { useEffect, useState, useMemo } from 'react';
+import {
+  FlatList,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { View, StyleSheet, FlatList, TouchableOpacity, Text, SafeAreaView, StatusBar, ActivityIndicator, Image, TextInput } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
+import Icon from 'react-native-vector-icons/Ionicons';
+import { Badge, Button, EmptyState, Screen, Text } from '../ui';
+import { useTheme } from '../styles/ThemeProvider';
 import ClothingItem from '../components/ClothingItem';
 import { ClothingItem as ClothingItemType } from '../types';
-import { getClothingItems, deleteClothingItem, resetStorage } from '../services/storage';
-import Icon from 'react-native-vector-icons/Ionicons';
+import {
+  getClothingItems,
+  deleteClothingItem,
+  resetStorage,
+} from '../services/storage';
 import FilterModal, { FilterOptions } from '../components/FilterModal';
 import { ClothingCategory, Season } from '../types';
-import theme from '../styles/theme';
 
 type WardrobeScreenProps = {
   navigation: NativeStackNavigationProp<any, 'WardrobeMain'>;
 };
 
 const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
+  const { theme } = useTheme();
   const [clothes, setClothes] = useState<ClothingItemType[]>([]);
   const [loading, setLoading] = useState(true);
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -43,9 +61,9 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
       setClothes(items);
       setLoading(false);
     });
-
     return unsubscribe;
   }, [navigation]);
+
   const handleEdit = (item: ClothingItemType) => {
     navigation.navigate('AddClothing', { editItem: item });
   };
@@ -78,40 +96,35 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
     setFilters(newFilters);
   };
 
-  // Filter and sort clothes
   const filteredAndSortedClothes = useMemo(() => {
     let result = [...clothes];
 
-    // Apply search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      result = result.filter((item) =>
-        item.name.toLowerCase().includes(query) ||
-        item.brand?.toLowerCase().includes(query) ||
-        item.color?.toLowerCase().includes(query) ||
-        item.tags?.some(tag => tag.toLowerCase().includes(query)) ||
-        item.retailer?.toLowerCase().includes(query)
+      result = result.filter(
+        item =>
+          item.name.toLowerCase().includes(query) ||
+          item.brand?.toLowerCase().includes(query) ||
+          item.color?.toLowerCase().includes(query) ||
+          item.tags?.some(tag => tag.toLowerCase().includes(query)) ||
+          item.retailer?.toLowerCase().includes(query),
       );
     }
 
-    // Apply category filter
     if (filters.categories.length > 0) {
-      result = result.filter((item) =>
-        filters.categories.includes(item.category as ClothingCategory)
+      result = result.filter(item =>
+        filters.categories.includes(item.category as ClothingCategory),
       );
     }
 
-    // Apply season filter
     if (filters.seasons.length > 0) {
-      result = result.filter((item) =>
-        item.season?.some((s: Season) => filters.seasons.includes(s))
+      result = result.filter(item =>
+        item.season?.some((s: Season) => filters.seasons.includes(s)),
       );
     }
 
-    // Apply sorting
     result.sort((a, b) => {
       let comparison = 0;
-      
       switch (filters.sortBy) {
         case 'name':
           comparison = a.name.localeCompare(b.name);
@@ -128,16 +141,15 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
           comparison = (a.brand || '').localeCompare(b.brand || '');
           break;
       }
-
       return filters.sortOrder === 'asc' ? comparison : -comparison;
     });
 
     return result;
-  }, [clothes, filters]);
+  }, [clothes, filters, searchQuery]);
 
   const renderItem = ({ item }: { item: ClothingItemType }) => (
-    <ClothingItem 
-      item={item} 
+    <ClothingItem
+      item={item}
       onEdit={handleEdit}
       onDelete={handleDelete}
       onPress={handleItemPress}
@@ -145,118 +157,149 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
     />
   );
 
-  const activeFiltersCount =
-    filters.categories.length + filters.seasons.length;
+  const activeFiltersCount = filters.categories.length + filters.seasons.length;
 
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View>
-            <Text style={styles.headerTitle}>My Wardrobe</Text>
-            <Text style={styles.headerSubtitle}>
-              {filteredAndSortedClothes.length} of {clothes.length} items
-            </Text>
-          </View>
-          <View style={styles.headerButtons}>
-            <TouchableOpacity
-              style={styles.loadDataButton}
-              onPress={handleResetStorage}
-            >
-              <Icon name="refresh-outline" size={18} color="#8B7FD9" />
-              <Text style={styles.loadDataText}>Load Sample</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.filterButton,
-                activeFiltersCount > 0 && styles.filterButtonActive,
-              ]}
-              onPress={() => setShowFilterModal(true)}
-            >
-              <Icon
-                name="options-outline"
-                size={20}
-                color={activeFiltersCount > 0 ? '#FFFFFF' : '#111827'}
-              />
-              {activeFiltersCount > 0 && (
-                <View style={styles.filterBadge}>
-                  <Text style={styles.filterBadgeText}>{activeFiltersCount}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
+  const headerElement = (
+    <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+      <View style={styles.headerRow}>
+        <View style={{ flex: 1 }}>
+          <Text variant="h2">My Wardrobe</Text>
+          <Text variant="caption" color="muted" style={{ marginTop: 2 }}>
+            {filteredAndSortedClothes.length} of {clothes.length} items
+          </Text>
+        </View>
+        <View style={styles.headerActions}>
+          <Button
+            label="Load Sample"
+            variant="ghost"
+            size="sm"
+            leftIcon={
+              <Icon name="refresh-outline" size={16} color={theme.colors.text} />
+            }
+            onPress={handleResetStorage}
+          />
+          <Pressable
+            onPress={() => setShowFilterModal(true)}
+            style={[
+              styles.filterBtn,
+              {
+                backgroundColor: activeFiltersCount > 0
+                  ? theme.colors.accent
+                  : theme.colors.muted,
+                borderRadius: theme.radius.full,
+              },
+            ]}
+          >
+            <Icon
+              name="options-outline"
+              size={20}
+              color={activeFiltersCount > 0 ? theme.colors.accentText : theme.colors.text}
+            />
+            {activeFiltersCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text
+                  variant="caption"
+                  style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}
+                >
+                  {activeFiltersCount}
+                </Text>
+              </View>
+            )}
+          </Pressable>
         </View>
       </View>
-      
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <Icon name="search-outline" size={20} color="#9CA3AF" style={styles.searchIcon} />
+
+      {/* Search */}
+      <View
+        style={[
+          styles.searchBar,
+          {
+            backgroundColor: theme.colors.muted,
+            borderRadius: theme.radius.lg,
+          },
+        ]}
+      >
+        <Icon name="search-outline" size={18} color={theme.colors.textSubtle} />
         <TextInput
-          style={styles.searchInput}
-          placeholder="Search by name, brand, color, or tags..."
-          placeholderTextColor="#9CA3AF"
+          style={[styles.searchInput, { color: theme.colors.text }]}
+          placeholder="Search by name, brand, color..."
+          placeholderTextColor={theme.colors.textSubtle}
           value={searchQuery}
           onChangeText={setSearchQuery}
           autoCapitalize="none"
           autoCorrect={false}
         />
         {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
-            <Icon name="close-circle" size={20} color="#9CA3AF" />
-          </TouchableOpacity>
+          <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+            <Icon name="close-circle" size={18} color={theme.colors.textSubtle} />
+          </Pressable>
         )}
       </View>
 
-      <View style={styles.container}>
+      {/* Active filters strip */}
+      {activeFiltersCount > 0 && (
+        <View style={styles.filterStrip}>
+          {filters.categories.map(c => (
+            <Badge key={c} label={c} tone="accent" />
+          ))}
+          {filters.seasons.map(s => (
+            <Badge key={s} label={s} tone="neutral" />
+          ))}
+          <Pressable onPress={() => setFilters({ categories: [], seasons: [], sortBy: 'date', sortOrder: 'desc' })}>
+            <Text variant="caption" color="muted">
+              Clear all
+            </Text>
+          </Pressable>
+        </View>
+      )}
+    </View>
+  );
+
+  return (
+    <Screen padded={false} header={headerElement}>
+      <View style={{ flex: 1 }}>
         {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#8B7FD9" />
+          <View style={styles.center}>
+            <Text variant="body" color="muted">Loading wardrobe...</Text>
           </View>
         ) : filteredAndSortedClothes.length > 0 ? (
           <FlatList
             data={filteredAndSortedClothes}
             renderItem={renderItem}
-            keyExtractor={(item) => item.id}
+            keyExtractor={item => item.id}
             numColumns={2}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 100 }}
             showsVerticalScrollIndicator={false}
-            ListHeaderComponent={(
-              <View style={styles.featuredSection}>
-                <Text style={styles.sectionTitle}>Recently Added</Text>
-                <View style={styles.featuredCard}>
-                  <Image 
-                    source={{uri: 'https://images.unsplash.com/photo-1551028719-00167b16eac5'}} 
-                    style={styles.featuredImage}
-                  />
-                  <LinearGradient 
-                    colors={['transparent', 'rgba(0,0,0,0.7)']} 
-                    style={styles.featuredGradient}
-                  >
-                    <Text style={styles.featuredText}>Summer Collection</Text>
-                  </LinearGradient>
-                </View>
-              </View>
-            )}
           />
         ) : (
-          <View style={styles.emptyState}>
-            <Icon name="shirt-outline" size={80} color="#D1D5DB" />
-            <Text style={styles.emptyStateTitle}>Your wardrobe is empty</Text>
-            <Text style={styles.emptyStateText}>Add some clothing items to get started</Text>
+          <View style={styles.center}>
+            <EmptyState
+              icon={<Icon name="shirt-outline" size={32} color={theme.colors.textSubtle} />}
+              title={clothes.length === 0 ? 'Your wardrobe is empty' : 'No matches'}
+              body={
+                clothes.length === 0
+                  ? 'Add some clothing items to get started.'
+                  : 'Try a different search or clear your filters.'
+              }
+            />
           </View>
         )}
-        <TouchableOpacity 
-          style={styles.addButton}
+
+        {/* FAB */}
+        <Pressable
           onPress={() => navigation.navigate('AddClothing')}
+          style={({ pressed }) => [
+            styles.fab,
+            {
+              backgroundColor: theme.colors.accent,
+              borderRadius: theme.radius.full,
+              opacity: pressed ? 0.85 : 1,
+              ...theme.shadows.medium,
+            },
+          ]}
         >
-          <LinearGradient
-            colors={['#8B7FD9', '#A599E9']}
-            style={styles.addButtonGradient}
-          >
-            <Icon name="add" size={24} color="#FFFFFF" />
-          </LinearGradient>
-        </TouchableOpacity>
+          <Icon name="add" size={24} color={theme.colors.accentText} />
+        </Pressable>
       </View>
 
       <FilterModal
@@ -265,201 +308,78 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
         onApplyFilters={handleApplyFilters}
         currentFilters={filters}
       />
-    </SafeAreaView>
+    </Screen>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
   header: {
-    backgroundColor: '#FFFFFF',
     paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    borderBottomWidth: 0,
+    paddingTop: 8,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
   },
-  headerContent: {
+  headerRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: '300',
-    color: theme.colors.text,
-    marginBottom: 4,
-    letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: theme.colors.mediumGray,
-    fontWeight: '400',
-  },
-  headerButtons: {
+  headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  loadDataButton: {
-    flexDirection: 'row',
+  filterBtn: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F3F0FF',
-    borderWidth: 1,
-    borderColor: '#8B7FD9',
-    gap: 4,
-  },
-  loadDataText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#8B7FD9',
-  },
-  filterButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: theme.colors.mutedBackground,
     justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 0,
-  },
-  filterButtonActive: {
-    backgroundColor: theme.colors.accent,
-    borderColor: theme.colors.accent,
   },
   filterBadge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#FF3B30',
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: 'center',
+    top: -2,
+    right: -2,
+    backgroundColor: '#DC2626',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  filterBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  searchContainer: {
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    marginHorizontal: 16,
-    marginVertical: 12,
-    borderRadius: 12,
+    marginTop: 12,
     paddingHorizontal: 12,
-    height: 48,
-  },
-  searchIcon: {
-    marginRight: 8,
+    height: 44,
+    gap: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
-    color: '#1F1B2E',
+    fontSize: 15,
     paddingVertical: 0,
   },
-  clearButton: {
-    padding: 4,
-  },
-  featuredSection: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.colors.mediumGray,
-    marginBottom: 12,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-  },
-  featuredCard: {
-    height: 200,
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 20,
-  },
-  featuredImage: {
-    width: '100%',
-    height: '100%',
-  },
-  featuredGradient: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '50%',
-    justifyContent: 'flex-end',
-    padding: 16,
-  },
-  featuredText: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '600',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  filterStrip: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
   },
-  listContent: {
-    paddingBottom: 20,
-  },
-  emptyState: {
+  center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
-  emptyStateTitle: {
-    fontSize: 20,
-    fontWeight: '300',
-    color: theme.colors.text,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyStateText: {
-    fontSize: 15,
-    fontWeight: '400',
-    color: theme.colors.mediumGray,
-    textAlign: 'center',
-  },
-  addButton: {
+  fab: {
     position: 'absolute',
     right: 20,
-    bottom: 20,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
+    bottom: 24,
+    width: 56,
+    height: 56,
     alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    backgroundColor: 'transparent',
-  },
-  addButtonGradient: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
     justifyContent: 'center',
-    alignItems: 'center',
   },
 });
 
