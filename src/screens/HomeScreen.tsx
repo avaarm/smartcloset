@@ -1,455 +1,407 @@
-import React, { useState, useEffect, useRef } from 'react';
+/**
+ * HomeScreen — the redesigned landing view.
+ *
+ * Uses the 21st.dev-style primitives from `src/ui/*` and tokens from
+ * `src/styles/tokens.ts`. Sections:
+ *   1. Greeting hero + auth button
+ *   2. Stats strip (items / outfits / wishlist)
+ *   3. Quick actions grid (wardrobe / outfits / lens / add)
+ *   4. Style profile CTA (if body profile missing)
+ *   5. Recently added horizontal strip
+ */
+
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Image,
   FlatList,
-  ActivityIndicator,
-  Animated,
+  Image,
+  Pressable,
+  StyleSheet,
+  View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import LinearGradient from 'react-native-linear-gradient';
-import StyleWidget from '../components/StyleWidget';
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Screen,
+  Skeleton,
+  Text,
+} from '../ui';
+import { useTheme } from '../styles/ThemeProvider';
 import { ClothingItem } from '../types';
-import theme from '../styles/theme';
+import { getClothingItems } from '../services/storage';
+import { getSavedOutfits } from '../services/outfitService';
+import { supabase } from '../config/supabase';
+import { signOut } from '../services/authService';
+import { getBodyProfile } from '../services/profileService';
 
 const HomeScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
+  const { theme } = useTheme();
+
   const [recentItems, setRecentItems] = useState<ClothingItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    totalItems: 0,
-    outfits: 0,
-    wishlist: 0,
-  });
-  
-  // Animation values
-  const scrollY = new Animated.Value(0);
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [0, 100],
-    outputRange: [1, 0.8],
-    extrapolate: 'clamp',
-  });
-  const headerTranslate = scrollY.interpolate({
-    inputRange: [0, 100],
-    outputRange: [0, -10],
-    extrapolate: 'clamp',
-  });
+  const [userName, setUserName] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [hasProfile, setHasProfile] = useState(true); // optimistic; avoid flash
+  const [stats, setStats] = useState({ totalItems: 0, outfits: 0, wishlist: 0 });
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      
-      // Load wardrobe stats
-      const wardrobeItems = await AsyncStorage.getItem('wardrobe');
-      const parsedWardrobe = wardrobeItems ? JSON.parse(wardrobeItems) : [];
-      
-      // Load outfits
-      const savedOutfits = await AsyncStorage.getItem('savedOutfits');
-      const parsedOutfits = savedOutfits ? JSON.parse(savedOutfits) : [];
-      
-      // Load wishlist
-      const wishlistItems = await AsyncStorage.getItem('wishlist');
-      const parsedWishlist = wishlistItems ? JSON.parse(wishlistItems) : [];
-      
-      // Set stats
-      setStats({
-        totalItems: parsedWardrobe.length,
-        outfits: parsedOutfits.length,
-        wishlist: parsedWishlist.length,
-      });
-      
-      // Get recent items (last 5 added)
-      const sortedItems = [...parsedWardrobe].sort((a, b) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setIsAuthenticated(true);
+        const meta = session.user.user_metadata;
+        setUserName(meta?.name || meta?.full_name || session.user.email?.split('@')[0] || null);
+      } else {
+        setIsAuthenticated(false);
+        setUserName(null);
+      }
+
+      const [wardrobe, outfits, profile] = await Promise.all([
+        getClothingItems(),
+        getSavedOutfits(),
+        getBodyProfile().catch(() => null),
+      ]);
+
+      const wishlist = wardrobe.filter(item => item.isWishlist);
+      setStats({ totalItems: wardrobe.length, outfits: outfits.length, wishlist: wishlist.length });
+      setHasProfile(!!profile);
+
+      const sorted = [...wardrobe].sort((a, b) => {
         const dateA = a.dateAdded ? new Date(a.dateAdded).getTime() : 0;
         const dateB = b.dateAdded ? new Date(b.dateAdded).getTime() : 0;
         return dateB - dateA;
       });
-      
-      setRecentItems(sortedItems.slice(0, 5));
+      setRecentItems(sorted.slice(0, 10));
     } catch (error) {
-      console.error('Error loading home data:', error);
+      console.error('[HomeScreen] load error:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleOutfitSuggestionPress = () => {
-    navigation.navigate('Outfits' as never);
-  };
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData]),
+  );
 
-  const handleItemPress = (item: ClothingItem) => {
-    (navigation as any).navigate('ItemDetails', { item });
-  };
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
-  const renderFeatureCard = (
-    title: string,
-    icon: string,
-    colors: string[],
-    onPress: () => void
-  ) => {
-    return (
-      <TouchableOpacity style={styles.featureCardContainer} onPress={onPress}>
-        <View style={styles.featureCard}>
-          <View style={styles.featureIconContainer}>
-            <Icon name={icon} size={24} color={theme.colors.mediumGray} />
-          </View>
-          <Text style={styles.featureCardTitle}>{title}</Text>
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const greeting = (() => {
+    const hour = new Date().getHours();
+    const prefix = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+    return userName ? `${prefix}, ${userName}` : prefix;
+  })();
+
+  const quickActions: Array<{
+    label: string;
+    sub: string;
+    icon: string;
+    onPress: () => void;
+  }> = [
+    {
+      label: 'Wardrobe',
+      sub: `${stats.totalItems} items`,
+      icon: 'shirt-outline',
+      onPress: () => navigation.navigate('Wardrobe'),
+    },
+    {
+      label: 'Outfits',
+      sub: `${stats.outfits} saved`,
+      icon: 'albums-outline',
+      onPress: () => navigation.navigate('Outfits'),
+    },
+    {
+      label: 'Search a look',
+      sub: 'Find it online',
+      icon: 'search-outline',
+      onPress: () => navigation.navigate('LensSearch'),
+    },
+    {
+      label: 'Add item',
+      sub: 'From photo',
+      icon: 'add-circle-outline',
+      onPress: () => navigation.navigate('Wardrobe', { screen: 'AddClothing' }),
+    },
+  ];
 
   const renderRecentItem = ({ item }: { item: ClothingItem }) => {
+    const uri = item.retailerImage || item.userImage;
     return (
-      <TouchableOpacity
-        style={styles.recentItemCard}
-        onPress={() => handleItemPress(item)}
+      <Pressable
+        onPress={() => navigation.navigate('ItemDetails', { item })}
+        style={({ pressed }) => [styles.recentItem, { opacity: pressed ? 0.7 : 1 }]}
       >
-        <Image
-          source={{ uri: item.retailerImage || item.userImage || 'https://via.placeholder.com/100x120' }}
-          style={styles.recentItemImage}
-          resizeMode="cover"
-        />
-        <Text style={styles.recentItemName} numberOfLines={1}>
+        <View
+          style={[
+            styles.recentImageWrap,
+            {
+              backgroundColor: theme.colors.muted,
+              borderRadius: theme.radius.lg,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
+          {uri ? (
+            <Image source={{ uri }} style={styles.recentImage} resizeMode="cover" />
+          ) : (
+            <Icon name="shirt-outline" size={28} color={theme.colors.textSubtle} />
+          )}
+        </View>
+        <Text variant="bodySmall" weight="500" numberOfLines={1} style={{ marginTop: 8 }}>
           {item.name || item.category}
         </Text>
-      </TouchableOpacity>
+        {item.brand ? (
+          <Text variant="caption" color="subtle" numberOfLines={1}>
+            {item.brand}
+          </Text>
+        ) : null}
+      </Pressable>
     );
   };
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good Morning';
-    if (hour < 18) return 'Good Afternoon';
-    return 'Good Evening';
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      setIsAuthenticated(false);
+      setUserName(null);
+    } catch (e) {
+      console.error('[HomeScreen] sign out error:', e);
+    }
   };
 
   return (
-    <Animated.ScrollView 
-      style={styles.container} 
-      showsVerticalScrollIndicator={false}
-      onScroll={Animated.event(
-        [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-        { useNativeDriver: true }
-      )}
-      scrollEventThrottle={16}
-    >
-      <Animated.View 
-        style={[
-          styles.header,
-          { 
-            opacity: headerOpacity,
-            transform: [{ translateY: headerTranslate }] 
-          }
-        ]}
-      >
-        <View style={styles.headerTopRow}>
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.greeting}>{getGreeting()}</Text>
-            <Text style={styles.tagline}>What will you wear today?</Text>
-          </View>
-          <TouchableOpacity style={styles.authButton} onPress={() => (navigation as any).navigate('SignIn')}>
-            <Text style={styles.authButtonText}>Sign in / Sign up</Text>
-          </TouchableOpacity>
+    <Screen scrollable padded={false}>
+      {/* Hero */}
+      <View style={styles.hero}>
+        <View style={{ flex: 1 }}>
+          <Text variant="h1" style={{ marginBottom: 4 }}>
+            {greeting}
+          </Text>
+          <Text variant="body" color="muted">
+            What will you wear today?
+          </Text>
         </View>
-      </Animated.View>
-
-      <StyleWidget onOutfitSuggestionPress={handleOutfitSuggestionPress} />
-
-      <Animated.View 
-        style={[styles.statsContainer, {
-          transform: [{
-            translateY: scrollY.interpolate({
-              inputRange: [0, 100, 200],
-              outputRange: [0, -5, -10],
-              extrapolate: 'clamp'
-            })
-          }]
-        }]}
-      >
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{stats.totalItems}</Text>
-          <Text style={styles.statLabel}>Items</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{stats.outfits}</Text>
-          <Text style={styles.statLabel}>Outfits</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{stats.wishlist}</Text>
-          <Text style={styles.statLabel}>Wishlist</Text>
-        </View>
-      </Animated.View>
-
-      <Text style={styles.sectionTitle}>Features</Text>
-      <View style={styles.featureCardsContainer}>
-        {renderFeatureCard(
-          'My Wardrobe',
-          'shirt-outline',
-          ['#8B8B8B', '#A8A8A8'],
-          () => navigation.navigate('Wardrobe' as never)
-        )}
-        {renderFeatureCard(
-          'Outfits',
-          'people-outline',
-          ['#6B6B6B', '#888888'],
-          () => navigation.navigate('Outfits' as never)
-        )}
-        {renderFeatureCard(
-          'Wishlist',
-          'heart-outline',
-          ['#5A5A5A', '#777777'],
-          () => navigation.navigate('Wishlist' as never)
-        )}
-        {renderFeatureCard(
-          'Add Item',
-          'add-circle-outline',
-          ['#4A4A4A', '#666666'],
-          () => navigation.navigate('Wardrobe' as never)
-        )}
+        <Button
+          label={isAuthenticated ? 'Sign out' : 'Sign in'}
+          variant={isAuthenticated ? 'ghost' : 'secondary'}
+          size="sm"
+          onPress={() => (isAuthenticated ? handleSignOut() : navigation.navigate('SignIn'))}
+        />
       </View>
 
-      <View style={styles.recentItemsHeader}>
-        <Text style={styles.sectionTitle}>Recently Added</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('Wardrobe' as never)}>
-          <Text style={styles.viewAllText}>View All</Text>
-        </TouchableOpacity>
+      {/* Stats */}
+      <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
+        <Card padding={0}>
+          <View style={styles.statsRow}>
+            {[
+              { label: 'Items', value: stats.totalItems },
+              { label: 'Outfits', value: stats.outfits },
+              { label: 'Wishlist', value: stats.wishlist },
+            ].map((s, i) => (
+              <React.Fragment key={s.label}>
+                <View style={styles.statCell}>
+                  <Text variant="h1" align="center">
+                    {s.value}
+                  </Text>
+                  <Text variant="overline" color="muted" align="center" style={{ marginTop: 4 }}>
+                    {s.label}
+                  </Text>
+                </View>
+                {i < 2 ? (
+                  <View
+                    style={{
+                      width: 1,
+                      alignSelf: 'stretch',
+                      backgroundColor: theme.colors.border,
+                    }}
+                  />
+                ) : null}
+              </React.Fragment>
+            ))}
+          </View>
+        </Card>
+      </View>
+
+      {/* Quick actions */}
+      <Text variant="overline" color="muted" style={styles.sectionLabel}>
+        Quick actions
+      </Text>
+      <View style={styles.actionsGrid}>
+        {quickActions.map(a => (
+          <Pressable
+            key={a.label}
+            onPress={a.onPress}
+            style={({ pressed }) => [
+              styles.actionCell,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+                borderRadius: theme.radius.xl,
+                opacity: pressed ? 0.7 : 1,
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.actionIcon,
+                {
+                  backgroundColor: theme.colors.muted,
+                  borderRadius: theme.radius.full,
+                },
+              ]}
+            >
+              <Icon name={a.icon} size={22} color={theme.colors.text} />
+            </View>
+            <Text variant="h4" style={{ marginTop: 12 }}>
+              {a.label}
+            </Text>
+            <Text variant="caption" color="muted" style={{ marginTop: 2 }}>
+              {a.sub}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {/* Style profile CTA */}
+      {!hasProfile ? (
+        <View style={{ paddingHorizontal: 20, marginTop: 8, marginBottom: 24 }}>
+          <Card elevated>
+            <Badge label="New" tone="accent" />
+            <Text variant="h3" style={{ marginTop: 10 }}>
+              Build your style profile
+            </Text>
+            <Text variant="body" color="muted" style={{ marginTop: 4 }}>
+              Answer a few questions and get personalized color palettes and fit recommendations.
+            </Text>
+            <Button
+              label="Start"
+              variant="primary"
+              size="md"
+              onPress={() => navigation.navigate('BodyProfileOnboarding')}
+              style={{ marginTop: 14 }}
+            />
+          </Card>
+        </View>
+      ) : null}
+
+      {/* Recently added */}
+      <View style={styles.sectionHeader}>
+        <Text variant="overline" color="muted">
+          Recently added
+        </Text>
+        {recentItems.length > 0 ? (
+          <Pressable onPress={() => navigation.navigate('Wardrobe')}>
+            <Text variant="label" color="accent">
+              View all
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#6200EE" style={styles.loader} />
-      ) : recentItems.length > 0 ? (
+        <View style={{ flexDirection: 'row', paddingHorizontal: 20, gap: 12 }}>
+          {[0, 1, 2, 3].map(i => (
+            <Skeleton key={i} width={120} height={160} borderRadius={theme.radius.lg} />
+          ))}
+        </View>
+      ) : recentItems.length === 0 ? (
+        <View style={{ paddingHorizontal: 20, marginBottom: 32 }}>
+          <Card bordered>
+            <EmptyState
+              icon={<Icon name="shirt-outline" size={32} color={theme.colors.textSubtle} />}
+              title="Your wardrobe is empty"
+              body="Add your first item to start building outfits."
+              actionLabel="Add item"
+              onAction={() => navigation.navigate('Wardrobe', { screen: 'AddClothing' })}
+            />
+          </Card>
+        </View>
+      ) : (
         <FlatList
           data={recentItems}
           renderItem={renderRecentItem}
-          keyExtractor={(item, index) => `recent-item-${index}`}
+          keyExtractor={(_, i) => `recent-${i}`}
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.recentItemsList}
-          style={styles.recentItemsContainer}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32, gap: 12 }}
         />
-      ) : (
-        <View style={styles.emptyStateContainer}>
-          <Icon name="shirt-outline" size={40} color="#CCCCCC" />
-          <Text style={styles.emptyStateText}>No items in your wardrobe yet</Text>
-          <TouchableOpacity
-            style={styles.addItemButton}
-            onPress={() => navigation.navigate('Wardrobe' as never)}
-          >
-            <Text style={styles.addItemButtonText}>Add Your First Item</Text>
-          </TouchableOpacity>
-        </View>
       )}
-    </Animated.ScrollView>
+    </Screen>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  header: {
+  hero: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 16,
+    paddingTop: 20,
+    paddingBottom: 24,
+    gap: 12,
   },
-  headerTopRow: {
+  statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingVertical: 20,
   },
-  headerTextContainer: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  greeting: {
-    fontSize: 32,
-    fontWeight: '300',
-    color: theme.colors.text,
-    marginBottom: 4,
-    letterSpacing: -0.5,
-  },
-  tagline: {
-    fontSize: 15,
-    fontWeight: '400',
-    color: theme.colors.mediumGray,
-    letterSpacing: 0,
-  },
-  authButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: theme.colors.lightGray,
-    backgroundColor: '#FFFFFF',
-  },
-  authButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.colors.text,
-    letterSpacing: 0.5,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 20,
-    marginVertical: 20,
-    borderRadius: 16,
-    padding: 20,
-    ...theme.shadows.subtle,
-  },
-  statItem: {
+  statCell: {
     flex: 1,
     alignItems: 'center',
   },
-  statValue: {
-    fontSize: 28,
-    fontWeight: '300',
-    color: theme.colors.text,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: theme.colors.mediumGray,
-    fontWeight: '500',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  statDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: theme.colors.lightGray,
-    opacity: 0.3,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.colors.mediumGray,
+  sectionLabel: {
     marginHorizontal: 20,
-    marginBottom: 16,
-    marginTop: 8,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
+    marginBottom: 12,
   },
-  featureCardsContainer: {
+  actionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
+    gap: 12,
     marginBottom: 24,
   },
-  featureCardContainer: {
-    width: '48%',
-    marginBottom: 12,
-    borderRadius: 16,
-    overflow: 'hidden',
+  actionCell: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    borderWidth: 1,
+    padding: 18,
   },
-  featureCard: {
-    backgroundColor: '#FFFFFF',
-    padding: 24,
-    height: 140,
-    justifyContent: 'center',
+  actionIcon: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
-    ...theme.shadows.subtle,
-  },
-  featureIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: theme.colors.mutedBackground,
     justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
   },
-  featureCardTitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: theme.colors.text,
-    textAlign: 'center',
-    letterSpacing: 0,
-  },
-  recentItemsHeader: {
+  sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingRight: 20,
-    marginBottom: 12,
-  },
-  viewAllText: {
-    fontSize: 13,
-    color: theme.colors.accent,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-  recentItemsContainer: {
-    marginBottom: 32,
-  },
-  recentItemsList: {
     paddingHorizontal: 20,
+    marginBottom: 12,
+    marginTop: 4,
   },
-  recentItemCard: {
+  recentItem: {
     width: 120,
-    marginRight: 16,
-    alignItems: 'center',
   },
-  recentItemImage: {
+  recentImageWrap: {
     width: 120,
     height: 160,
-    borderRadius: 12,
-    backgroundColor: theme.colors.mutedBackground,
-  },
-  recentItemName: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: theme.colors.text,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  emptyStateContainer: {
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 40,
-    marginHorizontal: 20,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    marginBottom: 24,
-    ...theme.shadows.subtle,
+    borderWidth: 1,
   },
-  emptyStateText: {
-    fontSize: 15,
-    fontWeight: '400',
-    color: theme.colors.mediumGray,
-    marginTop: 12,
-    marginBottom: 20,
-  },
-  addItemButton: {
-    backgroundColor: theme.colors.text,
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    borderRadius: 24,
-  },
-  addItemButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 13,
-    letterSpacing: 0.5,
-  },
-  loader: {
-    marginVertical: 24,
+  recentImage: {
+    width: '100%',
+    height: '100%',
   },
 });
 

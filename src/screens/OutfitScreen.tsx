@@ -1,20 +1,40 @@
+/**
+ * OutfitScreen — suggestions + saved outfits with material top tabs.
+ *
+ * Uses the new 21st.dev-style design system. Theming via useTheme().
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, StatusBar, Image, Alert } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  FlatList,
+  RefreshControl,
+  Alert,
+  Pressable,
+} from 'react-native';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { Badge, Button, Card, EmptyState, Screen, Text } from '../ui';
+import { useTheme } from '../styles/ThemeProvider';
 import { getClothingItems } from '../services/storage';
 import OutfitCard from '../components/OutfitCard';
-import { generateOutfitSuggestions, Outfit, saveOutfit, getSavedOutfits, deleteSavedOutfit } from '../services/outfitService';
+import {
+  generateOutfitSuggestions,
+  Outfit,
+  saveOutfit,
+  getSavedOutfits,
+  deleteSavedOutfit,
+} from '../services/outfitService';
 import { WearTrackingService } from '../services/wearTrackingService';
 import { WeatherOutfitService } from '../services/weatherOutfitService';
 import { WeatherData } from '../types/weather';
-import theme from '../styles/theme';
 
 const Tab = createMaterialTopTabNavigator();
 
 const SuggestionsTab = () => {
+  const { theme } = useTheme();
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -26,22 +46,22 @@ const SuggestionsTab = () => {
     try {
       setLoading(true);
       const clothingItems = await getClothingItems();
-      
+
       if (clothingItems.length < 2) {
         setOutfits([]);
         setWeather(null);
         setWeatherTips([]);
         return;
       }
-      
+
       if (useWeatherMode) {
         try {
-          const weatherRec = await WeatherOutfitService.getWeatherBasedRecommendations(clothingItems, 5);
+          const weatherRec =
+            await WeatherOutfitService.getWeatherBasedRecommendations(clothingItems, 5);
           setOutfits(weatherRec.recommendedOutfits);
           setWeather(weatherRec.weather);
           setWeatherTips(weatherRec.tips);
-        } catch (weatherError) {
-          console.error('Weather service failed, falling back to regular suggestions:', weatherError);
+        } catch {
           const suggestions = generateOutfitSuggestions(clothingItems, 5);
           setOutfits(suggestions);
           setWeather(null);
@@ -71,7 +91,6 @@ const SuggestionsTab = () => {
   const handleSaveOutfit = async (outfit: Outfit) => {
     try {
       await saveOutfit(outfit);
-      // Show success feedback
     } catch (error) {
       console.error('Error saving outfit:', error);
     }
@@ -79,87 +98,87 @@ const SuggestionsTab = () => {
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color="#8B7FD9" />
+      <View style={[styles.tab, { backgroundColor: theme.colors.background }]}>
+        <View style={styles.center}>
+          <Text variant="body" color="muted">Generating outfits...</Text>
+        </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.tab, { backgroundColor: theme.colors.background }]}>
       {outfits.length > 0 ? (
         <FlatList
           data={outfits}
           renderItem={({ item }) => (
-            <OutfitCard
-              outfit={item}
-              onSave={() => handleSaveOutfit(item)}
-            />
+            <OutfitCard outfit={item} onSave={() => handleSaveOutfit(item)} />
           )}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
+          keyExtractor={item => item.id}
+          contentContainerStyle={{ padding: 16 }}
           ListHeaderComponent={
             weather && useWeatherMode ? (
-              <View style={styles.weatherSection}>
+              <Card style={{ marginBottom: 16 }}>
                 <View style={styles.weatherHeader}>
-                  <Icon 
-                    name={WeatherOutfitService.getWeatherIcon(weather.condition)} 
-                    size={32} 
-                    color={theme.colors.accent} 
+                  <Icon
+                    name={WeatherOutfitService.getWeatherIcon(weather.condition)}
+                    size={28}
+                    color={theme.colors.accent}
                   />
-                  <View style={styles.weatherInfo}>
-                    <Text style={styles.weatherTemp}>{weather.temperature}°F</Text>
-                    <Text style={styles.weatherCondition}>{weather.condition}</Text>
-                    <Text style={styles.weatherLocation}>{weather.location}</Text>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text variant="h3">{weather.temperature}°F</Text>
+                    <Text variant="caption" color="muted" style={{ textTransform: 'capitalize' }}>
+                      {weather.condition} · {weather.location}
+                    </Text>
                   </View>
-                  <TouchableOpacity 
-                    style={styles.weatherToggle}
+                  <Button
+                    label="Show All"
+                    variant="ghost"
+                    size="sm"
                     onPress={() => setUseWeatherMode(false)}
-                  >
-                    <Text style={styles.weatherToggleText}>Show All</Text>
-                  </TouchableOpacity>
+                  />
                 </View>
                 {weatherTips.length > 0 && (
-                  <View style={styles.tipsContainer}>
-                    {weatherTips.map((tip, index) => (
-                      <Text key={index} style={styles.tipText}>{tip}</Text>
+                  <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
+                    {weatherTips.map((tip, i) => (
+                      <Text key={i} variant="bodySmall" color="muted" style={{ marginBottom: 4 }}>
+                        {tip}
+                      </Text>
                     ))}
                   </View>
                 )}
-              </View>
+              </Card>
             ) : !useWeatherMode ? (
-              <View style={styles.weatherSection}>
-                <TouchableOpacity 
-                  style={styles.weatherModeButton}
-                  onPress={() => setUseWeatherMode(true)}
-                >
-                  <Icon name="partly-sunny-outline" size={20} color={theme.colors.accent} />
-                  <Text style={styles.weatherModeText}>Show Weather-Based Suggestions</Text>
-                </TouchableOpacity>
-              </View>
+              <Pressable
+                onPress={() => setUseWeatherMode(true)}
+                style={[styles.weatherToggle, { backgroundColor: theme.colors.muted, borderRadius: theme.radius.lg }]}
+              >
+                <Icon name="partly-sunny-outline" size={18} color={theme.colors.text} />
+                <Text variant="bodySmall">Weather-Based Suggestions</Text>
+              </Pressable>
             ) : null
           }
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={['#8B7FD9']}
-              tintColor="#8B7FD9"
+              tintColor={theme.colors.accent}
             />
           }
         />
       ) : (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateTitle}>No Outfit Suggestions</Text>
-          <Text style={styles.emptyStateText}>
-            Add at least 2 clothing items to your wardrobe to get outfit suggestions.
-          </Text>
-          <TouchableOpacity
-            style={styles.refreshButton}
+        <View style={styles.center}>
+          <EmptyState
+            icon={<Icon name="albums-outline" size={28} color={theme.colors.textSubtle} />}
+            title="No Outfit Suggestions"
+            body="Add at least 2 clothing items to your wardrobe to get outfit suggestions."
+          />
+          <Button
+            label="Create Outfits"
+            variant="primary"
             onPress={onRefresh}
-          >
-            <Text style={styles.refreshButtonText}>Create Outfits</Text>
-          </TouchableOpacity>
+            style={{ marginTop: 16 }}
+          />
         </View>
       )}
     </View>
@@ -167,6 +186,7 @@ const SuggestionsTab = () => {
 };
 
 const SavedOutfitsTab = () => {
+  const { theme } = useTheme();
   const [savedOutfits, setSavedOutfits] = useState<Outfit[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -197,7 +217,7 @@ const SavedOutfitsTab = () => {
   const handleDeleteOutfit = async (outfitId: string) => {
     try {
       await deleteSavedOutfit(outfitId);
-      setSavedOutfits(savedOutfits.filter(outfit => outfit.id !== outfitId));
+      setSavedOutfits(savedOutfits.filter(o => o.id !== outfitId));
     } catch (error) {
       console.error('Error deleting outfit:', error);
     }
@@ -206,27 +226,26 @@ const SavedOutfitsTab = () => {
   const handleMarkAsWorn = async (outfit: Outfit) => {
     try {
       await WearTrackingService.markOutfitWorn(outfit);
-      Alert.alert(
-        'Success!',
-        'Outfit marked as worn. All items have been updated.',
-        [{ text: 'OK' }]
-      );
-    } catch (error) {
-      console.error('Error marking outfit as worn:', error);
+      Alert.alert('Success!', 'Outfit marked as worn. All items have been updated.', [
+        { text: 'OK' },
+      ]);
+    } catch {
       Alert.alert('Error', 'Failed to mark outfit as worn. Please try again.');
     }
   };
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color="#8B7FD9" />
+      <View style={[styles.tab, { backgroundColor: theme.colors.background }]}>
+        <View style={styles.center}>
+          <Text variant="body" color="muted">Loading saved outfits...</Text>
+        </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.tab, { backgroundColor: theme.colors.background }]}>
       {savedOutfits.length > 0 ? (
         <FlatList
           data={savedOutfits}
@@ -238,29 +257,29 @@ const SavedOutfitsTab = () => {
               onMarkAsWorn={() => handleMarkAsWorn(item)}
             />
           )}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
+          keyExtractor={item => item.id}
+          contentContainerStyle={{ padding: 16 }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={['#8B7FD9']}
-              tintColor="#8B7FD9"
+              tintColor={theme.colors.accent}
             />
           }
         />
       ) : (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateTitle}>No Saved Outfits</Text>
-          <Text style={styles.emptyStateText}>
-            Save outfit suggestions to view them here.
-          </Text>
-          <TouchableOpacity
-            style={styles.refreshButton}
+        <View style={styles.center}>
+          <EmptyState
+            icon={<Icon name="bookmark-outline" size={28} color={theme.colors.textSubtle} />}
+            title="No Saved Outfits"
+            body="Save outfit suggestions to view them here."
+          />
+          <Button
+            label="Browse Suggestions"
+            variant="secondary"
             onPress={() => navigation.navigate('Suggestions')}
-          >
-            <Text style={styles.refreshButtonText}>Browse Suggestions</Text>
-          </TouchableOpacity>
+            style={{ marginTop: 16 }}
+          />
         </View>
       )}
     </View>
@@ -268,221 +287,107 @@ const SavedOutfitsTab = () => {
 };
 
 const OutfitScreen = () => {
+  const { theme } = useTheme();
   const navigation = useNavigation<any>();
 
-  return (
-    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Outfit Ideas</Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity 
-            style={styles.headerButton}
-            onPress={() => navigation.navigate('OutfitAnalytics')}
-          >
-            <Icon name="stats-chart-outline" size={20} color={theme.colors.accent} />
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.headerButton}
-            onPress={() => navigation.navigate('ManualOutfitBuilder')}
-          >
-            <Icon name="add-circle-outline" size={20} color={theme.colors.accent} />
-          </TouchableOpacity>
-        </View>
+  const headerEl = (
+    <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+      <Text variant="h2">Outfit Ideas</Text>
+      <View style={styles.headerActions}>
+        <Pressable
+          onPress={() => navigation.navigate('OutfitAnalytics')}
+          style={[styles.iconBtn, { backgroundColor: theme.colors.muted, borderRadius: theme.radius.full }]}
+          hitSlop={8}
+        >
+          <Icon name="stats-chart-outline" size={18} color={theme.colors.text} />
+        </Pressable>
+        <Pressable
+          onPress={() => navigation.navigate('ManualOutfitBuilder')}
+          style={[styles.iconBtn, { backgroundColor: theme.colors.muted, borderRadius: theme.radius.full }]}
+          hitSlop={8}
+        >
+          <Icon name="add-circle-outline" size={18} color={theme.colors.text} />
+        </Pressable>
       </View>
+    </View>
+  );
+
+  return (
+    <Screen padded={false} header={headerEl}>
       <Tab.Navigator
         screenOptions={{
-          tabBarActiveTintColor: theme.colors.accent,
-          tabBarInactiveTintColor: theme.colors.mediumGray,
+          tabBarActiveTintColor: theme.colors.text,
+          tabBarInactiveTintColor: theme.colors.textSubtle,
           tabBarIndicatorStyle: {
             backgroundColor: theme.colors.accent,
-            height: 3,
-            borderRadius: 3,
+            height: 2,
+            borderRadius: 1,
           },
           tabBarLabelStyle: {
-            fontSize: 16,
+            fontSize: 15,
             fontWeight: '600',
             textTransform: 'none',
           },
           tabBarStyle: {
             elevation: 0,
             shadowOpacity: 0,
-            backgroundColor: theme.colors.cardBackground,
+            backgroundColor: theme.colors.surface,
             borderBottomWidth: 1,
-            borderBottomColor: theme.colors.lightGray,
+            borderBottomColor: theme.colors.border,
           },
         }}
       >
-        <Tab.Screen
-          name="Suggestions"
-          component={SuggestionsTab}
-          options={{
-            tabBarLabel: 'Suggestions',
-          }}
-        />
+        <Tab.Screen name="Suggestions" component={SuggestionsTab} />
         <Tab.Screen
           name="SavedOutfits"
           component={SavedOutfitsTab}
-          options={{
-            tabBarLabel: 'Saved',
-          }}
+          options={{ tabBarLabel: 'Saved' }}
         />
       </Tab.Navigator>
-    </SafeAreaView>
+    </Screen>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
   header: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    borderBottomWidth: 0,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: '300',
-    color: theme.colors.text,
-    letterSpacing: -0.5,
-    flex: 1,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: theme.colors.mutedBackground,
+  iconBtn: {
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: theme.colors.lightGray,
   },
-  container: {
+  tab: {
     flex: 1,
-    backgroundColor: theme.colors.background,
   },
-  centered: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  listContent: {
-    padding: theme.spacing.medium,
-  },
-  emptyState: {
+  center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: theme.spacing.xlarge,
-  },
-
-  emptyStateTitle: {
-    fontSize: 20,
-    fontWeight: '300',
-    marginTop: 12,
-    marginBottom: 8,
-    color: theme.colors.text,
-    letterSpacing: 0,
-  },
-  emptyStateText: {
-    fontSize: 15,
-    fontWeight: '400',
-    color: theme.colors.mediumGray,
-    textAlign: 'center',
-    marginBottom: 24,
-    maxWidth: '80%',
-    lineHeight: 22,
-  },
-  refreshButton: {
-    backgroundColor: theme.colors.text,
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    borderRadius: 24,
-  },
-  refreshButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-  weatherSection: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: theme.colors.lightGray,
+    padding: 24,
   },
   weatherHeader: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  weatherInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  weatherTemp: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: theme.colors.text,
-  },
-  weatherCondition: {
-    fontSize: 14,
-    color: theme.colors.mediumGray,
-    textTransform: 'capitalize',
-  },
-  weatherLocation: {
-    fontSize: 12,
-    color: theme.colors.mediumGray,
-    marginTop: 2,
-  },
   weatherToggle: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: theme.colors.mutedBackground,
-    borderWidth: 1,
-    borderColor: theme.colors.lightGray,
-  },
-  weatherToggleText: {
-    fontSize: 12,
-    color: theme.colors.text,
-    fontWeight: '500',
-  },
-  tipsContainer: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.lightGray,
-  },
-  tipText: {
-    fontSize: 13,
-    color: theme.colors.text,
-    marginBottom: 6,
-    lineHeight: 18,
-  },
-  weatherModeButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    padding: 12,
+    marginBottom: 12,
     gap: 8,
-  },
-  weatherModeText: {
-    fontSize: 14,
-    color: theme.colors.accent,
-    fontWeight: '500',
   },
 });
 

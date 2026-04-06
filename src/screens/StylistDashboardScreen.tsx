@@ -92,7 +92,7 @@ const StylistDashboardScreen = ({ navigation }: StylistDashboardScreenProps) => 
     }
   };
 
-  if (loading) {
+  if (loading || !stats) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingContainer}>
@@ -108,7 +108,7 @@ const StylistDashboardScreen = ({ navigation }: StylistDashboardScreenProps) => 
       
       {/* Header */}
       <LinearGradient
-        colors={theme.colors.gradient.luxury}
+        colors={theme.colors.gradient.primary}
         style={styles.header}
       >
         <View style={styles.headerContent}>
@@ -285,7 +285,7 @@ const StylistDashboardScreen = ({ navigation }: StylistDashboardScreenProps) => 
         </View>
 
         {/* Revenue Summary */}
-        {stats?.totalRevenue && stats.totalRevenue > 0 && (
+        {stats != null && stats.totalRevenue != null && stats.totalRevenue > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Revenue</Text>
             <View style={styles.revenueCard}>
@@ -295,7 +295,7 @@ const StylistDashboardScreen = ({ navigation }: StylistDashboardScreenProps) => 
               >
                 <Icon name="cash-outline" size={32} color="#FFFFFF" />
                 <Text style={styles.revenueAmount}>
-                  ${stats.totalRevenue.toLocaleString()}
+                  {'$' + stats.totalRevenue.toLocaleString()}
                 </Text>
                 <Text style={styles.revenueLabel}>Total Earnings</Text>
               </LinearGradient>
