@@ -5,7 +5,7 @@ import { supabase } from '../config/supabase';
 import { seedAllDemoData } from './seedDemoData';
 
 const STORAGE_KEY = '@smartcloset_items';
-const INITIALIZED_KEY = '@smartcloset_initialized_v4';
+const INITIALIZED_KEY = '@smartcloset_initialized_v5';
 const SAVED_OUTFITS_KEY = '@smartcloset_saved_outfits';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

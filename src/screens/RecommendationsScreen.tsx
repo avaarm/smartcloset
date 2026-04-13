@@ -123,9 +123,9 @@ const RecommendationsScreen = ({ navigation }: RecommendationsScreenProps) => {
     >
       <View style={styles.cardHeader}>
         <View style={styles.categoryBadge}>
-          <Icon name={getCategoryIcon(item.category)} size={16} color={theme.colors.primary} />
+          <Icon name={getCategoryIcon(item.category || 'style-guide')} size={16} color={theme.colors.primary} />
           <Text style={styles.categoryText}>
-            {item.category.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+            {(item.category || 'style-guide').replace('-', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
           </Text>
         </View>
         <View

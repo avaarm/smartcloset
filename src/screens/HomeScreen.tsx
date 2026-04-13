@@ -130,6 +130,18 @@ const HomeScreen: React.FC = () => {
       icon: 'add-circle-outline',
       onPress: () => navigation.navigate('Wardrobe', { screen: 'AddClothing' }),
     },
+    {
+      label: 'Insights',
+      sub: 'Wardrobe analytics',
+      icon: 'analytics-outline',
+      onPress: () => navigation.navigate('WardrobeInsights'),
+    },
+    {
+      label: 'Calendar',
+      sub: 'What you wore',
+      icon: 'calendar-outline',
+      onPress: () => navigation.navigate('OutfitCalendar'),
+    },
   ];
 
   const renderRecentItem = ({ item }: { item: ClothingItem }) => {
@@ -137,6 +149,8 @@ const HomeScreen: React.FC = () => {
     return (
       <Pressable
         onPress={() => navigation.navigate('ItemDetails', { item })}
+        accessibilityRole="button"
+        accessibilityLabel={`View ${item.name || item.category}${item.brand ? ` by ${item.brand}` : ''}`}
         style={({ pressed }) => [styles.recentItem, { opacity: pressed ? 0.7 : 1 }]}
       >
         <View
@@ -194,6 +208,7 @@ const HomeScreen: React.FC = () => {
           variant={isAuthenticated ? 'ghost' : 'secondary'}
           size="sm"
           onPress={() => (isAuthenticated ? handleSignOut() : navigation.navigate('SignIn'))}
+          accessibilityLabel={isAuthenticated ? 'Sign out of your account' : 'Sign in to your account'}
         />
       </View>
 
@@ -239,6 +254,8 @@ const HomeScreen: React.FC = () => {
           <Pressable
             key={a.label}
             onPress={a.onPress}
+            accessibilityRole="button"
+            accessibilityLabel={`${a.label}, ${a.sub}`}
             style={({ pressed }) => [
               styles.actionCell,
               {
@@ -287,6 +304,7 @@ const HomeScreen: React.FC = () => {
               size="md"
               onPress={() => navigation.navigate('BodyProfileOnboarding')}
               style={{ marginTop: 14 }}
+              accessibilityLabel="Start building your style profile"
             />
           </Card>
         </View>
@@ -298,7 +316,11 @@ const HomeScreen: React.FC = () => {
           Recently added
         </Text>
         {recentItems.length > 0 ? (
-          <Pressable onPress={() => navigation.navigate('Wardrobe')}>
+          <Pressable
+            onPress={() => navigation.navigate('Wardrobe')}
+            accessibilityRole="button"
+            accessibilityLabel="View all recently added items"
+          >
             <Text variant="label" color="accent">
               View all
             </Text>

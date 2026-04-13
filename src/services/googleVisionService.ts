@@ -1,4 +1,6 @@
 import { ClothingItem } from '../types';
+import { env } from '../config/env';
+import { readImageAsBase64 } from '../platform/fileSystem';
 
 // Configuration
 const GOOGLE_VISION_API_URL = 'https://vision.googleapis.com/v1/images:annotate';
@@ -65,11 +67,10 @@ class GoogleVisionService {
   private productSetId: string;
 
   constructor() {
-    // In production, these should come from environment variables or secure storage
-    this.apiKey = process.env.GOOGLE_VISION_API_KEY || '';
-    this.projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || '';
-    this.location = process.env.GOOGLE_VISION_LOCATION || 'us-west1';
-    this.productSetId = process.env.PRODUCT_SET_ID || 'fashion-products';
+    this.apiKey = env.GOOGLE_VISION_API_KEY;
+    this.projectId = env.GOOGLE_CLOUD_PROJECT_ID;
+    this.location = env.GOOGLE_VISION_LOCATION || 'us-west1';
+    this.productSetId = 'fashion-products';
   }
 
   /**
@@ -201,38 +202,10 @@ class GoogleVisionService {
   }
 
   /**
-   * Convert image URI to base64
+   * Convert image URI to base64 using the platform-aware file system wrapper.
    */
   private async imageToBase64(imageUri: string): Promise<string> {
-    try {
-      if (imageUri.startsWith('data:')) {
-        // Already base64
-        return imageUri.split(',')[1];
-      }
-
-      if (imageUri.startsWith('http')) {
-        // Remote image - fetch and convert
-        const response = await fetch(imageUri);
-        const blob = await response.blob();
-        return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const base64 = (reader.result as string).split(',')[1];
-            resolve(base64);
-          };
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-      }
-
-      // Local file - use React Native's file system
-      const RNFS = require('react-native-fs');
-      const base64 = await RNFS.readFile(imageUri, 'base64');
-      return base64;
-    } catch (error) {
-      console.error('Error converting image to base64:', error);
-      throw error;
-    }
+    return readImageAsBase64(imageUri);
   }
 
   /**

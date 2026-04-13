@@ -142,6 +142,11 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
       if (result.occasion && isConfidentPrediction(result, 'occasion')) {
         setOccasion(result.occasion as Occasion);
       }
+
+      // Also autofill color if confident
+      if (result.color && isConfidentPrediction(result, 'color')) {
+        setColor(result.color.charAt(0).toUpperCase() + result.color.slice(1));
+      }
     } catch (error) {
       console.error('Error analyzing image:', error);
     } finally {
@@ -408,8 +413,26 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
             )}
             {recognitionResult.occasion && (
               <Text style={styles.aiSuggestion}>
-                Occasion: {recognitionResult.occasion} 
+                Occasion: {recognitionResult.occasion}
                 ({Math.round((recognitionResult.confidence.occasion || 0) * 100)}% confidence)
+              </Text>
+            )}
+            {recognitionResult.color && (
+              <Text style={styles.aiSuggestion}>
+                Color: {recognitionResult.color}
+                ({Math.round((recognitionResult.confidence.color || 0) * 100)}% confidence)
+              </Text>
+            )}
+            {recognitionResult.material && (
+              <Text style={styles.aiSuggestion}>
+                Material: {recognitionResult.material}
+                ({Math.round((recognitionResult.confidence.material || 0) * 100)}% confidence)
+              </Text>
+            )}
+            {recognitionResult.pattern && recognitionResult.pattern !== 'solid' && (
+              <Text style={styles.aiSuggestion}>
+                Pattern: {recognitionResult.pattern}
+                ({Math.round((recognitionResult.confidence.pattern || 0) * 100)}% confidence)
               </Text>
             )}
           </View>
