@@ -9,6 +9,7 @@ import {
   Alert,
   Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { theme } from '../styles/theme';
 import { getCurrentClientAccount } from '../services/marketplaceService';
@@ -156,18 +157,20 @@ const ClientRecommendationsScreen = ({ navigation }: any) => {
   const renderRecommendation = ({ item }: { item: StylingRecommendation }) => {
     const isImplemented = item.status === 'implemented';
     const isPending = item.status === 'sent' || item.status === 'viewed';
+    const category = item.category || 'style-guide';
+    const status = item.status || 'draft';
 
     return (
       <View style={styles.recommendationCard}>
         <View style={styles.cardHeader}>
           <View style={styles.categoryBadge}>
-            <Icon name={getCategoryIcon(item.category)} size={16} color={theme.colors.primary} />
-            <Text style={styles.categoryText}>{item.category.replace('-', ' ')}</Text>
+            <Icon name={getCategoryIcon(category)} size={16} color={theme.colors.primary} />
+            <Text style={styles.categoryText}>{category.replace(/-/g, ' ')}</Text>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-            <Icon name={getStatusIcon(item.status)} size={14} color={getStatusColor(item.status)} />
-            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-              {item.status.toUpperCase()}
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(status) + '20' }]}>
+            <Icon name={getStatusIcon(status)} size={14} color={getStatusColor(status)} />
+            <Text style={[styles.statusText, { color: getStatusColor(status) }]}>
+              {status.toUpperCase()}
             </Text>
           </View>
         </View>
@@ -253,14 +256,18 @@ const ClientRecommendationsScreen = ({ navigation }: any) => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <SafeAreaView style={styles.loadingContainer} edges={['top']}>
         <Text style={styles.loadingText}>Loading recommendations...</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
+      <View style={styles.screenHeader}>
+        <Text style={styles.screenTitle}>Recommendations</Text>
+      </View>
       {/* Tabs */}
       <View style={styles.tabs}>
         <TouchableOpacity
@@ -311,7 +318,7 @@ const ClientRecommendationsScreen = ({ navigation }: any) => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       />
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -329,6 +336,18 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     color: theme.colors.textSecondary,
+  },
+  screenHeader: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 16,
+    backgroundColor: '#fff',
+  },
+  screenTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: theme.colors.text,
+    letterSpacing: -0.5,
   },
   tabs: {
     flexDirection: 'row',

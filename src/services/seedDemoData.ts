@@ -16,7 +16,7 @@ import { loadSampleMarketplaceData, setCurrentClientAccount } from './marketplac
 import { loadSampleMessagingData } from './messagingService';
 import { loadSampleAccountData } from './accountService';
 
-const DEMO_SEEDED_KEY = '@smartcloset_demo_seeded_v2';
+const DEMO_SEEDED_KEY = '@smartcloset_demo_seeded_v3';
 
 /**
  * Seed a client account so the "Client" tab has data.
@@ -75,6 +75,7 @@ const seedRecommendations = async () => {
       stylistId: 'stylist_sample_001',
       clientId: 'client_001',
       clientName: 'Sarah Johnson',
+      category: 'wardrobe-tip' as const,
       title: 'Spring Capsule Refresh',
       description:
         'Replace heavy winter layers with breathable linen and cotton pieces. Focus on light neutrals: cream, sand, soft blue.',
@@ -106,6 +107,7 @@ const seedRecommendations = async () => {
       stylistId: 'stylist_sample_001',
       clientId: 'client_002',
       clientName: 'Michael Chen',
+      category: 'outfit' as const,
       title: 'Business Travel Wardrobe',
       description:
         'Wrinkle-resistant pieces that transition from meetings to dinners. All items fit a carry-on.',
@@ -137,6 +139,7 @@ const seedRecommendations = async () => {
       stylistId: 'stylist_sample_001',
       clientId: 'client_003',
       clientName: 'Jessica Martinez',
+      category: 'purchase' as const,
       title: 'Weekend Elevated Basics',
       description:
         'Upgrade everyday pieces — same comfort level, more polished look. Focus on fit and fabric quality.',
@@ -160,6 +163,7 @@ const seedRecommendations = async () => {
       stylistId: 'stylist_sample_001',
       clientId: 'client_sample_001',
       clientName: 'Alex Morgan',
+      category: 'style-guide' as const,
       title: 'Office to Evening Transition',
       description:
         'Key pieces that take you from 9-5 to dinner plans without a full outfit change. Swap accessories, not clothes.',

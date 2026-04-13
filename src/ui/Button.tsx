@@ -41,6 +41,7 @@ export type ButtonProps = {
   rightIcon?: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
+  accessibilityLabel?: string;
 };
 
 const sizeMap = {
@@ -61,6 +62,7 @@ export const Button: React.FC<ButtonProps> = ({
   rightIcon,
   style,
   textStyle,
+  accessibilityLabel,
 }) => {
   const { theme } = useTheme();
   const sz = sizeMap[size];
@@ -105,6 +107,7 @@ export const Button: React.FC<ButtonProps> = ({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel || label}
       accessibilityState={{ disabled: isDisabled, busy: loading }}
       onPress={onPress}
       disabled={isDisabled}

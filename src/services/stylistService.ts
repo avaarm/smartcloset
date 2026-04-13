@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../config/supabase';
 import {
   StylistProfile,
   Client,
@@ -16,8 +17,34 @@ const RECOMMENDATIONS_KEY = '@smartcloset_stylist_recommendations';
 const NOTES_KEY = '@smartcloset_stylist_notes';
 const ACCOUNT_TYPE_KEY = '@smartcloset_account_type';
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const getAuthUserId = async (): Promise<string | null> => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user?.id ?? null;
+  } catch {
+    return null;
+  }
+};
+
+/** Get the stylist_profiles.id for the current user (cached after first lookup). */
+let _cachedStylistId: string | null = null;
+const getStylistProfileId = async (): Promise<string | null> => {
+  if (_cachedStylistId) return _cachedStylistId;
+  const userId = await getAuthUserId();
+  if (!userId) return null;
+  const { data } = await supabase
+    .from('stylist_profiles')
+    .select('id')
+    .eq('user_id', userId)
+    .single();
+  if (data) _cachedStylistId = data.id;
+  return data?.id ?? null;
+};
+
 // ============================================
-// Account Type Management
+// Account Type Management (always local)
 // ============================================
 
 export const getAccountType = async (): Promise<AccountType> => {
@@ -48,13 +75,108 @@ export const switchToUserMode = async (): Promise<void> => {
 };
 
 // ============================================
+// DB ↔ App mappers
+// ============================================
+
+const mapDbToProfile = (row: any): StylistProfile => ({
+  id: row.id,
+  accountType: 'stylist',
+  name: row.name,
+  email: row.email,
+  phone: row.phone,
+  bio: row.bio,
+  specialties: row.specialties || [],
+  certifications: row.certifications || [],
+  yearsExperience: row.years_experience,
+  profileImage: row.profile_image,
+  businessName: row.business_name,
+  website: row.website,
+  instagram: row.instagram,
+  pricing: row.pricing || {},
+  availability: row.availability || {},
+  rating: row.rating ? Number(row.rating) : undefined,
+  totalClients: row.total_clients || 0,
+  joinedDate: row.joined_date || row.created_at,
+  isActive: row.is_active ?? true,
+});
+
+const mapDbToClient = (row: any): Client => ({
+  id: row.id,
+  stylistId: row.stylist_id,
+  name: row.name,
+  email: row.email,
+  phone: row.phone,
+  profileImage: row.profile_image,
+  dateAdded: row.date_added || row.created_at,
+  lastSession: row.last_session,
+  totalSessions: row.total_sessions || 0,
+  notes: row.notes,
+  preferences: row.preferences || {},
+  goals: row.goals || [],
+  wardrobeAccess: row.wardrobe_access ?? false,
+  status: row.status || 'active',
+});
+
+const mapDbToAppointment = (row: any): Appointment => ({
+  id: row.id,
+  stylistId: row.stylist_id,
+  clientId: row.client_id,
+  clientName: row.client_name,
+  type: row.type,
+  date: row.date,
+  startTime: row.start_time,
+  endTime: row.end_time,
+  duration: row.duration,
+  location: row.location,
+  isVirtual: row.is_virtual ?? false,
+  meetingLink: row.meeting_link,
+  status: row.status || 'scheduled',
+  notes: row.notes,
+  prepNotes: row.prep_notes,
+  fee: row.fee ? Number(row.fee) : undefined,
+  paid: row.paid ?? false,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+const mapDbToRecommendation = (row: any): StylingRecommendation => ({
+  id: row.id,
+  stylistId: row.stylist_id,
+  clientId: row.client_id,
+  title: row.title,
+  description: row.description,
+  category: row.category || 'style-guide',
+  items: row.items || [],
+  suggestedPurchases: row.suggested_purchases || [],
+  images: row.images || [],
+  occasion: row.occasion,
+  season: row.season || [],
+  notes: row.notes,
+  status: row.status || 'draft',
+  createdAt: row.created_at,
+  sentAt: row.sent_at,
+  viewedAt: row.viewed_at,
+  clientFeedback: row.client_feedback,
+});
+
+// ============================================
 // Stylist Profile Management
 // ============================================
 
 export const getStylistProfile = async (): Promise<StylistProfile | null> => {
   try {
-    const profileData = await AsyncStorage.getItem(STYLIST_PROFILE_KEY);
-    return profileData ? JSON.parse(profileData) : null;
+    const userId = await getAuthUserId();
+    if (!userId) {
+      const data = await AsyncStorage.getItem(STYLIST_PROFILE_KEY);
+      return data ? JSON.parse(data) : null;
+    }
+    const { data, error } = await supabase
+      .from('stylist_profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+    if (error || !data) return null;
+    return mapDbToProfile(data);
   } catch (error) {
     console.error('Error getting stylist profile:', error);
     return null;
@@ -65,17 +187,44 @@ export const createStylistProfile = async (
   profile: Omit<StylistProfile, 'id' | 'joinedDate' | 'totalClients' | 'isActive'>
 ): Promise<StylistProfile> => {
   try {
-    const newProfile: StylistProfile = {
-      ...profile,
-      id: `stylist_${Date.now()}`,
-      joinedDate: new Date().toISOString(),
-      totalClients: 0,
-      isActive: true,
-    };
+    const userId = await getAuthUserId();
+    if (!userId) {
+      const newProfile: StylistProfile = {
+        ...profile,
+        id: `stylist_${Date.now()}`,
+        joinedDate: new Date().toISOString(),
+        totalClients: 0,
+        isActive: true,
+      };
+      await AsyncStorage.setItem(STYLIST_PROFILE_KEY, JSON.stringify(newProfile));
+      await setAccountType('stylist');
+      return newProfile;
+    }
 
-    await AsyncStorage.setItem(STYLIST_PROFILE_KEY, JSON.stringify(newProfile));
+    const { data, error } = await supabase
+      .from('stylist_profiles')
+      .insert({
+        user_id: userId,
+        name: profile.name,
+        email: profile.email,
+        phone: profile.phone,
+        bio: profile.bio,
+        specialties: profile.specialties || [],
+        certifications: profile.certifications || [],
+        years_experience: profile.yearsExperience || 0,
+        profile_image: profile.profileImage,
+        business_name: profile.businessName,
+        website: profile.website,
+        instagram: profile.instagram,
+        pricing: profile.pricing || {},
+        availability: profile.availability || {},
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    _cachedStylistId = data.id;
     await setAccountType('stylist');
-    return newProfile;
+    return mapDbToProfile(data);
   } catch (error) {
     console.error('Error creating stylist profile:', error);
     throw error;
@@ -86,12 +235,38 @@ export const updateStylistProfile = async (
   updates: Partial<StylistProfile>
 ): Promise<StylistProfile | null> => {
   try {
-    const currentProfile = await getStylistProfile();
-    if (!currentProfile) return null;
+    const userId = await getAuthUserId();
+    if (!userId) {
+      const current = await getStylistProfile();
+      if (!current) return null;
+      const updated = { ...current, ...updates };
+      await AsyncStorage.setItem(STYLIST_PROFILE_KEY, JSON.stringify(updated));
+      return updated;
+    }
 
-    const updatedProfile = { ...currentProfile, ...updates };
-    await AsyncStorage.setItem(STYLIST_PROFILE_KEY, JSON.stringify(updatedProfile));
-    return updatedProfile;
+    const dbUpdates: any = {};
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.email !== undefined) dbUpdates.email = updates.email;
+    if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
+    if (updates.bio !== undefined) dbUpdates.bio = updates.bio;
+    if (updates.specialties !== undefined) dbUpdates.specialties = updates.specialties;
+    if (updates.certifications !== undefined) dbUpdates.certifications = updates.certifications;
+    if (updates.yearsExperience !== undefined) dbUpdates.years_experience = updates.yearsExperience;
+    if (updates.profileImage !== undefined) dbUpdates.profile_image = updates.profileImage;
+    if (updates.businessName !== undefined) dbUpdates.business_name = updates.businessName;
+    if (updates.pricing !== undefined) dbUpdates.pricing = updates.pricing;
+    if (updates.availability !== undefined) dbUpdates.availability = updates.availability;
+    if (updates.totalClients !== undefined) dbUpdates.total_clients = updates.totalClients;
+    if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
+
+    const { data, error } = await supabase
+      .from('stylist_profiles')
+      .update(dbUpdates)
+      .eq('user_id', userId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data ? mapDbToProfile(data) : null;
   } catch (error) {
     console.error('Error updating stylist profile:', error);
     throw error;
@@ -104,8 +279,20 @@ export const updateStylistProfile = async (
 
 export const getClients = async (): Promise<Client[]> => {
   try {
-    const clientsData = await AsyncStorage.getItem(CLIENTS_KEY);
-    return clientsData ? JSON.parse(clientsData) : [];
+    const userId = await getAuthUserId();
+    if (!userId) {
+      const data = await AsyncStorage.getItem(CLIENTS_KEY);
+      return data ? JSON.parse(data) : [];
+    }
+    const stylistId = await getStylistProfileId();
+    if (!stylistId) return [];
+    const { data, error } = await supabase
+      .from('stylist_clients')
+      .select('*')
+      .eq('stylist_id', stylistId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data || []).map(mapDbToClient);
   } catch (error) {
     console.error('Error getting clients:', error);
     return [];
@@ -114,8 +301,18 @@ export const getClients = async (): Promise<Client[]> => {
 
 export const getClientById = async (clientId: string): Promise<Client | null> => {
   try {
-    const clients = await getClients();
-    return clients.find(c => c.id === clientId) || null;
+    const userId = await getAuthUserId();
+    if (!userId) {
+      const clients = await getClients();
+      return clients.find(c => c.id === clientId) || null;
+    }
+    const { data, error } = await supabase
+      .from('stylist_clients')
+      .select('*')
+      .eq('id', clientId)
+      .single();
+    if (error || !data) return null;
+    return mapDbToClient(data);
   } catch (error) {
     console.error('Error getting client:', error);
     return null;
@@ -126,25 +323,45 @@ export const addClient = async (
   clientData: Omit<Client, 'id' | 'dateAdded' | 'totalSessions' | 'status'>
 ): Promise<Client> => {
   try {
-    const clients = await getClients();
-    const newClient: Client = {
-      ...clientData,
-      id: `client_${Date.now()}`,
-      dateAdded: new Date().toISOString(),
-      totalSessions: 0,
-      status: 'active',
-    };
-
-    clients.push(newClient);
-    await AsyncStorage.setItem(CLIENTS_KEY, JSON.stringify(clients));
-
-    // Update stylist total clients count
-    const profile = await getStylistProfile();
-    if (profile) {
-      await updateStylistProfile({ totalClients: (profile.totalClients || 0) + 1 });
+    const userId = await getAuthUserId();
+    if (!userId) {
+      const clients = await getClients();
+      const newClient: Client = {
+        ...clientData,
+        id: `client_${Date.now()}`,
+        dateAdded: new Date().toISOString(),
+        totalSessions: 0,
+        status: 'active',
+      };
+      clients.push(newClient);
+      await AsyncStorage.setItem(CLIENTS_KEY, JSON.stringify(clients));
+      const profile = await getStylistProfile();
+      if (profile) {
+        await updateStylistProfile({ totalClients: (profile.totalClients || 0) + 1 });
+      }
+      return newClient;
     }
 
-    return newClient;
+    const stylistId = await getStylistProfileId();
+    if (!stylistId) throw new Error('No stylist profile found');
+
+    const { data, error } = await supabase
+      .from('stylist_clients')
+      .insert({
+        stylist_id: stylistId,
+        name: clientData.name,
+        email: clientData.email,
+        phone: clientData.phone,
+        profile_image: clientData.profileImage,
+        notes: clientData.notes,
+        preferences: clientData.preferences || {},
+        goals: clientData.goals || [],
+        wardrobe_access: clientData.wardrobeAccess || false,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return mapDbToClient(data);
   } catch (error) {
     console.error('Error adding client:', error);
     throw error;
@@ -156,14 +373,36 @@ export const updateClient = async (
   updates: Partial<Client>
 ): Promise<Client | null> => {
   try {
-    const clients = await getClients();
-    const index = clients.findIndex(c => c.id === clientId);
-    
-    if (index === -1) return null;
+    const userId = await getAuthUserId();
+    if (!userId) {
+      const clients = await getClients();
+      const index = clients.findIndex(c => c.id === clientId);
+      if (index === -1) return null;
+      clients[index] = { ...clients[index], ...updates };
+      await AsyncStorage.setItem(CLIENTS_KEY, JSON.stringify(clients));
+      return clients[index];
+    }
 
-    clients[index] = { ...clients[index], ...updates };
-    await AsyncStorage.setItem(CLIENTS_KEY, JSON.stringify(clients));
-    return clients[index];
+    const dbUpdates: any = {};
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.email !== undefined) dbUpdates.email = updates.email;
+    if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
+    if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+    if (updates.preferences !== undefined) dbUpdates.preferences = updates.preferences;
+    if (updates.goals !== undefined) dbUpdates.goals = updates.goals;
+    if (updates.wardrobeAccess !== undefined) dbUpdates.wardrobe_access = updates.wardrobeAccess;
+    if (updates.status !== undefined) dbUpdates.status = updates.status;
+    if (updates.lastSession !== undefined) dbUpdates.last_session = updates.lastSession;
+    if (updates.totalSessions !== undefined) dbUpdates.total_sessions = updates.totalSessions;
+
+    const { data, error } = await supabase
+      .from('stylist_clients')
+      .update(dbUpdates)
+      .eq('id', clientId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data ? mapDbToClient(data) : null;
   } catch (error) {
     console.error('Error updating client:', error);
     throw error;
@@ -172,9 +411,15 @@ export const updateClient = async (
 
 export const deleteClient = async (clientId: string): Promise<void> => {
   try {
-    const clients = await getClients();
-    const filtered = clients.filter(c => c.id !== clientId);
-    await AsyncStorage.setItem(CLIENTS_KEY, JSON.stringify(filtered));
+    const userId = await getAuthUserId();
+    if (!userId) {
+      const clients = await getClients();
+      const filtered = clients.filter(c => c.id !== clientId);
+      await AsyncStorage.setItem(CLIENTS_KEY, JSON.stringify(filtered));
+      return;
+    }
+    const { error } = await supabase.from('stylist_clients').delete().eq('id', clientId);
+    if (error) throw error;
   } catch (error) {
     console.error('Error deleting client:', error);
     throw error;
@@ -192,8 +437,20 @@ export const getActiveClients = async (): Promise<Client[]> => {
 
 export const getAppointments = async (): Promise<Appointment[]> => {
   try {
-    const appointmentsData = await AsyncStorage.getItem(APPOINTMENTS_KEY);
-    return appointmentsData ? JSON.parse(appointmentsData) : [];
+    const userId = await getAuthUserId();
+    if (!userId) {
+      const data = await AsyncStorage.getItem(APPOINTMENTS_KEY);
+      return data ? JSON.parse(data) : [];
+    }
+    const stylistId = await getStylistProfileId();
+    if (!stylistId) return [];
+    const { data, error } = await supabase
+      .from('appointments')
+      .select('*')
+      .eq('stylist_id', stylistId)
+      .order('date', { ascending: true });
+    if (error) throw error;
+    return (data || []).map(mapDbToAppointment);
   } catch (error) {
     console.error('Error getting appointments:', error);
     return [];
@@ -201,36 +458,95 @@ export const getAppointments = async (): Promise<Appointment[]> => {
 };
 
 export const getAppointmentsByClient = async (clientId: string): Promise<Appointment[]> => {
-  const appointments = await getAppointments();
-  return appointments.filter(a => a.clientId === clientId);
+  try {
+    const userId = await getAuthUserId();
+    if (!userId) {
+      const appointments = await getAppointments();
+      return appointments.filter(a => a.clientId === clientId);
+    }
+    const { data, error } = await supabase
+      .from('appointments')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('date', { ascending: true });
+    if (error) throw error;
+    return (data || []).map(mapDbToAppointment);
+  } catch (error) {
+    console.error('Error getting appointments by client:', error);
+    return [];
+  }
 };
 
 export const getUpcomingAppointments = async (): Promise<Appointment[]> => {
-  const appointments = await getAppointments();
-  const now = new Date();
-  return appointments
-    .filter(a => {
-      const appointmentDate = new Date(a.date);
-      return appointmentDate >= now && a.status === 'scheduled';
-    })
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  try {
+    const userId = await getAuthUserId();
+    if (!userId) {
+      const appointments = await getAppointments();
+      const now = new Date();
+      return appointments
+        .filter(a => new Date(a.date) >= now && a.status === 'scheduled')
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }
+    const stylistId = await getStylistProfileId();
+    if (!stylistId) return [];
+    const today = new Date().toISOString().split('T')[0];
+    const { data, error } = await supabase
+      .from('appointments')
+      .select('*')
+      .eq('stylist_id', stylistId)
+      .gte('date', today)
+      .in('status', ['scheduled', 'confirmed'])
+      .order('date', { ascending: true });
+    if (error) throw error;
+    return (data || []).map(mapDbToAppointment);
+  } catch (error) {
+    console.error('Error getting upcoming appointments:', error);
+    return [];
+  }
 };
 
 export const createAppointment = async (
   appointmentData: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<Appointment> => {
   try {
-    const appointments = await getAppointments();
-    const newAppointment: Appointment = {
-      ...appointmentData,
-      id: `appt_${Date.now()}`,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+    const userId = await getAuthUserId();
+    if (!userId) {
+      const appointments = await getAppointments();
+      const newAppointment: Appointment = {
+        ...appointmentData,
+        id: `appt_${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      appointments.push(newAppointment);
+      await AsyncStorage.setItem(APPOINTMENTS_KEY, JSON.stringify(appointments));
+      return newAppointment;
+    }
 
-    appointments.push(newAppointment);
-    await AsyncStorage.setItem(APPOINTMENTS_KEY, JSON.stringify(appointments));
-    return newAppointment;
+    const { data, error } = await supabase
+      .from('appointments')
+      .insert({
+        stylist_id: appointmentData.stylistId,
+        client_id: appointmentData.clientId,
+        client_name: appointmentData.clientName,
+        type: appointmentData.type,
+        date: appointmentData.date,
+        start_time: appointmentData.startTime,
+        end_time: appointmentData.endTime,
+        duration: appointmentData.duration,
+        location: appointmentData.location,
+        is_virtual: appointmentData.isVirtual || false,
+        meeting_link: appointmentData.meetingLink,
+        status: appointmentData.status || 'scheduled',
+        notes: appointmentData.notes,
+        prep_notes: appointmentData.prepNotes,
+        fee: appointmentData.fee,
+        paid: appointmentData.paid || false,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return mapDbToAppointment(data);
   } catch (error) {
     console.error('Error creating appointment:', error);
     throw error;
@@ -242,31 +558,54 @@ export const updateAppointment = async (
   updates: Partial<Appointment>
 ): Promise<Appointment | null> => {
   try {
-    const appointments = await getAppointments();
-    const index = appointments.findIndex(a => a.id === appointmentId);
-    
-    if (index === -1) return null;
+    const userId = await getAuthUserId();
+    if (!userId) {
+      const appointments = await getAppointments();
+      const index = appointments.findIndex(a => a.id === appointmentId);
+      if (index === -1) return null;
+      appointments[index] = { ...appointments[index], ...updates, updatedAt: new Date().toISOString() };
+      await AsyncStorage.setItem(APPOINTMENTS_KEY, JSON.stringify(appointments));
+      if (updates.status === 'completed') {
+        const client = await getClientById(appointments[index].clientId);
+        if (client) {
+          await updateClient(client.id, {
+            lastSession: appointments[index].date,
+            totalSessions: (client.totalSessions || 0) + 1,
+          });
+        }
+      }
+      return appointments[index];
+    }
 
-    appointments[index] = {
-      ...appointments[index],
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    };
-    
-    await AsyncStorage.setItem(APPOINTMENTS_KEY, JSON.stringify(appointments));
+    const dbUpdates: any = {};
+    if (updates.status !== undefined) dbUpdates.status = updates.status;
+    if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+    if (updates.prepNotes !== undefined) dbUpdates.prep_notes = updates.prepNotes;
+    if (updates.date !== undefined) dbUpdates.date = updates.date;
+    if (updates.startTime !== undefined) dbUpdates.start_time = updates.startTime;
+    if (updates.endTime !== undefined) dbUpdates.end_time = updates.endTime;
+    if (updates.paid !== undefined) dbUpdates.paid = updates.paid;
+    if (updates.fee !== undefined) dbUpdates.fee = updates.fee;
 
-    // Update client's last session if appointment is completed
-    if (updates.status === 'completed') {
-      const client = await getClientById(appointments[index].clientId);
+    const { data, error } = await supabase
+      .from('appointments')
+      .update(dbUpdates)
+      .eq('id', appointmentId)
+      .select()
+      .single();
+    if (error) throw error;
+
+    if (updates.status === 'completed' && data) {
+      const client = await getClientById(data.client_id);
       if (client) {
         await updateClient(client.id, {
-          lastSession: appointments[index].date,
+          lastSession: data.date,
           totalSessions: (client.totalSessions || 0) + 1,
         });
       }
     }
 
-    return appointments[index];
+    return data ? mapDbToAppointment(data) : null;
   } catch (error) {
     console.error('Error updating appointment:', error);
     throw error;
@@ -275,9 +614,17 @@ export const updateAppointment = async (
 
 export const deleteAppointment = async (appointmentId: string): Promise<void> => {
   try {
-    const appointments = await getAppointments();
-    const filtered = appointments.filter(a => a.id !== appointmentId);
-    await AsyncStorage.setItem(APPOINTMENTS_KEY, JSON.stringify(filtered));
+    const userId = await getAuthUserId();
+    if (!userId) {
+      const appointments = await getAppointments();
+      await AsyncStorage.setItem(
+        APPOINTMENTS_KEY,
+        JSON.stringify(appointments.filter(a => a.id !== appointmentId)),
+      );
+      return;
+    }
+    const { error } = await supabase.from('appointments').delete().eq('id', appointmentId);
+    if (error) throw error;
   } catch (error) {
     console.error('Error deleting appointment:', error);
     throw error;
@@ -290,8 +637,20 @@ export const deleteAppointment = async (appointmentId: string): Promise<void> =>
 
 export const getRecommendations = async (): Promise<StylingRecommendation[]> => {
   try {
-    const recommendationsData = await AsyncStorage.getItem(RECOMMENDATIONS_KEY);
-    return recommendationsData ? JSON.parse(recommendationsData) : [];
+    const userId = await getAuthUserId();
+    if (!userId) {
+      const data = await AsyncStorage.getItem(RECOMMENDATIONS_KEY);
+      return data ? JSON.parse(data) : [];
+    }
+    const stylistId = await getStylistProfileId();
+    if (!stylistId) return [];
+    const { data, error } = await supabase
+      .from('recommendations')
+      .select('*')
+      .eq('stylist_id', stylistId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data || []).map(mapDbToRecommendation);
   } catch (error) {
     console.error('Error getting recommendations:', error);
     return [];
@@ -301,25 +660,62 @@ export const getRecommendations = async (): Promise<StylingRecommendation[]> => 
 export const getRecommendationsByClient = async (
   clientId: string
 ): Promise<StylingRecommendation[]> => {
-  const recommendations = await getRecommendations();
-  return recommendations.filter(r => r.clientId === clientId);
+  try {
+    const userId = await getAuthUserId();
+    if (!userId) {
+      const recs = await getRecommendations();
+      return recs.filter(r => r.clientId === clientId);
+    }
+    const { data, error } = await supabase
+      .from('recommendations')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data || []).map(mapDbToRecommendation);
+  } catch (error) {
+    console.error('Error getting recommendations by client:', error);
+    return [];
+  }
 };
 
 export const createRecommendation = async (
-  recommendationData: Omit<StylingRecommendation, 'id' | 'createdAt' | 'status'>
+  recData: Omit<StylingRecommendation, 'id' | 'createdAt' | 'status'>
 ): Promise<StylingRecommendation> => {
   try {
-    const recommendations = await getRecommendations();
-    const newRecommendation: StylingRecommendation = {
-      ...recommendationData,
-      id: `rec_${Date.now()}`,
-      createdAt: new Date().toISOString(),
-      status: 'draft',
-    };
+    const userId = await getAuthUserId();
+    if (!userId) {
+      const recs = await getRecommendations();
+      const newRec: StylingRecommendation = {
+        ...recData,
+        id: `rec_${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        status: 'draft',
+      };
+      recs.push(newRec);
+      await AsyncStorage.setItem(RECOMMENDATIONS_KEY, JSON.stringify(recs));
+      return newRec;
+    }
 
-    recommendations.push(newRecommendation);
-    await AsyncStorage.setItem(RECOMMENDATIONS_KEY, JSON.stringify(recommendations));
-    return newRecommendation;
+    const { data, error } = await supabase
+      .from('recommendations')
+      .insert({
+        stylist_id: recData.stylistId,
+        client_id: recData.clientId,
+        title: recData.title,
+        description: recData.description,
+        category: recData.category || 'style-guide',
+        items: recData.items || [],
+        suggested_purchases: recData.suggestedPurchases || [],
+        images: recData.images || [],
+        occasion: recData.occasion,
+        season: recData.season || [],
+        notes: recData.notes,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return mapDbToRecommendation(data);
   } catch (error) {
     console.error('Error creating recommendation:', error);
     throw error;
@@ -331,14 +727,34 @@ export const updateRecommendation = async (
   updates: Partial<StylingRecommendation>
 ): Promise<StylingRecommendation | null> => {
   try {
-    const recommendations = await getRecommendations();
-    const index = recommendations.findIndex(r => r.id === recommendationId);
-    
-    if (index === -1) return null;
+    const userId = await getAuthUserId();
+    if (!userId) {
+      const recs = await getRecommendations();
+      const index = recs.findIndex(r => r.id === recommendationId);
+      if (index === -1) return null;
+      recs[index] = { ...recs[index], ...updates };
+      await AsyncStorage.setItem(RECOMMENDATIONS_KEY, JSON.stringify(recs));
+      return recs[index];
+    }
 
-    recommendations[index] = { ...recommendations[index], ...updates };
-    await AsyncStorage.setItem(RECOMMENDATIONS_KEY, JSON.stringify(recommendations));
-    return recommendations[index];
+    const dbUpdates: any = {};
+    if (updates.title !== undefined) dbUpdates.title = updates.title;
+    if (updates.description !== undefined) dbUpdates.description = updates.description;
+    if (updates.category !== undefined) dbUpdates.category = updates.category;
+    if (updates.status !== undefined) dbUpdates.status = updates.status;
+    if (updates.sentAt !== undefined) dbUpdates.sent_at = updates.sentAt;
+    if (updates.viewedAt !== undefined) dbUpdates.viewed_at = updates.viewedAt;
+    if (updates.clientFeedback !== undefined) dbUpdates.client_feedback = updates.clientFeedback;
+    if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+
+    const { data, error } = await supabase
+      .from('recommendations')
+      .update(dbUpdates)
+      .eq('id', recommendationId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data ? mapDbToRecommendation(data) : null;
   } catch (error) {
     console.error('Error updating recommendation:', error);
     throw error;
@@ -353,7 +769,7 @@ export const sendRecommendation = async (recommendationId: string): Promise<void
 };
 
 // ============================================
-// Stylist Notes
+// Stylist Notes (kept local — lightweight data)
 // ============================================
 
 export const getNotes = async (): Promise<StylistNote[]> => {
@@ -382,7 +798,6 @@ export const createNote = async (
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-
     notes.push(newNote);
     await AsyncStorage.setItem(NOTES_KEY, JSON.stringify(notes));
     return newNote;
@@ -399,15 +814,8 @@ export const updateNote = async (
   try {
     const notes = await getNotes();
     const index = notes.findIndex(n => n.id === noteId);
-    
     if (index === -1) return null;
-
-    notes[index] = {
-      ...notes[index],
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    };
-    
+    notes[index] = { ...notes[index], ...updates, updatedAt: new Date().toISOString() };
     await AsyncStorage.setItem(NOTES_KEY, JSON.stringify(notes));
     return notes[index];
   } catch (error) {
@@ -419,8 +827,10 @@ export const updateNote = async (
 export const deleteNote = async (noteId: string): Promise<void> => {
   try {
     const notes = await getNotes();
-    const filtered = notes.filter(n => n.id !== noteId);
-    await AsyncStorage.setItem(NOTES_KEY, JSON.stringify(filtered));
+    await AsyncStorage.setItem(
+      NOTES_KEY,
+      JSON.stringify(notes.filter(n => n.id !== noteId)),
+    );
   } catch (error) {
     console.error('Error deleting note:', error);
     throw error;
@@ -443,11 +853,9 @@ export const getStylistStats = async (): Promise<StylistStats> => {
     const totalRevenue = appointments
       .filter(a => a.paid && a.fee)
       .reduce((sum, a) => sum + (a.fee || 0), 0);
-    
     const recommendationsSent = recommendations.filter(
       r => r.status === 'sent' || r.status === 'viewed' || r.status === 'implemented'
     ).length;
-    
     const recommendationsImplemented = recommendations.filter(
       r => r.status === 'implemented'
     ).length;
@@ -476,12 +884,11 @@ export const getStylistStats = async (): Promise<StylistStats> => {
 };
 
 // ============================================
-// Sample Data for Testing
+// Sample Data for Testing (guest mode only)
 // ============================================
 
 export const loadSampleStylistData = async (): Promise<void> => {
   try {
-    // Create sample stylist profile
     const sampleProfile: StylistProfile = {
       id: 'stylist_sample_001',
       accountType: 'stylist',
@@ -516,7 +923,6 @@ export const loadSampleStylistData = async (): Promise<void> => {
     await AsyncStorage.setItem(STYLIST_PROFILE_KEY, JSON.stringify(sampleProfile));
     await setAccountType('stylist');
 
-    // Create sample clients
     const sampleClients: Client[] = [
       {
         id: 'client_001',
@@ -587,7 +993,6 @@ export const loadSampleStylistData = async (): Promise<void> => {
 
     await AsyncStorage.setItem(CLIENTS_KEY, JSON.stringify(sampleClients));
 
-    // Create sample appointments
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -605,7 +1010,7 @@ export const loadSampleStylistData = async (): Promise<void> => {
         startTime: '10:00',
         endTime: '12:00',
         duration: 120,
-        location: 'Client\'s home',
+        location: "Client's home",
         isVirtual: false,
         status: 'confirmed',
         notes: 'Focus on work wardrobe organization',
@@ -636,7 +1041,6 @@ export const loadSampleStylistData = async (): Promise<void> => {
     ];
 
     await AsyncStorage.setItem(APPOINTMENTS_KEY, JSON.stringify(sampleAppointments));
-
     console.log('Sample stylist data loaded successfully');
   } catch (error) {
     console.error('Error loading sample stylist data:', error);

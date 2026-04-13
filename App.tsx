@@ -40,6 +40,11 @@ import BodyProfileOnboardingScreen from './src/screens/BodyProfileOnboardingScre
 import BodyProfileScreen from './src/screens/BodyProfileScreen';
 import LensSearchScreen from './src/screens/LensSearchScreen';
 import AddClientScreen from './src/screens/AddClientScreen';
+import RecommendationDetailsScreen from './src/screens/RecommendationDetailsScreen';
+import CreateRecommendationScreen from './src/screens/CreateRecommendationScreen';
+import AppointmentDetailsScreen from './src/screens/AppointmentDetailsScreen';
+import WardrobeInsightsScreen from './src/screens/WardrobeInsightsScreen';
+import OutfitCalendarScreen from './src/screens/OutfitCalendarScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -62,9 +67,14 @@ const WardrobeStack = () => {
         component={ItemDetailsScreen}
         options={{ headerShown: false }}
       />
-      <Stack.Screen 
-        name="CreateOutfit" 
+      <Stack.Screen
+        name="CreateOutfit"
         component={CreateOutfitScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="WardrobeInsights"
+        component={WardrobeInsightsScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>
@@ -136,6 +146,16 @@ const HomeStack = () => {
         component={BookStylistScreen}
         options={{ headerShown: false, presentation: 'modal' }}
       />
+      <Stack.Screen
+        name="WardrobeInsights"
+        component={WardrobeInsightsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="OutfitCalendar"
+        component={OutfitCalendarScreen}
+        options={{ headerShown: false }}
+      />
     </Stack.Navigator>
   );
 };
@@ -158,9 +178,14 @@ const OutfitStack = () => {
         component={ManualOutfitBuilderScreen}
         options={{ headerShown: false }}
       />
-      <Stack.Screen 
-        name="OutfitAnalytics" 
+      <Stack.Screen
+        name="OutfitAnalytics"
         component={OutfitAnalyticsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="OutfitCalendar"
+        component={OutfitCalendarScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>
@@ -201,12 +226,17 @@ const StylistDashboardStack = () => {
       />
       <Stack.Screen
         name="CreateAppointment"
-        component={(props: any) => <CreateAppointmentScreen {...props} />}
+        component={CreateAppointmentScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen
         name="AddClient"
         component={AddClientScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="AppointmentDetails"
+        component={AppointmentDetailsScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>
@@ -223,12 +253,17 @@ const ClientsStack = () => {
       />
       <Stack.Screen
         name="ClientDetails"
-        component={(props: any) => <ClientDetailsScreen {...props} />}
+        component={ClientDetailsScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen
         name="AddClient"
         component={AddClientScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="AppointmentDetails"
+        component={AppointmentDetailsScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>
@@ -258,6 +293,16 @@ const StylistRecommendationsStack = () => {
       <Stack.Screen
         name="RecommendationsMain"
         component={RecommendationsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="RecommendationDetails"
+        component={RecommendationDetailsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="CreateRecommendation"
+        component={CreateRecommendationScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen

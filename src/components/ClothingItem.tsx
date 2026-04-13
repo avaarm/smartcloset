@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, Image, StyleSheet, Dimensions, TouchableOpacity, Alert, Animated } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import LinearGradient from 'react-native-linear-gradient';
 import type { ClothingItem as ClothingItemType } from '../types';
 import theme from '../styles/theme';
+import { getBodyProfile, BodyProfile } from '../services/profileService';
+import { colorNameToHex, paletteMatchScore } from '../services/styleRulesEngine';
 
 interface Props {
   item: ClothingItemType;
@@ -16,6 +18,22 @@ interface Props {
 const ClothingItem: React.FC<Props> = ({ item, onEdit, onDelete, onPress, showActions = false }) => {
   const [scaleAnim] = useState(new Animated.Value(1));
   const [imageError, setImageError] = useState(false);
+  const [colorMatch, setColorMatch] = useState<'match' | 'avoid' | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const profile = await getBodyProfile();
+        if (!profile || !item.color) return;
+        const hex = colorNameToHex(item.color);
+        if (!hex) return;
+        const recScore = paletteMatchScore(profile.recommendedPalette, hex);
+        const avoidScore = paletteMatchScore(profile.avoidColors, hex);
+        if (recScore > 0.5 && recScore > avoidScore) setColorMatch('match');
+        else if (avoidScore > 0.5 && avoidScore > recScore) setColorMatch('avoid');
+      } catch {}
+    })();
+  }, [item.color]);
   
   const handleDelete = () => {
     Alert.alert(
@@ -93,6 +111,17 @@ const ClothingItem: React.FC<Props> = ({ item, onEdit, onDelete, onPress, showAc
           <Text style={styles.name}>{item.name}</Text>
           <Text style={styles.category}>{item.category}</Text>
           {item.brand && <Text style={styles.brand}>{item.brand}</Text>}
+          {colorMatch && (
+            <View style={styles.colorMatchRow}>
+              <View style={[
+                styles.colorMatchDot,
+                { backgroundColor: colorMatch === 'match' ? '#2E8B57' : '#E57373' },
+              ]} />
+              <Text style={styles.colorMatchText}>
+                {colorMatch === 'match' ? 'Great color for you' : 'Outside your palette'}
+              </Text>
+            </View>
+          )}
         </View>
       </Animated.View>
     </TouchableOpacity>
@@ -168,6 +197,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     ...theme.shadows.subtle,
+  },
+  colorMatchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 4,
+  },
+  colorMatchDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  colorMatchText: {
+    fontSize: 10,
+    color: theme.colors.mediumGray,
+    letterSpacing: 0.2,
   },
 });
 

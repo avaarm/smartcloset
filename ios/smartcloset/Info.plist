@@ -32,8 +32,14 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>SmartCloset uses your camera to photograph clothing items and add them to your wardrobe.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>SmartCloset uses your location to provide weather-appropriate outfit suggestions.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>smartcloset needs access to your photo library so you can add clothing images to your wardrobe.</string>
+	<string>SmartCloset needs access to your photo library so you can add clothing images to your wardrobe.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>SmartCloset saves outfit photos to your photo library.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIRequiredDeviceCapabilities</key>

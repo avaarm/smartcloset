@@ -169,17 +169,25 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
           </Text>
         </View>
         <View style={styles.headerActions}>
-          <Button
-            label="Load Sample"
-            variant="ghost"
-            size="sm"
-            leftIcon={
-              <Icon name="refresh-outline" size={16} color={theme.colors.text} />
-            }
-            onPress={handleResetStorage}
-          />
+          <Pressable
+            onPress={() => (navigation as any).navigate('WardrobeInsights')}
+            hitSlop={8}
+            accessibilityLabel="Wardrobe analytics"
+            accessibilityRole="button"
+            style={[
+              styles.filterBtn,
+              {
+                backgroundColor: theme.colors.muted,
+                borderRadius: theme.radius.full,
+              },
+            ]}
+          >
+            <Icon name="analytics-outline" size={20} color={theme.colors.text} />
+          </Pressable>
           <Pressable
             onPress={() => setShowFilterModal(true)}
+            accessibilityLabel={`Filters${activeFiltersCount > 0 ? `, ${activeFiltersCount} active` : ''}`}
+            accessibilityRole="button"
             style={[
               styles.filterBtn,
               {
@@ -228,6 +236,8 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
           onChangeText={setSearchQuery}
           autoCapitalize="none"
           autoCorrect={false}
+          accessibilityLabel="Search wardrobe"
+          accessibilityRole="search"
         />
         {searchQuery.length > 0 && (
           <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
@@ -245,7 +255,11 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
           {filters.seasons.map(s => (
             <Badge key={s} label={s} tone="neutral" />
           ))}
-          <Pressable onPress={() => setFilters({ categories: [], seasons: [], sortBy: 'date', sortOrder: 'desc' })}>
+          <Pressable
+            onPress={() => setFilters({ categories: [], seasons: [], sortBy: 'date', sortOrder: 'desc' })}
+            accessibilityLabel="Clear all filters"
+            accessibilityRole="button"
+          >
             <Text variant="caption" color="muted">
               Clear all
             </Text>
@@ -288,6 +302,8 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
         {/* FAB */}
         <Pressable
           onPress={() => navigation.navigate('AddClothing')}
+          accessibilityLabel="Add clothing item"
+          accessibilityRole="button"
           style={({ pressed }) => [
             styles.fab,
             {

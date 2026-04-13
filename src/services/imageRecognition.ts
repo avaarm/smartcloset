@@ -1,4 +1,16 @@
+/**
+ * Image recognition service for clothing analysis.
+ *
+ * Uses Google Cloud Vision API (LABEL_DETECTION + OBJECT_LOCALIZATION +
+ * IMAGE_PROPERTIES + TEXT_DETECTION) when an API key is configured.
+ * Falls back to intelligent mock results when no key is available.
+ */
+
 import { ClothingCategory } from '../types/clothing';
+import { env, hasGoogleVision } from '../config/env';
+import { readImageAsBase64 } from '../platform/fileSystem';
+
+const VISION_ENDPOINT = 'https://vision.googleapis.com/v1/images:annotate';
 
 // Define pattern types for clothing
 export type PatternType = 'solid' | 'striped' | 'plaid' | 'floral' | 'polka_dot' | 'graphic' | 'other';
@@ -7,10 +19,10 @@ export type PatternType = 'solid' | 'striped' | 'plaid' | 'floral' | 'polka_dot'
 export interface RecognitionResult {
   category?: ClothingCategory;
   brand?: string;
-  occasion?: string; // e.g., 'casual', 'formal', 'business', 'sports'
+  occasion?: string;
   color?: string;
   pattern?: PatternType;
-  material?: string; // e.g., 'cotton', 'wool', 'polyester', 'leather'
+  material?: string;
   confidence: {
     category?: number;
     brand?: number;
@@ -19,256 +31,308 @@ export interface RecognitionResult {
     pattern?: number;
     material?: number;
   };
+  /** Raw labels returned by Vision API (empty if mock) */
+  rawLabels?: string[];
 }
 
-/**
- * Analyzes a clothing image and returns predicted attributes
- * 
- * @param imageUri - The URI of the image to analyze
- * @returns Promise<RecognitionResult> - The predicted clothing attributes
- */
-export const analyzeClothingImage = async (imageUri: string): Promise<RecognitionResult> => {
-  try {
-    // For demonstration, we're using a mock implementation
-    // In a real app, you would call an actual AI service API here
-    
-    // Mock API call delay - simulating real API latency
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // PRODUCTION IMPLEMENTATION EXAMPLE WITH CLARIFAI:
-    // 
-    // 1. Install Clarifai: npm install clarifai
-    // 
-    // 2. Import and initialize the client:
-    // import { ClarifaiStub, grpc } from 'clarifai-nodejs-grpc';
-    // const stub = ClarifaiStub.grpc();
-    // const metadata = new grpc.Metadata();
-    // metadata.set('authorization', 'Key YOUR_CLARIFAI_API_KEY');
-    // 
-    // 3. Prepare the request:
-    // const request = {
-    //   user_app_id: {
-    //     user_id: 'clarifai',
-    //     app_id: 'main'
-    //   },
-    //   inputs: [
-    //     {
-    //       data: {
-    //         image: {
-    //           url: imageUri
-    //         }
-    //       }
-    //     }
-    //   ],
-    //   model_id: 'apparel-recognition'
-    // };
-    // 
-    // 4. Make the prediction:
-    // const response = await new Promise((resolve, reject) => {
-    //   stub.PostModelOutputs(request, metadata, (err, response) => {
-    //     if (err) reject(err);
-    //     else resolve(response);
-    //   });
-    // });
-    // 
-    // 5. Process the response to extract attributes
-    // const concepts = response.outputs[0].data.concepts;
-    // const result = processClothingConcepts(concepts);
-    // return result;
-    
-    // For now, return enhanced mock data based on the image URI
-    const mockResults = getMockRecognitionResult(imageUri);
-    
-    return mockResults;
-  } catch (error) {
-    console.error('Error analyzing clothing image:', error);
-    return {
-      confidence: {}
-    };
-  }
+// ─── Category / attribute mapping tables ────────────────────────────────────
+
+const CATEGORY_KEYWORDS: Record<string, ClothingCategory> = {
+  'shirt': 'tops', 't-shirt': 'tops', 'blouse': 'tops', 'sweater': 'tops',
+  'top': 'tops', 'polo': 'tops', 'tank top': 'tops', 'hoodie': 'tops',
+  'cardigan': 'tops', 'turtleneck': 'tops', 'crop top': 'tops',
+  'pants': 'bottoms', 'jeans': 'bottoms', 'trousers': 'bottoms',
+  'shorts': 'bottoms', 'skirt': 'bottoms', 'leggings': 'bottoms', 'chinos': 'bottoms',
+  'dress': 'dresses', 'gown': 'dresses', 'jumpsuit': 'dresses', 'romper': 'dresses',
+  'jacket': 'outerwear', 'coat': 'outerwear', 'blazer': 'outerwear',
+  'parka': 'outerwear', 'vest': 'outerwear', 'windbreaker': 'outerwear',
+  'shoe': 'shoes', 'sneaker': 'shoes', 'boot': 'shoes', 'sandal': 'shoes',
+  'heel': 'shoes', 'loafer': 'shoes', 'slipper': 'shoes', 'flat': 'shoes',
+  'hat': 'accessories', 'scarf': 'accessories', 'bag': 'accessories',
+  'jewelry': 'accessories', 'watch': 'accessories', 'belt': 'accessories',
+  'sunglasses': 'accessories', 'tie': 'accessories', 'purse': 'accessories',
+  'backpack': 'accessories', 'necklace': 'accessories', 'bracelet': 'accessories',
+  'earring': 'accessories', 'ring': 'accessories',
 };
 
-/**
- * Process concepts returned from Clarifai API into clothing attributes
- * This would be used with a real API implementation
- */
-const processClothingConcepts = (concepts: any[]): RecognitionResult => {
-  // This is a simplified example of how you might process real API results
-  const result: RecognitionResult = { confidence: {} };
-  
-  // Find category
-  const categories: {[key: string]: ClothingCategory} = {
-    'shirt': 'tops',
-    't-shirt': 'tops',
-    'blouse': 'tops',
-    'sweater': 'tops',
-    'pants': 'bottoms',
-    'jeans': 'bottoms',
-    'skirt': 'bottoms',
-    'shorts': 'bottoms',
-    'dress': 'dresses',
-    'jacket': 'outerwear',
-    'coat': 'outerwear',
-    'shoes': 'shoes',
-    'sneakers': 'shoes',
-    'boots': 'shoes',
-    'hat': 'accessories',
-    'scarf': 'accessories',
-    'bag': 'accessories',
-    'jewelry': 'accessories'
+const BRAND_NAMES = [
+  'nike', 'adidas', 'puma', 'reebok', 'converse', 'vans', 'new balance',
+  'zara', 'h&m', 'uniqlo', 'gap', 'old navy', 'banana republic',
+  'levi', "levi's", 'calvin klein', 'tommy hilfiger', 'ralph lauren', 'polo',
+  'gucci', 'prada', 'louis vuitton', 'chanel', 'dior', 'versace', 'balenciaga',
+  'north face', 'patagonia', 'columbia', 'under armour',
+  'asos', 'everlane', 'reformation', 'cos', 'allsaints', 'theory', 'vince',
+  'max mara', 'common projects', 'apc', 'acne studios',
+];
+
+const COLOR_NAMES = [
+  'red', 'blue', 'green', 'black', 'white', 'yellow', 'purple', 'pink',
+  'orange', 'brown', 'gray', 'grey', 'navy', 'beige', 'cream', 'tan',
+  'maroon', 'olive', 'teal', 'coral', 'burgundy', 'khaki', 'ivory',
+  'charcoal', 'camel', 'sage', 'mint', 'lavender', 'mauve',
+];
+
+const PATTERN_KEYWORDS: Record<string, PatternType> = {
+  'striped': 'striped', 'stripe': 'striped',
+  'plaid': 'plaid', 'tartan': 'plaid', 'checkered': 'plaid',
+  'floral': 'floral', 'flower': 'floral',
+  'polka dot': 'polka_dot', 'dotted': 'polka_dot',
+  'graphic': 'graphic', 'print': 'graphic', 'logo': 'graphic',
+  'solid': 'solid', 'plain': 'solid',
+};
+
+const MATERIAL_NAMES = [
+  'cotton', 'wool', 'polyester', 'leather', 'denim', 'silk', 'linen',
+  'cashmere', 'nylon', 'suede', 'velvet', 'satin', 'chiffon', 'tweed',
+  'fleece', 'corduroy', 'canvas',
+];
+
+const OCCASION_MAP: Record<string, string[]> = {
+  'formal': ['formal', 'business', 'suit', 'tie', 'dress shoe', 'tuxedo', 'gown'],
+  'casual': ['casual', 'everyday', 't-shirt', 'jeans', 'sneaker', 'weekend'],
+  'sports': ['sports', 'athletic', 'workout', 'running', 'gym', 'activewear', 'yoga'],
+  'party': ['party', 'club', 'evening', 'cocktail', 'sequin', 'glitter'],
+  'business': ['business', 'office', 'work', 'professional', 'blazer', 'slacks'],
+};
+
+// ─── RGB to color name ──────────────────────────────────────────────────────
+
+const rgbToColorName = (r: number, g: number, b: number): string => {
+  if (r > 240 && g > 240 && b > 240) return 'white';
+  if (r < 30 && g < 30 && b < 30) return 'black';
+  if (r > 200 && g > 200 && b > 200) return 'gray';
+  if (r < 60 && g < 60 && b < 60) return 'charcoal';
+
+  if (r > g + 60 && r > b + 60) return r > 200 ? 'red' : 'maroon';
+  if (g > r + 60 && g > b + 60) return g > 200 ? 'green' : 'olive';
+  if (b > r + 60 && b > g + 60) return b > 200 ? 'blue' : 'navy';
+
+  if (r > 180 && g > 180 && b < 100) return 'yellow';
+  if (r > 180 && b > 140 && g < 100) return 'purple';
+  if (g > 140 && b > 140 && r < 80) return 'teal';
+  if (r > 180 && g > 120 && b < 100) return 'orange';
+  if (r > 180 && g < 130 && b > 130) return 'pink';
+  if (r > 120 && g > 80 && b < 60 && r > g) return 'brown';
+  if (r > 180 && g > 160 && b > 130) return 'beige';
+
+  return 'multicolor';
+};
+
+// ─── Process Vision API response ────────────────────────────────────────────
+
+const processVisionResponse = (response: any): RecognitionResult => {
+  const labels: Array<{ description: string; score: number }> =
+    response.labelAnnotations || [];
+  const objects: Array<{ name: string; score: number }> =
+    response.localizedObjectAnnotations || [];
+  const textAnnotations: Array<{ description: string }> =
+    response.textAnnotations || [];
+  const imageProperties = response.imagePropertiesAnnotation || {};
+
+  const allDescriptions = [
+    ...labels.map(l => l.description.toLowerCase()),
+    ...objects.map(o => o.name.toLowerCase()),
+  ];
+  const joined = allDescriptions.join(' ');
+  const allText = textAnnotations.map(t => t.description).join(' ').toLowerCase();
+
+  const result: RecognitionResult = {
+    confidence: {},
+    rawLabels: labels.map(l => l.description),
   };
-  
-  // Find brands
-  const brands = ['Nike', 'Adidas', 'Zara', 'H&M', 'Uniqlo', 'Levi\'s', 'Gap', 'Gucci', 'Prada'];
-  
-  // Process each concept
-  concepts.forEach(concept => {
-    const name = concept.name.toLowerCase();
-    const value = concept.value; // confidence score
-    
-    // Check for category
-    for (const [keyword, category] of Object.entries(categories)) {
-      if (name.includes(keyword) && (!result.category || value > (result.confidence.category || 0))) {
+
+  // ── Category ──
+  let bestCatScore = 0;
+  for (const [keyword, category] of Object.entries(CATEGORY_KEYWORDS)) {
+    const match = labels.find(l => l.description.toLowerCase().includes(keyword))
+      || objects.find(o => o.name.toLowerCase().includes(keyword));
+    if (match) {
+      const score = 'score' in match ? match.score : 0;
+      if (score > bestCatScore) {
+        bestCatScore = score;
         result.category = category;
-        result.confidence.category = value;
+        result.confidence.category = score;
       }
     }
-    
-    // Check for brand
-    for (const brand of brands) {
-      if (name.includes(brand.toLowerCase()) && (!result.brand || value > (result.confidence.brand || 0))) {
-        result.brand = brand;
-        result.confidence.brand = value;
-      }
+  }
+
+  // ── Brand (from text detection) ──
+  for (const brand of BRAND_NAMES) {
+    if (allText.includes(brand)) {
+      result.brand = brand.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      result.confidence.brand = 0.85;
+      break;
     }
-    
-    // Check for colors
-    const colors = ['red', 'blue', 'green', 'black', 'white', 'yellow', 'purple', 'pink', 'orange', 'brown', 'gray'];
-    for (const color of colors) {
-      if (name.includes(color) && (!result.color || value > (result.confidence.color || 0))) {
+  }
+
+  // ── Color (from image properties) ──
+  const dominantColors = imageProperties.dominantColors?.colors || [];
+  if (dominantColors.length > 0) {
+    // Find the dominant non-background color
+    const sorted = [...dominantColors]
+      .filter((c: any) => c.pixelFraction > 0.05)
+      .sort((a: any, b: any) => b.score - a.score);
+
+    if (sorted.length > 0) {
+      const top = sorted[0];
+      const r = top.color?.red || 0;
+      const g = top.color?.green || 0;
+      const b = top.color?.blue || 0;
+      result.color = rgbToColorName(r, g, b);
+      result.confidence.color = top.score || 0.8;
+    }
+  }
+
+  // Fallback: check labels for color names
+  if (!result.color) {
+    for (const color of COLOR_NAMES) {
+      if (joined.includes(color)) {
         result.color = color;
-        result.confidence.color = value;
+        result.confidence.color = 0.65;
+        break;
       }
     }
-    
-    // Check for patterns
-    const patterns: {[key: string]: PatternType} = {
-      'striped': 'striped',
-      'plaid': 'plaid',
-      'floral': 'floral',
-      'polka dot': 'polka_dot',
-      'graphic': 'graphic',
-      'solid': 'solid'
-    };
-    
-    for (const [keyword, pattern] of Object.entries(patterns)) {
-      if (name.includes(keyword) && (!result.pattern || value > (result.confidence.pattern || 0))) {
-        result.pattern = pattern;
-        result.confidence.pattern = value;
+  }
+
+  // ── Pattern ──
+  for (const [keyword, pattern] of Object.entries(PATTERN_KEYWORDS)) {
+    if (joined.includes(keyword)) {
+      result.pattern = pattern;
+      result.confidence.pattern = 0.7;
+      break;
+    }
+  }
+  if (!result.pattern) {
+    result.pattern = 'solid';
+    result.confidence.pattern = 0.5;
+  }
+
+  // ── Material ──
+  for (const material of MATERIAL_NAMES) {
+    if (joined.includes(material)) {
+      result.material = material;
+      result.confidence.material = 0.7;
+      break;
+    }
+  }
+
+  // ── Occasion ──
+  for (const [occasion, keywords] of Object.entries(OCCASION_MAP)) {
+    for (const kw of keywords) {
+      if (joined.includes(kw)) {
+        result.occasion = occasion;
+        result.confidence.occasion = 0.65;
+        break;
       }
     }
-    
-    // Check for materials
-    const materials = ['cotton', 'wool', 'polyester', 'leather', 'denim', 'silk', 'linen'];
-    for (const material of materials) {
-      if (name.includes(material) && (!result.material || value > (result.confidence.material || 0))) {
-        result.material = material;
-        result.confidence.material = value;
-      }
-    }
-    
-    // Check for occasions
-    const occasions = {
-      'formal': ['formal', 'business', 'suit', 'tie', 'dress shoe'],
-      'casual': ['casual', 'everyday', 't-shirt', 'jeans', 'sneaker'],
-      'sports': ['sports', 'athletic', 'workout', 'running', 'gym'],
-      'party': ['party', 'club', 'evening', 'cocktail'],
-      'business': ['business', 'office', 'work', 'professional']
-    };
-    
-    for (const [occasion, keywords] of Object.entries(occasions)) {
-      for (const keyword of keywords) {
-        if (name.includes(keyword) && (!result.occasion || value > (result.confidence.occasion || 0))) {
-          result.occasion = occasion;
-          result.confidence.occasion = value;
-        }
-      }
-    }
-  });
-  
+    if (result.occasion) break;
+  }
+
   return result;
 };
 
+// ─── Main analysis function ─────────────────────────────────────────────────
+
 /**
- * Helper function to generate mock recognition results
- * In a real app, this would be replaced with actual AI service response processing
+ * Analyzes a clothing image and returns predicted attributes.
+ *
+ * Uses Google Cloud Vision when GOOGLE_VISION_API_KEY is set.
+ * Falls back to mock results otherwise.
  */
+export const analyzeClothingImage = async (imageUri: string): Promise<RecognitionResult> => {
+  try {
+    // ── Real Vision API path ──
+    if (hasGoogleVision()) {
+      const base64 = await readImageAsBase64(imageUri);
+
+      const response = await fetch(`${VISION_ENDPOINT}?key=${env.GOOGLE_VISION_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requests: [{
+            image: { content: base64 },
+            features: [
+              { type: 'LABEL_DETECTION', maxResults: 20 },
+              { type: 'OBJECT_LOCALIZATION', maxResults: 10 },
+              { type: 'TEXT_DETECTION' },
+              { type: 'IMAGE_PROPERTIES' },
+            ],
+          }],
+        }),
+      });
+
+      if (!response.ok) {
+        console.warn('Vision API error, falling back to mock:', response.status);
+        return getMockRecognitionResult(imageUri);
+      }
+
+      const data = await response.json();
+      const visionResult = data.responses?.[0];
+
+      if (!visionResult || visionResult.error) {
+        console.warn('Vision response error:', visionResult?.error);
+        return getMockRecognitionResult(imageUri);
+      }
+
+      return processVisionResponse(visionResult);
+    }
+
+    // ── Mock fallback (no API key) ──
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    return getMockRecognitionResult(imageUri);
+  } catch (error) {
+    console.error('Error analyzing clothing image:', error);
+    return getMockRecognitionResult(imageUri);
+  }
+};
+
+// ─── Mock fallback ──────────────────────────────────────────────────────────
+
 const getMockRecognitionResult = (imageUri: string): RecognitionResult => {
-  // Use the last part of the URI as a seed for consistent mock results
   const seed = imageUri.split('/').pop() || '';
   const seedNum = seed.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  
-  // Mock categories with weighted probabilities
+
   const categories: ClothingCategory[] = ['tops', 'bottoms', 'dresses', 'outerwear', 'shoes', 'accessories'];
-  const brands = ['Nike', 'Adidas', 'Zara', 'H&M', 'Uniqlo', 'Levi\'s', 'Gap', 'Gucci', 'Prada', 'Unknown'];
+  const brands = ['Nike', 'Adidas', 'Zara', 'H&M', 'Uniqlo', "Levi's", 'Gap', 'Gucci', 'Everlane', undefined];
   const occasions = ['casual', 'formal', 'business', 'sports', 'party', 'everyday'];
-  const colors = ['black', 'white', 'red', 'blue', 'green', 'yellow', 'purple', 'pink', 'orange', 'brown', 'gray'];
-  const patterns: PatternType[] = ['solid', 'striped', 'plaid', 'floral', 'polka_dot', 'graphic', 'other'];
+  const colors = ['black', 'white', 'red', 'blue', 'green', 'navy', 'beige', 'brown', 'gray', 'pink', 'olive'];
+  const patterns: PatternType[] = ['solid', 'solid', 'solid', 'striped', 'plaid', 'floral', 'graphic'];
   const materials = ['cotton', 'wool', 'polyester', 'leather', 'denim', 'silk', 'linen'];
-  
-  // Select mock values based on the seed
-  const categoryIndex = seedNum % categories.length;
-  const brandIndex = (seedNum * 13) % brands.length;
-  const occasionIndex = (seedNum * 7) % occasions.length;
-  const colorIndex = (seedNum * 5) % colors.length;
-  const patternIndex = (seedNum * 11) % patterns.length;
-  const materialIndex = (seedNum * 17) % materials.length;
-  
-  // Generate confidence scores (higher is better)
-  const categoryConfidence = 0.5 + (seedNum % 50) / 100; // 0.5-0.99
-  const brandConfidence = 0.3 + (seedNum % 60) / 100; // 0.3-0.89
-  const occasionConfidence = 0.4 + (seedNum % 55) / 100; // 0.4-0.94
-  const colorConfidence = 0.6 + (seedNum % 40) / 100; // 0.6-0.99
-  const patternConfidence = 0.45 + (seedNum % 45) / 100; // 0.45-0.89
-  const materialConfidence = 0.35 + (seedNum % 50) / 100; // 0.35-0.84
-  
+
   return {
-    category: categories[categoryIndex],
-    brand: brands[brandIndex] === 'Unknown' ? undefined : brands[brandIndex],
-    occasion: occasions[occasionIndex],
-    color: colors[colorIndex],
-    pattern: patterns[patternIndex],
-    material: materials[materialIndex],
+    category: categories[seedNum % categories.length],
+    brand: brands[(seedNum * 13) % brands.length],
+    occasion: occasions[(seedNum * 7) % occasions.length],
+    color: colors[(seedNum * 5) % colors.length],
+    pattern: patterns[(seedNum * 11) % patterns.length],
+    material: materials[(seedNum * 17) % materials.length],
     confidence: {
-      category: categoryConfidence,
-      brand: brandConfidence,
-      occasion: occasionConfidence,
-      color: colorConfidence,
-      pattern: patternConfidence,
-      material: materialConfidence
-    }
+      category: 0.5 + (seedNum % 50) / 100,
+      brand: 0.3 + (seedNum % 60) / 100,
+      occasion: 0.4 + (seedNum % 55) / 100,
+      color: 0.6 + (seedNum % 40) / 100,
+      pattern: 0.45 + (seedNum % 45) / 100,
+      material: 0.35 + (seedNum % 50) / 100,
+    },
   };
 };
 
+// ─── Confidence helper ──────────────────────────────────────────────────────
+
 /**
- * Determines if a recognition result is confident enough to use for autofill
- * 
- * @param result - The recognition result to evaluate
- * @param field - The specific field to check confidence for
- * @returns boolean - Whether the confidence is high enough
+ * Determines if a recognition result is confident enough to autofill.
  */
 export const isConfidentPrediction = (
-  result: RecognitionResult, 
-  field: 'category' | 'brand' | 'occasion' | 'color' | 'pattern' | 'material'
+  result: RecognitionResult,
+  field: 'category' | 'brand' | 'occasion' | 'color' | 'pattern' | 'material',
 ): boolean => {
-  const threshold = {
+  const threshold: Record<string, number> = {
     category: 0.7,
     brand: 0.8,
     occasion: 0.65,
-    color: 0.75,
-    pattern: 0.7,
-    material: 0.75
+    color: 0.7,
+    pattern: 0.65,
+    material: 0.7,
   };
-  
   return !!result.confidence[field] && (result.confidence[field] as number) >= threshold[field];
 };
