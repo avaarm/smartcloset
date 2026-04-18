@@ -17,6 +17,8 @@ import {
   createAutoBackup,
   clearAllData,
 } from '../services/backupService';
+import { reseedAllDemoData } from '../services/seedDemoData';
+import { resetStorage } from '../services/storage';
 import theme from '../styles/theme';
 import { supabase } from '../config/supabase';
 import { signOut } from '../services/authService';
@@ -128,6 +130,37 @@ const SettingsScreen = () => {
         Alert.alert('Error', 'Failed to clear data.');
       }
     }
+  };
+
+  const handleReseedDemoData = async () => {
+    Alert.alert(
+      'Reset Demo Data',
+      'This will replace your current wardrobe and sample data with a fresh seed — wishlist, outfits, body profile, stylist clients, appointments, recommendations, booking requests, and outfit history will all be regenerated. Your account and login are preserved.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await resetStorage();       // wipes & re-seeds wardrobe + saved outfits
+              await reseedAllDemoData();  // re-seeds everything else
+              await loadBackupStats();
+              Alert.alert(
+                'Demo Data Reset',
+                'Fresh demo data loaded. Pull to refresh any open screens to see the new content.',
+              );
+            } catch (error) {
+              Alert.alert('Error', 'Failed to reset demo data.');
+              console.error('[SettingsScreen] reseed failed:', error);
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const toggleAutoBackup = async (value: boolean) => {
@@ -316,6 +349,22 @@ const SettingsScreen = () => {
         {/* Danger Zone */}
         <View style={styles.section}>
           <Text style={styles.dangerSectionTitle}>Danger Zone</Text>
+
+          <TouchableOpacity
+            style={[styles.dangerButton, { borderColor: '#8B7FD9', backgroundColor: '#F3F1FF' }]}
+            onPress={handleReseedDemoData}
+            disabled={loading}
+          >
+            <Icon name="refresh-outline" size={20} color="#6B5FC4" />
+            <Text style={[styles.dangerButtonText, { color: '#6B5FC4' }]}>
+              Reset Demo Data
+            </Text>
+          </TouchableOpacity>
+
+          <Text style={[styles.dangerWarning, { marginBottom: 16 }]}>
+            Replaces all data with a fresh sample set (wardrobe, outfits, stylist &
+            client content). Useful for testing every feature from a known state.
+          </Text>
 
           <TouchableOpacity
             style={styles.dangerButton}

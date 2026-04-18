@@ -8,6 +8,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import LinearGradient from 'react-native-linear-gradient';
 import theme from '../styles/theme';
 import { sampleClothes } from '../data/sampleClothes';
+import WishlistSearchModal from './WishlistSearchModal';
 
 const WishlistScreen = () => {
   const navigation = useNavigation();
@@ -16,6 +17,7 @@ const WishlistScreen = () => {
   const [budget, setBudget] = useState(0);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [budgetInput, setBudgetInput] = useState('');
+  const [showSearchModal, setShowSearchModal] = useState(false);
 
   useEffect(() => {
     loadWishlistItems();
@@ -199,13 +201,22 @@ const WishlistScreen = () => {
                 <Icon name="heart-outline" size={80} color={theme.colors.lightGray} />
                 <Text style={styles.emptyStateTitle}>Your wishlist is empty</Text>
                 <Text style={styles.emptyStateText}>
-                  Add items you're considering to purchase
+                  Search the web for items you'd love to own
                 </Text>
                 <TouchableOpacity
                   style={styles.sampleDataButton}
+                  onPress={() => setShowSearchModal(true)}
+                >
+                  <Icon name="search" size={16} color="#FFFFFF" />
+                  <Text style={styles.sampleDataButtonText}>Search Online</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.sampleDataButton, styles.sampleDataButtonSecondary]}
                   onPress={handleAddSampleData}
                 >
-                  <Text style={styles.sampleDataButtonText}>Load Sample Items</Text>
+                  <Text style={[styles.sampleDataButtonText, { color: theme.colors.accent }]}>
+                    Load Sample Items
+                  </Text>
                 </TouchableOpacity>
               </View>
             }
@@ -213,7 +224,22 @@ const WishlistScreen = () => {
         )}
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => (navigation as any).navigate('AddClothing', { isWishlist: true })}
+          onPress={() =>
+            Alert.alert('Add to Wishlist', undefined, [
+              {
+                text: 'Search online',
+                onPress: () => setShowSearchModal(true),
+              },
+              {
+                text: 'Add manually',
+                onPress: () =>
+                  (navigation as any).navigate('AddClothing', { isWishlist: true }),
+              },
+              { text: 'Cancel', style: 'cancel' },
+            ])
+          }
+          accessibilityLabel="Add to wishlist"
+          accessibilityRole="button"
         >
           <LinearGradient
             colors={theme.colors.gradient.primary}
@@ -223,6 +249,13 @@ const WishlistScreen = () => {
           </LinearGradient>
         </TouchableOpacity>
       </View>
+
+      {/* Search modal */}
+      <WishlistSearchModal
+        visible={showSearchModal}
+        onClose={() => setShowSearchModal(false)}
+        onAdded={loadWishlistItems}
+      />
 
       {/* Budget Modal */}
       <Modal
@@ -385,6 +418,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     borderRadius: 24,
     marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sampleDataButtonSecondary: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: theme.colors.accent,
   },
   sampleDataButtonText: {
     color: '#FFFFFF',

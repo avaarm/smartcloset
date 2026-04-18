@@ -39,6 +39,8 @@ import ClientRecommendationsScreen from './src/screens/ClientRecommendationsScre
 import BodyProfileOnboardingScreen from './src/screens/BodyProfileOnboardingScreen';
 import BodyProfileScreen from './src/screens/BodyProfileScreen';
 import LensSearchScreen from './src/screens/LensSearchScreen';
+import { initCrashReporting, setUser as setCrashUser } from './src/services/crashReporting';
+import env from './src/config/env';
 import AddClientScreen from './src/screens/AddClientScreen';
 import RecommendationDetailsScreen from './src/screens/RecommendationDetailsScreen';
 import CreateRecommendationScreen from './src/screens/CreateRecommendationScreen';
@@ -408,6 +410,9 @@ const ClientMyStylistStack = () => {
   );
 };
 
+// Initialize crash reporting before any rendering
+initCrashReporting(env.SENTRY_DSN);
+
 const App = (): React.JSX.Element => {
   const [showSplash, setShowSplash] = useState(true);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -422,12 +427,18 @@ const App = (): React.JSX.Element => {
       supabase.auth.getSession().then(({ data: { session: s } }) => {
         setSession(s);
         setIsAuthLoading(false);
+        // Set crash reporting user context
+        if (s?.user) {
+          setCrashUser({ id: s.user.id, email: s.user.email });
+        }
       });
 
       // Listen for auth state changes
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         (_event, s) => {
           setSession(s);
+          // Update crash reporting user context
+          setCrashUser(s?.user ? { id: s.user.id, email: s.user.email } : null);
         },
       );
 

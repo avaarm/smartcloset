@@ -5,7 +5,7 @@ import { supabase } from '../config/supabase';
 import { seedAllDemoData } from './seedDemoData';
 
 const STORAGE_KEY = '@smartcloset_items';
-const INITIALIZED_KEY = '@smartcloset_initialized_v5';
+const INITIALIZED_KEY = '@smartcloset_initialized_v6';
 const SAVED_OUTFITS_KEY = '@smartcloset_saved_outfits';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -86,6 +86,11 @@ const initializeLocalStorage = async (): Promise<void> => {
             .filter(Boolean),
           season: o.season,
           occasion: o.occasion,
+          wearCount: (o as any).wearCount ?? 0,
+          lastWorn: (o as any).lastWorn,
+          favorite: (o as any).favorite ?? false,
+          notes: (o as any).notes,
+          tags: (o as any).tags || [],
           createdAt: o.dateCreated || new Date().toISOString(),
         }))
         .filter(o => o.items.length >= 2);

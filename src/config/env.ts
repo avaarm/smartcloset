@@ -34,6 +34,7 @@ import {
   MAX_IMAGE_SIZE_MB as _MAX_IMAGE_SIZE_MB,
   IMAGE_QUALITY as _IMAGE_QUALITY,
   THUMBNAIL_SIZE as _THUMBNAIL_SIZE,
+  SENTRY_DSN as _SENTRY_DSN,
   // @ts-ignore
 } from '@env';
 
@@ -75,6 +76,9 @@ export const env = {
   GOOGLE_WEB_CLIENT_ID: str(_GOOGLE_WEB_CLIENT_ID),
   GOOGLE_IOS_CLIENT_ID: str(_GOOGLE_IOS_CLIENT_ID),
   APPLE_SERVICE_ID: str(_APPLE_SERVICE_ID),
+
+  // --- Sentry crash reporting ---
+  SENTRY_DSN: str(_SENTRY_DSN),
 
   // --- App meta ---
   APP_ENV: str(_APP_ENV, 'development'),

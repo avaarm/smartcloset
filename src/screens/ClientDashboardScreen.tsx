@@ -80,7 +80,9 @@ const ClientDashboardScreen = ({ navigation }: any) => {
   };
 
   const handleFindStylist = () => {
-    navigation.navigate('StylistMarketplace');
+    // StylistMarketplace lives inside the MyStylist tab's stack; navigate to
+    // that tab and specify the nested screen.
+    navigation.navigate('MyStylist', { screen: 'StylistMarketplace' });
   };
 
   if (loading) {
