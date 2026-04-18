@@ -8,7 +8,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { saveClothingItem, updateClothingItem } from '../services/storage';
 import { ClothingCategory, Season, Occasion } from '../types/clothing';
-import { analyzeClothingImage, isConfidentPrediction, RecognitionResult } from '../services/imageRecognition';
+import {
+  analyzeClothingImage,
+  isConfidentPrediction,
+  shouldAutofillPrediction,
+  generateNameFromRecognition,
+  RecognitionResult,
+} from '../services/imageRecognition';
 import { copyImageToPermanentStorage } from '../services/imageStorage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -129,23 +135,41 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
     try {
       const result = await analyzeClothingImage(uri);
       setRecognitionResult(result);
-      
-      // Autofill fields based on confident predictions
-      if (result.category && isConfidentPrediction(result, 'category')) {
+
+      // Auto-apply predictions using a looser threshold than
+      // isConfidentPrediction — the goal is to always give the user a useful
+      // starting point they can override. Only autofill fields the user hasn't
+      // touched (so re-analyzing an edited item doesn't clobber their edits).
+      if (result.category && shouldAutofillPrediction(result, 'category')) {
         setCategory(result.category);
       }
-      
-      if (result.brand && isConfidentPrediction(result, 'brand')) {
+
+      if (result.brand && shouldAutofillPrediction(result, 'brand') && !brand.trim()) {
         setBrand(result.brand);
       }
-      
-      if (result.occasion && isConfidentPrediction(result, 'occasion')) {
+
+      if (result.occasion && shouldAutofillPrediction(result, 'occasion') && !occasion) {
         setOccasion(result.occasion as Occasion);
       }
 
-      // Also autofill color if confident
-      if (result.color && isConfidentPrediction(result, 'color')) {
+      if (result.color && shouldAutofillPrediction(result, 'color') && !color.trim()) {
         setColor(result.color.charAt(0).toUpperCase() + result.color.slice(1));
+      }
+
+      // Auto-generate a name from the recognized attributes if the user
+      // hasn't entered one yet. e.g. "Burgundy Handbag", "Gucci Black Jacket".
+      if (!name.trim()) {
+        const generated = generateNameFromRecognition(result);
+        if (generated) setName(generated);
+      }
+
+      // If the detected material isn't already in tags, add it as a tag so
+      // filtering/search picks it up.
+      if (result.material && shouldAutofillPrediction(result, 'material')) {
+        const current = tags.split(',').map((t: string) => t.trim()).filter(Boolean);
+        if (!current.some((t: string) => t.toLowerCase() === result.material!.toLowerCase())) {
+          setTags(current.length > 0 ? `${tags}, ${result.material}` : result.material);
+        }
       }
     } catch (error) {
       console.error('Error analyzing image:', error);

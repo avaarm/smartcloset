@@ -18,6 +18,8 @@ export type PatternType = 'solid' | 'striped' | 'plaid' | 'floral' | 'polka_dot'
 // Types for the AI image recognition service
 export interface RecognitionResult {
   category?: ClothingCategory;
+  /** Specific sub-category keyword like "handbag", "jeans", "sneaker" — used for name auto-fill. */
+  subtype?: string;
   brand?: string;
   occasion?: string;
   color?: string;
@@ -151,6 +153,7 @@ const processVisionResponse = (response: any): RecognitionResult => {
       if (score > bestCatScore) {
         bestCatScore = score;
         result.category = category;
+        result.subtype = keyword;
         result.confidence.category = score;
       }
     }
@@ -292,7 +295,16 @@ const getMockRecognitionResult = (imageUri: string): RecognitionResult => {
   const seed = imageUri.split('/').pop() || '';
   const seedNum = seed.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
 
-  const categories: ClothingCategory[] = ['tops', 'bottoms', 'dresses', 'outerwear', 'shoes', 'accessories'];
+  // Pair each category with a representative subtype keyword
+  const categoryPicks: Array<{ category: ClothingCategory; subtype: string }> = [
+    { category: 'tops', subtype: 'shirt' },
+    { category: 'bottoms', subtype: 'jeans' },
+    { category: 'dresses', subtype: 'dress' },
+    { category: 'outerwear', subtype: 'jacket' },
+    { category: 'shoes', subtype: 'sneaker' },
+    { category: 'accessories', subtype: 'handbag' },
+  ];
+  const pick = categoryPicks[seedNum % categoryPicks.length];
   const brands = ['Nike', 'Adidas', 'Zara', 'H&M', 'Uniqlo', "Levi's", 'Gap', 'Gucci', 'Everlane', undefined];
   const occasions = ['casual', 'formal', 'business', 'sports', 'party', 'everyday'];
   const colors = ['black', 'white', 'red', 'blue', 'green', 'navy', 'beige', 'brown', 'gray', 'pink', 'olive'];
@@ -300,19 +312,22 @@ const getMockRecognitionResult = (imageUri: string): RecognitionResult => {
   const materials = ['cotton', 'wool', 'polyester', 'leather', 'denim', 'silk', 'linen'];
 
   return {
-    category: categories[seedNum % categories.length],
+    category: pick.category,
+    subtype: pick.subtype,
     brand: brands[(seedNum * 13) % brands.length],
     occasion: occasions[(seedNum * 7) % occasions.length],
     color: colors[(seedNum * 5) % colors.length],
     pattern: patterns[(seedNum * 11) % patterns.length],
     material: materials[(seedNum * 17) % materials.length],
     confidence: {
-      category: 0.5 + (seedNum % 50) / 100,
-      brand: 0.3 + (seedNum % 60) / 100,
-      occasion: 0.4 + (seedNum % 55) / 100,
-      color: 0.6 + (seedNum % 40) / 100,
-      pattern: 0.45 + (seedNum % 45) / 100,
-      material: 0.35 + (seedNum % 50) / 100,
+      // Mock confidences set high enough to pass the autofill threshold so
+      // tests / demos without a Vision key still see auto-applied fields.
+      category: 0.75 + (seedNum % 20) / 100,
+      brand: 0.55 + (seedNum % 40) / 100,
+      occasion: 0.6 + (seedNum % 35) / 100,
+      color: 0.75 + (seedNum % 20) / 100,
+      pattern: 0.55 + (seedNum % 40) / 100,
+      material: 0.5 + (seedNum % 40) / 100,
     },
   };
 };
@@ -321,6 +336,7 @@ const getMockRecognitionResult = (imageUri: string): RecognitionResult => {
 
 /**
  * Determines if a recognition result is confident enough to autofill.
+ * Stricter threshold — use for UI highlighting / "confirm this guess" prompts.
  */
 export const isConfidentPrediction = (
   result: RecognitionResult,
@@ -335,4 +351,58 @@ export const isConfidentPrediction = (
     material: 0.7,
   };
   return !!result.confidence[field] && (result.confidence[field] as number) >= threshold[field];
+};
+
+/**
+ * Looser threshold for auto-filling an EMPTY field — we'd rather pre-fill a
+ * reasonable guess than leave the form blank. The user can always override.
+ */
+export const shouldAutofillPrediction = (
+  result: RecognitionResult,
+  field: 'category' | 'brand' | 'occasion' | 'color' | 'pattern' | 'material',
+): boolean => {
+  const threshold: Record<string, number> = {
+    category: 0.35,
+    brand: 0.5,
+    occasion: 0.4,
+    color: 0.4,
+    pattern: 0.4,
+    material: 0.4,
+  };
+  return !!result.confidence[field] && (result.confidence[field] as number) >= threshold[field];
+};
+
+/**
+ * Generate a default item name from the recognition result, e.g.
+ *   { color: 'burgundy', subtype: 'handbag' } → "Burgundy Handbag"
+ *   { brand: 'Gucci', color: 'black', subtype: 'jacket' } → "Gucci Black Jacket"
+ * Falls back to a generic category label if no subtype/color is available.
+ */
+export const generateNameFromRecognition = (result: RecognitionResult): string => {
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  const parts: string[] = [];
+
+  if (result.brand) parts.push(result.brand);
+  if (result.color) parts.push(cap(result.color));
+  if (result.pattern && result.pattern !== 'solid') {
+    parts.push(cap(result.pattern.replace('_', ' ')));
+  }
+
+  // Prefer the specific subtype keyword; fall back to a generic category noun.
+  const categoryNouns: Record<ClothingCategory, string> = {
+    tops: 'Top',
+    bottoms: 'Bottoms',
+    dresses: 'Dress',
+    outerwear: 'Outerwear',
+    shoes: 'Shoes',
+    accessories: 'Accessory',
+  } as any;
+
+  if (result.subtype) {
+    parts.push(cap(result.subtype));
+  } else if (result.category && categoryNouns[result.category]) {
+    parts.push(categoryNouns[result.category]);
+  }
+
+  return parts.join(' ').trim();
 };

@@ -15,8 +15,11 @@ import { loadSampleStylistData } from './stylistService';
 import { loadSampleMarketplaceData, setCurrentClientAccount } from './marketplaceService';
 import { loadSampleMessagingData } from './messagingService';
 import { loadSampleAccountData } from './accountService';
+import { saveBodyProfile, type BodyProfile } from './profileService';
+import type { ClothingItem } from '../types';
 
-const DEMO_SEEDED_KEY = '@smartcloset_demo_seeded_v3';
+// Bump this version string when adding new seeders so existing installs re-seed.
+const DEMO_SEEDED_KEY = '@smartcloset_demo_seeded_v4';
 
 /**
  * Seed a client account so the "Client" tab has data.
@@ -196,6 +199,291 @@ const seedRecommendations = async () => {
 };
 
 /**
+ * Seed a body profile so the BodyProfile screen has data and OutfitScreen's
+ * smart suggestions work without forcing the user through onboarding.
+ */
+const seedBodyProfile = async (): Promise<void> => {
+  const profile: BodyProfile = {
+    skinTone: 'medium',
+    undertone: 'warm',
+    bodyType: 'hourglass',
+    recommendedPalette: [
+      '#D4A574', // camel
+      '#2C3E50', // navy
+      '#8B4513', // saddle brown
+      '#F5E6D3', // cream
+      '#6B4423', // cocoa
+      '#E8B4B8', // dusty rose
+      '#4A5759', // slate
+      '#C9A66B', // honey gold
+    ],
+    avoidColors: [
+      '#FF00FF', // magenta — clashes with warm undertone
+      '#00FFFF', // cyan
+      '#CCCCCC', // washed-out gray
+    ],
+    recommendedFits: {
+      tops: ['fitted', 'wrap', 'v-neck', 'belted'],
+      bottoms: ['high-waisted', 'straight-leg', 'tailored'],
+      dresses: ['wrap', 'fit-and-flare', 'belted sheath'],
+    },
+    sizeHints: {
+      tops: 'M',
+      bottoms: '28',
+      shoes: '8',
+    },
+    updatedAt: new Date().toISOString(),
+  };
+
+  await saveBodyProfile(profile);
+};
+
+/**
+ * Seed outfit history — one worn entry every 1–3 days over the last 45 days
+ * so the calendar, analytics, and wear-tracking screens all have data.
+ */
+const seedOutfitHistory = async (): Promise<void> => {
+  const OUTFIT_HISTORY_KEY = '@smartcloset_outfit_history';
+  // Use outfit IDs from enhancedSampleData.enhancedOutfits
+  const outfitIds = ['o1', 'o2', 'o3', 'o4', 'o5', 'o6', 'o7'];
+  const occasions = [
+    'work', 'brunch', 'errands', 'client meeting', 'dinner', 'coffee',
+    'workout', 'date night', 'travel', 'weekend', 'family event',
+    'presentation', 'casual day', 'networking', 'shopping',
+  ];
+  const notes = [
+    'Felt great!',
+    'Got compliments',
+    'Comfortable all day',
+    'Need to iron next time',
+    'Perfect for the weather',
+    undefined,
+    undefined,
+    'A bit warm',
+    'Loved this combo',
+    'Will wear again',
+    undefined,
+  ];
+
+  const entries: any[] = [];
+  const now = Date.now();
+  const oneDay = 86400000;
+
+  // Generate ~30 entries over the last 45 days, cycling through outfits.
+  let daysBack = 1;
+  let i = 0;
+  while (daysBack <= 45 && entries.length < 30) {
+    const gap = 1 + (i % 3); // 1–3 day spacing
+    daysBack += gap;
+    if (daysBack > 45) break;
+
+    const outfitId = outfitIds[i % outfitIds.length];
+    // Rate biased toward 4–5 (people tend to rate outfits they chose to wear)
+    const rating = [5, 4, 5, 3, 4, 5, 4, 5, 4, 5][i % 10];
+    entries.push({
+      id: `h_seed_${i}_${Date.now()}`,
+      outfitId,
+      dateWorn: new Date(now - daysBack * oneDay).toISOString(),
+      occasion: occasions[i % occasions.length],
+      rating,
+      notes: notes[i % notes.length],
+    });
+    i++;
+  }
+
+  await AsyncStorage.setItem(OUTFIT_HISTORY_KEY, JSON.stringify(entries));
+};
+
+/**
+ * Seed wishlist items — appends a few aspirational pieces (isWishlist=true)
+ * to the existing wardrobe so the Wishlist tab has content on first launch.
+ */
+const seedWishlistItems = async (): Promise<void> => {
+  const ITEMS_KEY = '@smartcloset_items';
+  const existingRaw = await AsyncStorage.getItem(ITEMS_KEY);
+  const existing: ClothingItem[] = existingRaw ? JSON.parse(existingRaw) : [];
+
+  // Skip if a wishlist item is already present (idempotent).
+  if (existing.some(it => it.isWishlist)) return;
+
+  const wishlistItems: Partial<ClothingItem>[] = [
+    {
+      id: 'wish_001',
+      name: 'Burgundy Leather Clutch',
+      category: 'accessories' as any,
+      retailerImage: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=500',
+      color: 'burgundy',
+      season: ['fall' as any, 'winter' as any],
+      brand: 'Bottega Veneta',
+      retailer: 'Net-a-Porter',
+      dateAdded: new Date().toISOString(),
+      isWishlist: true,
+      wearCount: 0,
+      cost: 2800,
+      tags: ['evening', 'luxury', 'leather'],
+      favorite: true,
+      notes: 'Dream bag — save for it',
+    },
+    {
+      id: 'wish_002',
+      name: 'Cream Cashmere Coat',
+      category: 'outerwear' as any,
+      retailerImage: 'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=500',
+      color: 'cream',
+      season: ['fall' as any, 'winter' as any],
+      brand: 'Max Mara',
+      retailer: 'Max Mara',
+      dateAdded: new Date(Date.now() - 3 * 86400000).toISOString(),
+      isWishlist: true,
+      wearCount: 0,
+      cost: 2390,
+      tags: ['luxury', 'timeless', 'investment'],
+      favorite: true,
+    },
+    {
+      id: 'wish_003',
+      name: 'White Leather Sneakers',
+      category: 'shoes' as any,
+      retailerImage: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500',
+      color: 'white',
+      season: ['spring' as any, 'summer' as any, 'fall' as any],
+      brand: 'Common Projects',
+      retailer: 'SSENSE',
+      dateAdded: new Date(Date.now() - 7 * 86400000).toISOString(),
+      isWishlist: true,
+      wearCount: 0,
+      cost: 425,
+      tags: ['minimalist', 'versatile'],
+      favorite: false,
+    },
+    {
+      id: 'wish_004',
+      name: 'Silk Slip Dress',
+      category: 'dresses' as any,
+      retailerImage: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=500',
+      color: 'champagne',
+      season: ['summer' as any, 'spring' as any],
+      brand: 'Reformation',
+      retailer: 'Reformation',
+      dateAdded: new Date(Date.now() - 14 * 86400000).toISOString(),
+      isWishlist: true,
+      wearCount: 0,
+      cost: 248,
+      tags: ['evening', 'date', 'silk'],
+      favorite: true,
+    },
+    {
+      id: 'wish_005',
+      name: 'Wide-Leg Wool Trousers',
+      category: 'bottoms' as any,
+      retailerImage: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=500',
+      color: 'charcoal',
+      season: ['fall' as any, 'winter' as any],
+      brand: 'Toteme',
+      retailer: 'MyTheresa',
+      dateAdded: new Date(Date.now() - 21 * 86400000).toISOString(),
+      isWishlist: true,
+      wearCount: 0,
+      cost: 540,
+      tags: ['work', 'elevated', 'tailored'],
+      favorite: false,
+    },
+    {
+      id: 'wish_006',
+      name: 'Gold Hoop Earrings',
+      category: 'accessories' as any,
+      retailerImage: 'https://images.unsplash.com/photo-1535632787350-4e68ef0ac584?w=500',
+      color: 'gold',
+      season: ['spring' as any, 'summer' as any, 'fall' as any, 'winter' as any],
+      brand: 'Mejuri',
+      retailer: 'Mejuri',
+      dateAdded: new Date(Date.now() - 30 * 86400000).toISOString(),
+      isWishlist: true,
+      wearCount: 0,
+      cost: 148,
+      tags: ['everyday', 'jewelry'],
+      favorite: false,
+    },
+  ];
+
+  const merged = [...existing, ...wishlistItems];
+  await AsyncStorage.setItem(ITEMS_KEY, JSON.stringify(merged));
+};
+
+/**
+ * Seed booking requests — incoming requests from (prospective) clients to the
+ * stylist account. Mix of statuses so the stylist dashboard shows real counts.
+ */
+const seedBookingRequests = async (): Promise<void> => {
+  const BOOKING_REQUESTS_KEY = '@smartcloset_booking_requests';
+  const existing = await AsyncStorage.getItem(BOOKING_REQUESTS_KEY);
+  if (existing && JSON.parse(existing).length > 0) return; // Idempotent
+
+  const requests = [
+    {
+      id: 'booking_seed_001',
+      stylistId: 'stylist_sample_001',
+      clientId: 'client_prospect_001',
+      clientName: 'Priya Patel',
+      clientEmail: 'priya.patel@example.com',
+      clientPhone: '(415) 555-0134',
+      requestedService: 'Virtual Consultation',
+      preferredDate: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10),
+      preferredTime: '14:00',
+      message:
+        "Hi Emma! I'm starting a new role and want to rebuild my work wardrobe. Loved your portfolio — hoping you can help.",
+      status: 'pending' as const,
+      createdAt: new Date(Date.now() - 2 * 3600000).toISOString(),
+    },
+    {
+      id: 'booking_seed_002',
+      stylistId: 'stylist_sample_001',
+      clientId: 'client_prospect_002',
+      clientName: 'Marcus Williams',
+      clientEmail: 'marcus.w@example.com',
+      requestedService: 'Wardrobe Audit',
+      preferredDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
+      preferredTime: '10:00',
+      message:
+        'Moving from casual tech role to finance — need a full refresh. Budget is flexible for investment pieces.',
+      status: 'accepted' as const,
+      createdAt: new Date(Date.now() - 2 * 86400000).toISOString(),
+      respondedAt: new Date(Date.now() - 1 * 86400000).toISOString(),
+    },
+    {
+      id: 'booking_seed_003',
+      stylistId: 'stylist_sample_001',
+      clientId: 'client_sample_001',
+      clientName: 'Alex Morgan',
+      clientEmail: 'alex@smartcloset.app',
+      clientPhone: '(310) 555-0199',
+      requestedService: 'Seasonal Capsule Package',
+      preferredDate: new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10),
+      preferredTime: '16:00',
+      message: "Ready for the spring package we discussed. Same day/time as last time if possible.",
+      status: 'pending' as const,
+      createdAt: new Date(Date.now() - 30 * 60000).toISOString(),
+    },
+    {
+      id: 'booking_seed_004',
+      stylistId: 'stylist_sample_001',
+      clientId: 'client_prospect_003',
+      clientName: 'Jordan Lee',
+      clientEmail: 'jordan.lee@example.com',
+      requestedService: 'Single Outfit Styling',
+      preferredDate: new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10),
+      preferredTime: '11:00',
+      message: 'Need an outfit for a wedding. One-time session.',
+      status: 'declined' as const,
+      createdAt: new Date(Date.now() - 5 * 86400000).toISOString(),
+      respondedAt: new Date(Date.now() - 4 * 86400000).toISOString(),
+    },
+  ];
+
+  await AsyncStorage.setItem(BOOKING_REQUESTS_KEY, JSON.stringify(requests));
+};
+
+/**
  * Main entry — call once on first launch. Idempotent via DEMO_SEEDED_KEY.
  */
 export const seedAllDemoData = async (): Promise<void> => {
@@ -212,6 +500,10 @@ export const seedAllDemoData = async (): Promise<void> => {
     await loadSampleMessagingData();
     await seedClientAccount();
     await seedRecommendations();
+    await seedBodyProfile();
+    await seedOutfitHistory();
+    await seedWishlistItems();
+    await seedBookingRequests();
 
     await AsyncStorage.setItem(DEMO_SEEDED_KEY, 'true');
     console.log('[seedDemoData] All demo data seeded successfully');
