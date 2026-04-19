@@ -102,24 +102,83 @@ const OCCASION_MAP: Record<string, string[]> = {
 // ─── RGB to color name ──────────────────────────────────────────────────────
 
 const rgbToColorName = (r: number, g: number, b: number): string => {
+  // ── Neutrals ──
   if (r > 240 && g > 240 && b > 240) return 'white';
-  if (r < 30 && g < 30 && b < 30) return 'black';
-  if (r > 200 && g > 200 && b > 200) return 'gray';
-  if (r < 60 && g < 60 && b < 60) return 'charcoal';
+  if (r > 220 && g > 210 && b > 190 && Math.abs(r - g) < 20 && r > b) return 'ivory';
+  if (r < 25 && g < 25 && b < 25) return 'black';
+  if (r < 55 && g < 55 && b < 55) return 'charcoal';
+  if (r > 190 && g > 190 && b > 190 && Math.abs(r - g) < 15 && Math.abs(g - b) < 15) return 'gray';
 
-  if (r > g + 60 && r > b + 60) return r > 200 ? 'red' : 'maroon';
-  if (g > r + 60 && g > b + 60) return g > 200 ? 'green' : 'olive';
-  if (b > r + 60 && b > g + 60) return b > 200 ? 'blue' : 'navy';
+  // ── Red / pink family (r dominant) ──
+  if (r > g + 40 && r > b + 40) {
+    // Burgundy / maroon: deep dark red with hint of blue/brown
+    if (r < 160 && g < 70 && b < 70) return 'burgundy';
+    if (r < 190 && g < 80 && b < 80) return 'maroon';
+    if (r > 200 && g < 100 && b < 100) return 'red';
+    // Wine: rich dark red with purple lean
+    if (r < 180 && g < 60 && b > 40 && b < 100) return 'burgundy';
+    // Pink
+    if (r > 200 && g > 140 && b > 140) return 'pink';
+    // Coral / salmon
+    if (r > 220 && g > 120 && g < 180 && b < 140) return 'coral';
+    // Rust / terracotta: warm brown-red
+    if (r > 140 && r < 210 && g > 70 && g < 130 && b < 80) return 'rust';
+    return 'red';
+  }
 
-  if (r > 180 && g > 180 && b < 100) return 'yellow';
-  if (r > 180 && b > 140 && g < 100) return 'purple';
-  if (g > 140 && b > 140 && r < 80) return 'teal';
-  if (r > 180 && g > 120 && b < 100) return 'orange';
-  if (r > 180 && g < 130 && b > 130) return 'pink';
-  if (r > 120 && g > 80 && b < 60 && r > g) return 'brown';
-  if (r > 180 && g > 160 && b > 130) return 'beige';
+  // ── Purple / violet family (r and b dominant over g) ──
+  if (r > g + 30 && b > g + 30) {
+    if (r > 150 && b > 150) return 'purple';
+    if (r < 120 && b < 120) return 'plum';
+    if (r > 180 && b > 140 && g < 140) return 'mauve';
+    return 'purple';
+  }
 
-  return 'multicolor';
+  // ── Green family (g dominant) ──
+  if (g > r + 40 && g > b + 40) {
+    if (g > 200 && r < 140) return 'green';
+    if (r > 80 && g > 100 && b < 80 && g < 180) return 'olive';
+    if (g > 140 && b > 140 && r < 140) return 'teal';
+    return 'green';
+  }
+
+  // ── Blue family (b dominant) ──
+  if (b > r + 40 && b > g + 40) {
+    if (b > 180 && r < 100 && g < 160) return 'blue';
+    if (b < 130 && r < 60 && g < 80) return 'navy';
+    if (b > 200 && g > 140) return 'sky blue';
+    return 'blue';
+  }
+
+  // ── Yellow / gold / orange (r+g high, b low) ──
+  if (r > 180 && g > 140 && b < 100) {
+    if (r > 220 && g > 200) return 'yellow';
+    if (r > 200 && g > 140 && b < 70) return 'orange';
+    if (r > 170 && g > 140 && b < 110) return 'gold';
+    return 'mustard';
+  }
+
+  // ── Brown / tan / beige (warm earth tones) ──
+  if (r > g && g > b && r < 200) {
+    // Dark brown
+    if (r < 140 && g < 100 && b < 80) return 'brown';
+    // Camel / caramel
+    if (r > 150 && r < 210 && g > 110 && g < 170 && b < 120) return 'camel';
+    // Tan
+    if (r > 180 && g > 140 && b > 100 && b < 150) return 'tan';
+    // Beige
+    if (r > 200 && g > 180 && b > 140) return 'beige';
+    return 'brown';
+  }
+
+  // ── Champagne / cream (very light warm) ──
+  if (r > 220 && g > 210 && b > 180 && r > b) return 'champagne';
+
+  // Nothing matched — pick the dominant channel rather than "multicolor"
+  const max = Math.max(r, g, b);
+  if (max === r) return 'red';
+  if (max === g) return 'green';
+  return 'blue';
 };
 
 // ─── Process Vision API response ────────────────────────────────────────────

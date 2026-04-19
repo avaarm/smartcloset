@@ -16,6 +16,18 @@ import {
   RecognitionResult,
 } from '../services/imageRecognition';
 import { copyImageToPermanentStorage } from '../services/imageStorage';
+import { searchByImage, type LensResult } from '../services/lensSearchService';
+import {
+  buildFingerprint,
+  hashImageBase64,
+} from '../services/imageFingerprint';
+import {
+  lookupKnowledgeBase,
+  recordContribution,
+  type KBMatch,
+} from '../services/productContributions';
+import MatchPickerSheet, { type PickedMatch } from './MatchPickerSheet';
+import { readImageAsBase64 } from '../platform/fileSystem';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 type AddClothingScreenProps = {
@@ -52,6 +64,16 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   // AI recognition states
   const [analyzing, setAnalyzing] = useState(false);
   const [recognitionResult, setRecognitionResult] = useState<RecognitionResult | null>(null);
+
+  // Match-picker state — populated after Vision analysis
+  const [matchLoading, setMatchLoading] = useState(false);
+  const [kbMatches, setKbMatches] = useState<KBMatch[]>([]);
+  const [lensResults, setLensResults] = useState<LensResult[]>([]);
+  const [fingerprint, setFingerprint] = useState<string | null>(null);
+  const [imageHash, setImageHash] = useState<string | null>(null);
+  const [visionLabels, setVisionLabels] = useState<string[]>([]);
+  const [pickedMatch, setPickedMatch] = useState<PickedMatch | null>(null);
+  const [matchSheetDismissed, setMatchSheetDismissed] = useState(false);
 
   const onCategoryChange = useCallback((value: ClothingCategory) => {
     setCategory(value);
@@ -130,11 +152,89 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
     });
   };
   
+  /**
+   * Apply a user-picked match (from KB or Lens) — auto-fills the form.
+   * Only fills fields the user hasn't already edited.
+   */
+  const applyMatch = useCallback(
+    (match: PickedMatch) => {
+      setPickedMatch(match);
+      setMatchSheetDismissed(true);
+
+      if (!name.trim()) setName(match.name);
+      if (match.category && !isEditing) {
+        setCategory(match.category as ClothingCategory);
+      }
+      if (match.brand && !brand.trim()) setBrand(match.brand);
+      if (match.retailer && !retailer.trim()) setRetailer(match.retailer);
+      if (match.color && !color.trim()) {
+        setColor(match.color.charAt(0).toUpperCase() + match.color.slice(1));
+      }
+      if (match.cost != null && !cost) setCost(String(match.cost));
+      if (match.material) {
+        const current = tags.split(',').map((t: string) => t.trim()).filter(Boolean);
+        if (!current.some((t: string) => t.toLowerCase() === match.material!.toLowerCase())) {
+          setTags(current.length > 0 ? `${tags}, ${match.material}` : match.material);
+        }
+      }
+      if (match.sourceUrl) {
+        const line = `Source: ${match.sourceUrl}`;
+        setNotes(prev => (prev && !prev.includes(match.sourceUrl!) ? `${prev}\n${line}` : prev || line));
+      }
+    },
+    [brand, color, cost, isEditing, name, notes, retailer, tags],
+  );
+
+  const dismissMatchSheet = useCallback(() => {
+    setMatchSheetDismissed(true);
+  }, []);
+
   const analyzeImage = async (uri: string) => {
     setAnalyzing(true);
+    setMatchSheetDismissed(false);
+    setPickedMatch(null);
+    setKbMatches([]);
+    setLensResults([]);
     try {
+      // ── 1. Compute image fingerprint (cheap, local) ──
+      let base64: string | null = null;
+      try {
+        base64 = await readImageAsBase64(uri);
+        const imgHash = hashImageBase64(base64);
+        setImageHash(imgHash);
+      } catch (hashErr) {
+        console.warn('[Analyze] fingerprint failed:', hashErr);
+      }
+
+      // ── 2. Run Vision AI ──
       const result = await analyzeClothingImage(uri);
       setRecognitionResult(result);
+      setVisionLabels(result.rawLabels || []);
+
+      // ── 3. Build full fingerprint (image hash + top labels) ──
+      if (base64) {
+        const fp = buildFingerprint(base64, result);
+        setFingerprint(fp);
+
+        // ── 4. Kick off KB lookup + lens shopping search in parallel ──
+        setMatchLoading(true);
+        Promise.allSettled([
+          lookupKnowledgeBase(fp),
+          searchByImage(uri),
+        ])
+          .then(([kbRes, lensRes]) => {
+            if (kbRes.status === 'fulfilled') setKbMatches(kbRes.value);
+            if (lensRes.status === 'fulfilled' && !lensRes.value.notConfigured) {
+              // Prefer shopping results, cap at 8 to keep the sheet manageable
+              setLensResults(
+                lensRes.value.results
+                  .filter(r => r.imageUrl && r.isShopping)
+                  .slice(0, 8),
+              );
+            }
+          })
+          .finally(() => setMatchLoading(false));
+      }
 
       // Auto-apply predictions using a looser threshold than
       // isConfidentPrediction — the goal is to always give the user a useful
@@ -234,6 +334,33 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
       } else {
         await saveClothingItem(itemData);
       }
+
+      // ── Record a contribution to the knowledge base ──
+      // Every save — whether from a lens match, KB match, or manual entry —
+      // feeds the shared recognition KB. Non-blocking; silently ignored if
+      // anything fails so save UX is never interrupted.
+      if (!isEditing && fingerprint && imageHash) {
+        recordContribution({
+          fingerprint,
+          imageHash,
+          source: pickedMatch?.source ?? 'manual',
+          name: itemData.name,
+          category: itemData.category,
+          brand: itemData.brand || undefined,
+          retailer: itemData.retailer || undefined,
+          color: itemData.color || undefined,
+          material:
+            itemData.tags?.find((t: string) =>
+              ['cotton', 'wool', 'leather', 'silk', 'linen', 'denim', 'cashmere', 'polyester'].includes(
+                t.toLowerCase(),
+              ),
+            ) || undefined,
+          cost: itemData.cost,
+          sourceUrl: pickedMatch?.sourceUrl,
+          visionLabels: visionLabels.slice(0, 10),
+        }).catch(err => console.warn('[AddClothing] contribution failed:', err));
+      }
+
       navigation.goBack();
     } catch (error) {
       console.error('Error saving item:', error);
@@ -305,6 +432,39 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
                     .filter(Boolean)
                     .join(' · ') || 'no attributes matched'
                 : 'Set GOOGLE_VISION_API_KEY in .env and rebuild.'}
+            </Text>
+          </View>
+        )}
+
+        {/* Match picker — shows after Vision completes, until user picks or dismisses */}
+        {recognitionResult && !analyzing && !matchSheetDismissed && (
+          <MatchPickerSheet
+            loading={matchLoading}
+            kbMatches={kbMatches}
+            lensResults={lensResults}
+            onPick={applyMatch}
+            onSkip={dismissMatchSheet}
+          />
+        )}
+
+        {/* Picked-match confirmation pill */}
+        {pickedMatch && (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#ECFDF5',
+              borderRadius: 10,
+              padding: 10,
+              marginHorizontal: 16,
+              marginTop: 8,
+            }}
+          >
+            <Icon name="checkmark-circle" size={16} color="#059669" />
+            <Text style={{ marginLeft: 8, fontSize: 12, color: '#065F46', flex: 1 }}>
+              Auto-filled from{' '}
+              {pickedMatch.source === 'kb_match' ? 'community knowledge' : 'web match'}
+              {pickedMatch.retailer ? ` (${pickedMatch.retailer})` : ''}
             </Text>
           </View>
         )}
