@@ -59,10 +59,10 @@ const WardrobeStack = () => {
         component={WardrobeScreen}
         options={{ headerShown: false }}
       />
-      <Stack.Screen 
-        name="AddClothing" 
+      <Stack.Screen
+        name="AddClothing"
         component={AddClothingScreen}
-        options={{ title: 'Add New Item' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen 
         name="ItemDetails" 
@@ -202,10 +202,10 @@ const WishlistStack = () => {
         component={WishlistScreen}
         options={{ headerShown: false }}
       />
-      <Stack.Screen 
-        name="AddClothing" 
+      <Stack.Screen
+        name="AddClothing"
         component={AddClothingScreen}
-        options={{ title: 'Add to Wishlist' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen 
         name="ItemDetails" 

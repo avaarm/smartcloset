@@ -279,6 +279,36 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
           )}
         </TouchableOpacity>
 
+        {/* AI detection banner — shows what Vision returned so you can tell if it worked */}
+        {recognitionResult && !analyzing && (
+          <View
+            style={{
+              backgroundColor: recognitionResult.isReal ? '#EEF2FF' : '#FEF3C7',
+              borderRadius: 10,
+              padding: 10,
+              marginHorizontal: 16,
+              marginTop: 8,
+            }}
+          >
+            <Text style={{ fontSize: 12, fontWeight: '600', color: '#4338CA' }}>
+              {recognitionResult.isReal ? '🔍 AI Detected' : '⚠️ No AI result'}
+            </Text>
+            <Text style={{ fontSize: 12, color: '#4338CA', marginTop: 2 }}>
+              {recognitionResult.isReal
+                ? [
+                    recognitionResult.category &&
+                      `${recognitionResult.subtype || recognitionResult.category}`,
+                    recognitionResult.color && `${recognitionResult.color}`,
+                    recognitionResult.brand && `${recognitionResult.brand}`,
+                    recognitionResult.material && `${recognitionResult.material}`,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || 'no attributes matched'
+                : 'Set GOOGLE_VISION_API_KEY in .env and rebuild.'}
+            </Text>
+          </View>
+        )}
+
         <Text style={styles.sectionHeader}>Details</Text>
 
         <TextInput
