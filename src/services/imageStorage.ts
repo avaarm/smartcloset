@@ -68,37 +68,94 @@ function decode(base64: string): Uint8Array {
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 /**
+ * Normalize a picker-returned URI to an absolute filesystem path.
+ * Handles: file:// prefix, URL-encoded characters (spaces, unicode), and
+ * /private-prefixed paths (iOS exposes /var/... which RNFS reads as /private/var/...).
+ */
+const uriToPath = (uri: string): string => {
+  let p = uri.startsWith('file://') ? uri.substring('file://'.length) : uri;
+  try {
+    p = decodeURIComponent(p);
+  } catch {
+    // Leave as-is if decoding fails
+  }
+  return p;
+};
+
+/**
+ * Resolve a source path that actually exists on disk. iOS returns paths that
+ * sometimes need /private prefixed (or stripped) to match the real location.
+ */
+const resolveExistingPath = async (rawPath: string): Promise<string | null> => {
+  if (await RNFS.exists(rawPath)) return rawPath;
+  // Try with /private prefix (iOS maps /var -> /private/var internally)
+  if (rawPath.startsWith('/var/')) {
+    const privPath = `/private${rawPath}`;
+    if (await RNFS.exists(privPath)) return privPath;
+  }
+  // Try stripping /private (inverse case)
+  if (rawPath.startsWith('/private/var/')) {
+    const noPriv = rawPath.substring('/private'.length);
+    if (await RNFS.exists(noPriv)) return noPriv;
+  }
+  return null;
+};
+
+/**
  * Copies an image from a temporary location to permanent storage.
  * For authenticated users, also uploads to Supabase Storage and returns the
  * cloud URL. For guests, returns the local file:// path.
+ *
+ * Robust to iOS PHPicker quirks — if the copy fails, we fall back to reading
+ * the file directly into Documents via base64 so the permanent URI we return
+ * always points at a file we own.
  */
 export const copyImageToPermanentStorage = async (tempUri: string): Promise<string> => {
-  try {
-    // Already a cloud URL — nothing to do
-    if (tempUri.startsWith('http')) return tempUri;
+  // Already a cloud URL — nothing to do
+  if (tempUri.startsWith('http')) return tempUri;
 
-    // Already in document directory
-    if (tempUri.includes(RNFS.DocumentDirectoryPath)) {
-      // Still try cloud upload for authenticated users
-      const cloudUrl = await uploadToCloud(tempUri);
-      return cloudUrl || tempUri;
-    }
-
-    // Copy temp → permanent local path first
-    const timestamp = Date.now();
-    const filename = `clothing_${timestamp}.jpg`;
-    const destPath = `${RNFS.DocumentDirectoryPath}/${filename}`;
-    const sourcePath = tempUri.replace('file://', '');
-    await RNFS.copyFile(sourcePath, destPath);
-    const localUri = `file://${destPath}`;
-
-    // Try cloud upload (non-blocking for UX — returns cloud URL if fast enough)
-    const cloudUrl = await uploadToCloud(localUri);
-    return cloudUrl || localUri;
-  } catch (error) {
-    console.error('Error copying image to permanent storage:', error);
-    throw error;
+  // Already in document directory — just try cloud upload
+  if (tempUri.includes(RNFS.DocumentDirectoryPath)) {
+    const cloudUrl = await uploadToCloud(tempUri);
+    return cloudUrl || tempUri;
   }
+
+  const timestamp = Date.now();
+  const filename = `clothing_${timestamp}.jpg`;
+  const destPath = `${RNFS.DocumentDirectoryPath}/${filename}`;
+  const localUri = `file://${destPath}`;
+
+  const rawPath = uriToPath(tempUri);
+  const sourcePath = await resolveExistingPath(rawPath);
+
+  if (!sourcePath) {
+    // The picker handed us a URI whose file is gone. On iOS this can happen
+    // when the PHPicker sandbox expires between callback and copy. Last
+    // resort: try a read+write via base64 (sometimes RNFS.readFile succeeds
+    // where copyFile fails due to permission nuances).
+    try {
+      const base64 = await RNFS.readFile(rawPath, 'base64');
+      await RNFS.writeFile(destPath, base64, 'base64');
+    } catch (readErr) {
+      console.error('[imageStorage] source file not accessible:', rawPath, readErr);
+      throw new Error(
+        'Could not read the selected image. Try picking it again.',
+      );
+    }
+  } else {
+    try {
+      await RNFS.copyFile(sourcePath, destPath);
+    } catch (copyErr) {
+      // Fall back to base64 round-trip (some iOS simulator states block copyFile)
+      console.warn('[imageStorage] copyFile failed, trying base64 fallback:', copyErr);
+      const base64 = await RNFS.readFile(sourcePath, 'base64');
+      await RNFS.writeFile(destPath, base64, 'base64');
+    }
+  }
+
+  // Try cloud upload for authenticated users (falls back to local URI)
+  const cloudUrl = await uploadToCloud(localUri);
+  return cloudUrl || localUri;
 };
 
 /**

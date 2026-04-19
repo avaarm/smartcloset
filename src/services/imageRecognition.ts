@@ -35,6 +35,8 @@ export interface RecognitionResult {
   };
   /** Raw labels returned by Vision API (empty if mock) */
   rawLabels?: string[];
+  /** True when the result came from a real Vision API call, false for mock fallback. */
+  isReal?: boolean;
 }
 
 // ─── Category / attribute mapping tables ────────────────────────────────────
@@ -243,10 +245,14 @@ const processVisionResponse = (response: any): RecognitionResult => {
  * Falls back to mock results otherwise.
  */
 export const analyzeClothingImage = async (imageUri: string): Promise<RecognitionResult> => {
+  console.log('[Vision] analyzeClothingImage called. hasGoogleVision=', hasGoogleVision(),
+    'keyLen=', env.GOOGLE_VISION_API_KEY.length, 'enabled=', env.ENABLE_VISION_API);
   try {
     // ── Real Vision API path ──
     if (hasGoogleVision()) {
+      console.log('[Vision] reading image as base64:', imageUri.substring(0, 80));
       const base64 = await readImageAsBase64(imageUri);
+      console.log('[Vision] base64 length:', base64.length);
 
       const response = await fetch(`${VISION_ENDPOINT}?key=${env.GOOGLE_VISION_API_KEY}`, {
         method: 'POST',
@@ -264,8 +270,11 @@ export const analyzeClothingImage = async (imageUri: string): Promise<Recognitio
         }),
       });
 
+      console.log('[Vision] HTTP status:', response.status);
+
       if (!response.ok) {
-        console.warn('Vision API error, falling back to mock:', response.status);
+        const errBody = await response.text();
+        console.warn('[Vision] API error body:', errBody.substring(0, 400));
         return getMockRecognitionResult(imageUri);
       }
 
@@ -273,18 +282,36 @@ export const analyzeClothingImage = async (imageUri: string): Promise<Recognitio
       const visionResult = data.responses?.[0];
 
       if (!visionResult || visionResult.error) {
-        console.warn('Vision response error:', visionResult?.error);
+        console.warn('[Vision] response error:', JSON.stringify(visionResult?.error));
         return getMockRecognitionResult(imageUri);
       }
 
-      return processVisionResponse(visionResult);
+      const labelCount = (visionResult.labelAnnotations || []).length;
+      const objCount = (visionResult.localizedObjectAnnotations || []).length;
+      console.log('[Vision] got', labelCount, 'labels,', objCount, 'objects');
+      const topLabels = (visionResult.labelAnnotations || [])
+        .slice(0, 5)
+        .map((l: any) => `${l.description}(${l.score?.toFixed(2)})`);
+      console.log('[Vision] top labels:', topLabels.join(', '));
+
+      const processed = processVisionResponse(visionResult);
+      processed.isReal = true;
+      console.log('[Vision] processed result:', JSON.stringify({
+        category: processed.category,
+        subtype: processed.subtype,
+        brand: processed.brand,
+        color: processed.color,
+        confidence: processed.confidence,
+      }));
+      return processed;
     }
 
     // ── Mock fallback (no API key) ──
-    await new Promise(resolve => setTimeout(resolve, 1200));
+    console.warn('[Vision] SKIPPED — Vision API not configured. Check .env and rebuild.');
+    await new Promise(resolve => setTimeout(resolve, 300));
     return getMockRecognitionResult(imageUri);
-  } catch (error) {
-    console.error('Error analyzing clothing image:', error);
+  } catch (error: any) {
+    console.error('[Vision] Exception in analyze:', error?.message || error);
     return getMockRecognitionResult(imageUri);
   }
 };
@@ -311,24 +338,12 @@ const getMockRecognitionResult = (imageUri: string): RecognitionResult => {
   const patterns: PatternType[] = ['solid', 'solid', 'solid', 'striped', 'plaid', 'floral', 'graphic'];
   const materials = ['cotton', 'wool', 'polyester', 'leather', 'denim', 'silk', 'linen'];
 
+  // Mock fallback — returns empty result so we don't invent wrong values that
+  // contradict the actual photo. The caller (AddClothingScreen) checks
+  // `isReal` before auto-filling any field; mock results never autofill.
   return {
-    category: pick.category,
-    subtype: pick.subtype,
-    brand: brands[(seedNum * 13) % brands.length],
-    occasion: occasions[(seedNum * 7) % occasions.length],
-    color: colors[(seedNum * 5) % colors.length],
-    pattern: patterns[(seedNum * 11) % patterns.length],
-    material: materials[(seedNum * 17) % materials.length],
-    confidence: {
-      // Mock confidences set high enough to pass the autofill threshold so
-      // tests / demos without a Vision key still see auto-applied fields.
-      category: 0.75 + (seedNum % 20) / 100,
-      brand: 0.55 + (seedNum % 40) / 100,
-      occasion: 0.6 + (seedNum % 35) / 100,
-      color: 0.75 + (seedNum % 20) / 100,
-      pattern: 0.55 + (seedNum % 40) / 100,
-      material: 0.5 + (seedNum % 40) / 100,
-    },
+    confidence: {},
+    isReal: false,
   };
 };
 
