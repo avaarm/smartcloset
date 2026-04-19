@@ -187,7 +187,7 @@ const LensCard: React.FC<{
         })
       }
     >
-      {result.imageUrl ? (
+      {/^https?:\/\//i.test(result.imageUrl || '') ? (
         <Image source={{ uri: result.imageUrl }} style={styles.cardImage} />
       ) : (
         <View style={[styles.cardImage, styles.cardImagePlaceholder]}>
