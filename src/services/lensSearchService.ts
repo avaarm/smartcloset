@@ -174,19 +174,25 @@ export const searchByImage = async (imageUri: string): Promise<LensSearchRespons
     const results: LensResult[] = [];
     const seen = new Set<string>();
 
+    /** Only strings that look like http(s) URLs qualify as image URLs. */
+    const isHttpUrl = (u: unknown): u is string =>
+      typeof u === 'string' && /^https?:\/\//i.test(u);
+
     pages.forEach((p, idx) => {
       if (!p.url) return;
       const host = normalizeHost(p.url);
       if (!host || seen.has(p.url)) return;
       seen.add(p.url);
 
-      // Pick a thumbnail: matching full image > partial > page main image
-      const imageUrl: string =
-        p.fullMatchingImages?.[0]?.url
-        ?? p.partialMatchingImages?.[0]?.url
-        ?? p.pageTitle
-        ?? similarImages[idx]?.url
-        ?? '';
+      // Pick a thumbnail: matching full image > partial > similar image.
+      // NOTE: never fall back to p.pageTitle here — it's a TITLE, not a URL,
+      // and would be resolved against the bundle if passed to <Image>.
+      const candidates = [
+        p.fullMatchingImages?.[0]?.url,
+        p.partialMatchingImages?.[0]?.url,
+        similarImages[idx]?.url,
+      ];
+      const imageUrl = candidates.find(isHttpUrl) ?? '';
 
       results.push({
         id: `page-${idx}`,

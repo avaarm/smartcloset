@@ -377,7 +377,7 @@ const ResultCard: React.FC<{
         { opacity: pressed ? 0.75 : disabled && !adding ? 0.5 : 1 },
       ]}
     >
-      {result.imageUrl ? (
+      {/^https?:\/\//i.test(result.imageUrl || '') ? (
         <Image
           source={{ uri: result.imageUrl }}
           style={styles.cardImage}

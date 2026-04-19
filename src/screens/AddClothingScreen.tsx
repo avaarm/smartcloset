@@ -225,10 +225,10 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
           .then(([kbRes, lensRes]) => {
             if (kbRes.status === 'fulfilled') setKbMatches(kbRes.value);
             if (lensRes.status === 'fulfilled' && !lensRes.value.notConfigured) {
-              // Prefer shopping results, cap at 8 to keep the sheet manageable
+              // Prefer shopping results with valid http(s) image URLs, cap at 8
               setLensResults(
                 lensRes.value.results
-                  .filter(r => r.imageUrl && r.isShopping)
+                  .filter(r => /^https?:\/\//i.test(r.imageUrl || '') && r.isShopping)
                   .slice(0, 8),
               );
             }
