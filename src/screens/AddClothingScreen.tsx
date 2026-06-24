@@ -566,7 +566,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
                   ]
                     .filter(Boolean)
                     .join(' · ') || 'no attributes matched'
-                : 'Set GOOGLE_VISION_API_KEY in .env and rebuild.'}
+                : 'AI analysis unavailable. Enter details manually below.'}
             </Text>
 
             {/* Color swatches — tap to set as the item's color */}

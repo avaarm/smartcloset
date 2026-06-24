@@ -105,7 +105,7 @@ const WardrobeInsightsScreen: React.FC = () => {
         </View>
       }>
         <EmptyState
-          icon="analytics-outline"
+          icon={<Icon name="analytics-outline" size={28} color={theme.colors.textSubtle} />}
           title="No items yet"
           body="Add clothing items to your wardrobe to see insights and analytics."
         />

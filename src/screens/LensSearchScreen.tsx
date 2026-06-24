@@ -162,22 +162,19 @@ const LensSearchScreen: React.FC = () => {
         {/* Not configured state */}
         {!loading && response?.notConfigured && (
           <Card style={{ marginTop: 20 }}>
-            <Badge label="Setup required" tone="warning" />
+            <Badge label="Unavailable" tone="warning" />
             <Text variant="h3" style={{ marginTop: 10 }}>
-              Add a Google Vision API key
+              Visual search unavailable
             </Text>
             <Text variant="body" color="muted" style={{ marginTop: 6, lineHeight: 20 }}>
-              Lens search uses Google Cloud Vision to find visually similar
-              items across the web. Add `GOOGLE_VISION_API_KEY` to your .env
-              file and rebuild the app.
+              Lens search uses AI to find visually similar items across the
+              web. This feature is not available right now.
             </Text>
             <Button
-              label="Open setup docs"
+              label="Try searching by text instead"
               variant="secondary"
               size="md"
-              onPress={() =>
-                Linking.openURL('https://console.cloud.google.com/apis/library/vision.googleapis.com').catch(() => {})
-              }
+              onPress={() => {}}
               style={{ marginTop: 14 }}
             />
           </Card>

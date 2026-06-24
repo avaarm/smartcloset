@@ -333,6 +333,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '85%',
+    minHeight: '55%',
     ...theme.shadows.card,
   },
   handle: {
