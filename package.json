@@ -13,7 +13,6 @@
     "web:preview": "vite preview --config web/vite.config.ts"
   },
   "dependencies": {
-    "@google-cloud/vision": "^5.3.2",
     "@invertase/react-native-apple-authentication": "^2.5.1",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/datetimepicker": "^8.6.0",
@@ -26,8 +25,6 @@
     "@sentry/react-native": "^8.7.0",
     "@supabase/supabase-js": "^2.95.3",
     "@types/react-native-vector-icons": "^6.4.18",
-    "aws-sdk": "^2.1692.0",
-    "openai": "^5.10.2",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-native": "0.75.3",

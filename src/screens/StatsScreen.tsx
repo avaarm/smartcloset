@@ -26,7 +26,8 @@ export const StatsScreen = () => {
 
   const loadStats = async () => {
     try {
-      const allItems = await getClothingItems();
+      // Stats need the full wardrobe — opt out of pagination
+      const allItems = await getClothingItems({ all: true });
       setItems(allItems);
       const wardrobeStats = StatsService.calculateWardrobeStats(allItems);
       setStats(wardrobeStats);

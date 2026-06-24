@@ -18,6 +18,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import theme from '../styles/theme';
 import { ClothingItem } from '../types';
 import { WearTrackingService } from '../services/wearTrackingService';
+import { deleteClothingItem } from '../services/storage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -31,6 +32,7 @@ const ItemDetailsScreen: React.FC = () => {
   const [scrollY] = useState(new Animated.Value(0));
   const [isFavorite, setIsFavorite] = useState(item.favorite || false);
   const [wearCount, setWearCount] = useState(item.wearCount || 0);
+  const [lastWorn, setLastWorn] = useState<string | undefined>(item.lastWorn);
 
   const headerOpacity = scrollY.interpolate({
     inputRange: [0, 200],
@@ -59,23 +61,68 @@ const ItemDetailsScreen: React.FC = () => {
   };
 
   const handleMarkAsWorn = async () => {
+    const prevLastWorn = lastWorn;
+    const prevCount = wearCount;
     try {
+      // Optimistic local update so the UI updates immediately
+      const now = new Date().toISOString();
+      setWearCount(prevCount + 1);
+      setLastWorn(now);
       await WearTrackingService.markItemWorn(item.id);
-      setWearCount(wearCount + 1);
       Alert.alert(
-        'Success',
-        `${item.name} has been marked as worn!`,
-        [{ text: 'OK' }]
+        'Marked as worn',
+        `${item.name} now logged ${prevCount + 1} time${prevCount + 1 === 1 ? '' : 's'}.`,
+        [
+          {
+            text: 'Undo',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await WearTrackingService.undoLastWear(item.id, prevLastWorn);
+                setWearCount(prevCount);
+                setLastWorn(prevLastWorn);
+              } catch {
+                Alert.alert('Error', 'Could not undo. Try again.');
+              }
+            },
+          },
+          { text: 'OK', style: 'default' },
+        ],
       );
     } catch (error) {
       console.error('Error marking item as worn:', error);
+      // Revert optimistic state on failure
+      setWearCount(prevCount);
+      setLastWorn(prevLastWorn);
       Alert.alert('Error', 'Failed to mark item as worn');
     }
   };
 
+  const handleDelete = () => {
+    Alert.alert(
+      `Delete "${item.name}"?`,
+      'This removes the item from your wardrobe. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteClothingItem(item.id);
+              navigation.goBack();
+            } catch {
+              Alert.alert('Error', 'Failed to delete the item.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const getLastWornText = () => {
-    if (!item.lastWorn) return 'Never';
-    const lastWornDate = new Date(item.lastWorn);
+    if (!lastWorn) return 'Never';
+    const lastWornDate = new Date(lastWorn);
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - lastWornDate.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -218,16 +265,102 @@ const ItemDetailsScreen: React.FC = () => {
           <View style={styles.detailsSection}>
             <Text style={styles.sectionTitle}>Details</Text>
             {item.brand && renderInfoRow('pricetag-outline', 'Brand', item.brand)}
+            {item.retailer && renderInfoRow('storefront-outline', 'Retailer', item.retailer)}
             {renderInfoRow('color-palette-outline', 'Color', item.color || 'Not specified')}
-            {item.season && item.season.length > 0 && renderInfoRow('sunny-outline', 'Season', item.season.map(s => s.toString()).join(', '))}
-            {item.dateAdded && (
+            {item.season && item.season.length > 0 &&
+              renderInfoRow(
+                'sunny-outline',
+                'Season',
+                item.season.length === 4 ? 'All seasons' : item.season.map(s => s.toString()).join(', '),
+              )}
+            {item.occasion && renderInfoRow('compass-outline', 'Occasion', item.occasion)}
+            {item.dateAdded &&
               renderInfoRow(
                 'calendar-outline',
                 'Added',
-                new Date(item.dateAdded).toLocaleDateString()
-              )
-            )}
+                new Date(item.dateAdded).toLocaleDateString(),
+              )}
           </View>
+
+          {/* Pricing Section — Used vs New + Savings */}
+          {(item.cost || item.retailCost) && (
+            <View style={styles.detailsSection}>
+              <Text style={styles.sectionTitle}>Pricing</Text>
+              <View style={styles.priceRow}>
+                <View style={styles.priceCol}>
+                  <Text style={styles.priceLabel}>Used</Text>
+                  <Text style={styles.priceValue}>
+                    {item.cost ? `$${item.cost.toFixed(item.cost % 1 === 0 ? 0 : 2)}` : '—'}
+                  </Text>
+                </View>
+                <View style={styles.priceCol}>
+                  <Text style={styles.priceLabel}>New</Text>
+                  <Text style={styles.priceValue}>
+                    {item.retailCost
+                      ? `$${item.retailCost.toFixed(item.retailCost % 1 === 0 ? 0 : 2)}`
+                      : '—'}
+                  </Text>
+                </View>
+                <View style={styles.priceCol}>
+                  <Text style={styles.priceLabel}>Saved</Text>
+                  {item.cost && item.retailCost && item.retailCost > item.cost ? (
+                    <View style={{ alignItems: 'center' }}>
+                      <Text style={[styles.priceValue, { color: '#059669' }]}>
+                        ${(item.retailCost - item.cost).toFixed(0)}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#059669', fontWeight: '600' }}>
+                        {Math.round(((item.retailCost - item.cost) / item.retailCost) * 100)}% off
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.priceValue}>—</Text>
+                  )}
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Materials composition */}
+          {item.materials && item.materials.length > 0 && (
+            <View style={styles.detailsSection}>
+              <Text style={styles.sectionTitle}>Materials</Text>
+              {item.materials.map((m, i) => (
+                <View key={`${m.name}-${i}`} style={styles.materialRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.materialName}>
+                      {m.name.charAt(0).toUpperCase() + m.name.slice(1)}
+                    </Text>
+                    <Text style={styles.materialTier}>{m.tier || 'primary'}</Text>
+                  </View>
+                  {m.percentage != null && (
+                    <Text style={styles.materialPct}>{m.percentage}%</Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Tags */}
+          {item.tags && item.tags.length > 0 && (
+            <View style={styles.detailsSection}>
+              <Text style={styles.sectionTitle}>Tags</Text>
+              <View style={styles.tagWrap}>
+                {item.tags.map((t, i) => (
+                  <View key={`${t}-${i}`} style={styles.tagChip}>
+                    <Text style={styles.tagText}>{t}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Notes */}
+          {item.notes && item.notes.trim().length > 0 && (
+            <View style={styles.detailsSection}>
+              <Text style={styles.sectionTitle}>Notes</Text>
+              <Text style={styles.notesText}>{item.notes}</Text>
+            </View>
+          )}
 
           {/* Actions Section */}
           <View style={styles.actionsSection}>
@@ -259,18 +392,93 @@ const ItemDetailsScreen: React.FC = () => {
               <Icon name="share-social-outline" size={20} color={theme.colors.accent} />
               <Text style={styles.actionButtonOutlineText}>Share Item</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionButtonOutline, { marginTop: 12, borderColor: '#FCA5A5' }]}
+              onPress={handleDelete}
+            >
+              <Icon name="trash-outline" size={20} color="#DC2626" />
+              <Text style={[styles.actionButtonOutlineText, { color: '#DC2626' }]}>
+                Delete Item
+              </Text>
+            </TouchableOpacity>
           </View>
 
-          {/* Style Tips Section */}
+          {/* Wear Analytics — replaces the hardcoded "Style Tips" with real signal */}
           <View style={styles.tipsSection}>
-            <Text style={styles.sectionTitle}>Style Tips</Text>
-            <View style={styles.tipCard}>
-              <Icon name="bulb-outline" size={24} color={theme.colors.warning} />
-              <Text style={styles.tipText}>
-                This {item.category} pairs well with neutral colors and can be dressed up or down
-                depending on the occasion.
-              </Text>
-            </View>
+            <Text style={styles.sectionTitle}>Wear Analytics</Text>
+            {(() => {
+              const wears = wearCount;
+              const paid = item.cost || 0;
+              const retail = item.retailCost || paid;
+              const cpwPaid = wears > 0 && paid > 0 ? paid / wears : null;
+              const cpwRetail = wears > 0 && retail > 0 ? retail / wears : null;
+
+              // Idle warning: > $50 retail and never worn
+              if (retail >= 50 && wears === 0) {
+                return (
+                  <View style={[styles.tipCard, { backgroundColor: '#FEF3C7' }]}>
+                    <Icon name="alert-circle-outline" size={24} color="#92400E" />
+                    <View style={{ flex: 1, marginLeft: 4 }}>
+                      <Text style={[styles.tipText, { color: '#92400E', fontWeight: '600' }]}>
+                        Idle ${retail.toFixed(0)} value
+                      </Text>
+                      <Text style={[styles.tipText, { color: '#92400E', marginTop: 2, fontSize: 13 }]}>
+                        You haven't worn this yet. Try styling it this week, or it may be a candidate to sell.
+                      </Text>
+                    </View>
+                  </View>
+                );
+              }
+
+              // Strong cost-per-wear (under $5/wear)
+              if (cpwPaid != null && cpwPaid < 5) {
+                return (
+                  <View style={[styles.tipCard, { backgroundColor: '#D1FAE5' }]}>
+                    <Icon name="trophy-outline" size={24} color="#065F46" />
+                    <View style={{ flex: 1, marginLeft: 4 }}>
+                      <Text style={[styles.tipText, { color: '#065F46', fontWeight: '600' }]}>
+                        Workhorse · ${cpwPaid.toFixed(2)}/wear
+                      </Text>
+                      <Text style={[styles.tipText, { color: '#065F46', marginTop: 2, fontSize: 13 }]}>
+                        {wears} wears at ${paid.toFixed(0)} paid. Excellent value — keep it in rotation.
+                      </Text>
+                    </View>
+                  </View>
+                );
+              }
+
+              // Generic: show CPW comparison
+              if (cpwPaid != null) {
+                return (
+                  <View style={styles.tipCard}>
+                    <Icon name="analytics-outline" size={24} color={theme.colors.accent} />
+                    <View style={{ flex: 1, marginLeft: 4 }}>
+                      <Text style={[styles.tipText, { fontWeight: '600' }]}>
+                        ${cpwPaid.toFixed(2)} per wear
+                      </Text>
+                      <Text style={[styles.tipText, { marginTop: 2, fontSize: 13 }]}>
+                        {wears} wear{wears === 1 ? '' : 's'} of an item that cost ${paid.toFixed(0)}
+                        {cpwRetail && retail > paid
+                          ? ` (${cpwRetail.toFixed(2)} based on retail).`
+                          : '.'}
+                        {' '}Each additional wear lowers this number.
+                      </Text>
+                    </View>
+                  </View>
+                );
+              }
+
+              // No cost data
+              return (
+                <View style={styles.tipCard}>
+                  <Icon name="information-circle-outline" size={24} color={theme.colors.accent} />
+                  <Text style={styles.tipText}>
+                    Add cost info via the edit pencil to see cost-per-wear and savings analytics.
+                  </Text>
+                </View>
+              );
+            })()}
           </View>
         </View>
       </Animated.ScrollView>
@@ -540,6 +748,88 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     lineHeight: 20,
     marginLeft: 12,
+  },
+  // Pricing breakdown row
+  priceRow: {
+    flexDirection: 'row',
+    backgroundColor: theme.colors.cardBackground,
+    borderRadius: 12,
+    padding: 16,
+    ...theme.shadows.subtle,
+  },
+  priceCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  priceLabel: {
+    fontSize: 11,
+    color: theme.colors.mediumGray,
+    fontWeight: '600',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  priceValue: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: theme.colors.text,
+  },
+  // Materials composition
+  materialRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: theme.colors.cardBackground,
+    borderRadius: 8,
+    marginBottom: 6,
+    ...theme.shadows.subtle,
+  },
+  materialName: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  materialTier: {
+    fontSize: 11,
+    color: theme.colors.mediumGray,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  materialPct: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.colors.accent,
+  },
+  // Tags
+  tagWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  tagChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: theme.colors.mutedBackground,
+    borderRadius: 14,
+  },
+  tagText: {
+    fontSize: 13,
+    color: theme.colors.text,
+    fontWeight: '500',
+  },
+  // Notes
+  notesText: {
+    fontSize: 14,
+    color: theme.colors.text,
+    lineHeight: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: theme.colors.cardBackground,
+    borderRadius: 8,
+    ...theme.shadows.subtle,
   },
 });
 

@@ -10,11 +10,15 @@
 
 const meta = (import.meta as any).env ?? {};
 
-// Strip "VITE_" prefix and re-export all
+// Accept both VITE_-prefixed and bare names. vite.config.ts whitelists the
+// bare prefixes (SUPABASE_, GOOGLE_, etc.) so a single .env serves native and
+// web without having to rename every key.
 const envVars: Record<string, string> = {};
 for (const [key, value] of Object.entries(meta)) {
   if (key.startsWith('VITE_')) {
     envVars[key.slice(5)] = value as string;
+  } else {
+    envVars[key] = value as string;
   }
 }
 
@@ -40,3 +44,4 @@ export const ENABLE_OFFLINE_MODE = envVars.ENABLE_OFFLINE_MODE ?? 'true';
 export const MAX_IMAGE_SIZE_MB = envVars.MAX_IMAGE_SIZE_MB ?? '10';
 export const IMAGE_QUALITY = envVars.IMAGE_QUALITY ?? '80';
 export const THUMBNAIL_SIZE = envVars.THUMBNAIL_SIZE ?? '300';
+export const SENTRY_DSN = envVars.SENTRY_DSN ?? '';

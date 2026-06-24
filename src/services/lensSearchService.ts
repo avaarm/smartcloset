@@ -19,60 +19,196 @@
 
 import { env, hasGoogleVision } from '../config/env';
 import { readImageAsBase64 } from '../platform/fileSystem';
-
-const VISION_ENDPOINT = 'https://vision.googleapis.com/v1/images:annotate';
+import { callAiProxy } from './aiProxy';
 
 // Known shopping/retail hostnames. Keep alphabetical.
+// Covers: fast fashion, mid-market, contemporary, luxury, department, and
+// resale. Subdomain matching in isShoppingHost() means e.g. "shop.gap.com"
+// counts as "gap.com" too.
 const SHOPPING_HOSTS = new Set([
-  'amazon.com',
-  'amazon.co.uk',
-  'asos.com',
-  'ae.com',
-  'anthropologie.com',
-  'aritzia.com',
-  'asos.com',
-  'banana-republic.com',
-  'bananarepublic.com',
-  'bananarepublic.gap.com',
+  // ── Marketplaces + department ──
+  'amazon.com', 'amazon.co.uk', 'amazon.ca',
+  'ebay.com', 'ebay.co.uk',
+  'etsy.com',
   'bloomingdales.com',
-  'boohoo.com',
-  'cos.com',
-  'everlane.com',
-  'express.com',
-  'farfetch.com',
-  'forever21.com',
-  'freepeople.com',
-  'gap.com',
-  'gucci.com',
-  'hm.com',
-  'hollisterco.com',
-  'jcrew.com',
-  'kohls.com',
-  'lululemon.com',
-  'lvmh.com',
   'macys.com',
-  'madewell.com',
-  'marksandspencer.com',
+  'neimanmarcus.com',
+  'nordstrom.com',
+  'nordstromrack.com',
+  'saksfifthavenue.com',
+  'saksoff5th.com',
+  'target.com',
+  'walmart.com',
+  'zappos.com',
+  'dsw.com',
+  'footlocker.com',
+
+  // ── Luxury + designer ──
+  'balenciaga.com',
+  'bergdorfgoodman.com',
+  'bottegaveneta.com',
+  'browns-fashion.com',
+  'burberry.com',
+  'celine.com',
+  'chanel.com',
+  'dior.com',
+  'farfetch.com',
+  'fendi.com',
+  'givenchy.com',
+  'gucci.com',
+  'hermes.com',
+  'loewe.com',
+  'louisvuitton.com',
+  'lvmh.com',
+  'luisaviaroma.com',
+  'matchesfashion.com',
   'mrporter.com',
   'mytheresa.com',
   'net-a-porter.com',
-  'nike.com',
-  'nordstrom.com',
-  'nordstromrack.com',
-  'oldnavy.gap.com',
-  'rei.com',
-  'revolve.com',
+  'prada.com',
   'ssense.com',
-  'target.com',
+  'theoutnet.com',
+  'valentino.com',
+  'versace.com',
+  'yoox.com',
+  '24s.com',
+
+  // ── Contemporary + mid-market ──
+  'allsaints.com',
+  'acnestudios.com',
+  'anthropologie.com',
+  'apc-us.com',
+  'aritzia.com',
+  'banana-republic.com',
+  'bananarepublic.com',
+  'bananarepublic.gap.com',
+  'cos.com',
+  'everlane.com',
+  'express.com',
+  'freepeople.com',
+  'gap.com',
+  'jcrew.com',
+  'madewell.com',
+  'reformation.com', 'thereformation.com',
+  'revolve.com',
+  'shopbop.com',
+  'theory.com',
+  'toteme.com',
+  'vince.com',
+
+  // ── Fast fashion ──
+  'asos.com',
+  'boohoo.com',
+  'fashionnova.com',
+  'forever21.com',
+  'hm.com',
+  'hollisterco.com',
+  'lulus.com',
+  'missguided.com',
+  'prettylittlething.com',
+  'princesspolly.com',
+  'princess-polly.com',
+  'shein.com',
   'topshop.com',
   'uniqlo.com',
   'urbanoutfitters.com',
-  'walmart.com',
-  'wayfair.com',
-  'westelm.com',
   'zalando.com',
   'zara.com',
+
+  // ── Athletic + active ──
+  'alo.com', 'aloyoga.com',
+  'athleta.com',
+  'gymshark.com',
+  'lululemon.com',
+  'nike.com',
+  'outdoorvoices.com',
+  'puma.com',
+  'reebok.com',
+  'underarmour.com',
+
+  // ── American classic ──
+  'abercrombie.com',
+  'ae.com',
+  'bestsecret.com',
+  'kohls.com',
+  'levi.com', 'levis.com',
+  'oldnavy.gap.com',
+  'polo.com', 'ralphlauren.com',
+  'victoriassecret.com',
+
+  // ── Outdoor + workwear ──
+  'columbia.com',
+  'filson.com',
+  'patagonia.com',
+  'rei.com',
+
+  // ── Resale + secondhand ──
+  'depop.com',
+  'grailed.com',
+  'mercari.com',
+  'poshmark.com',
+  'realreal.com', 'therealreal.com',
+  'thredup.com',
+  'vestiairecollective.com',
+  'vinted.com',
+
+  // ── Sneakers resale ──
+  'goat.com',
+  'stadiumgoods.com',
+  'stockx.com',
+
+  // ── Home (ignore for clothes queries but harmless) ──
+  'marksandspencer.com',
+  'wayfair.com',
+  'westelm.com',
 ]);
+
+/**
+ * Hosts that produce noise for clothing-lookup results — video/social/blogs
+ * rarely have the structured product data we need. Any match here is never
+ * treated as a shopping result and gets dropped during refinement.
+ */
+const BLOCKED_HOSTS = new Set([
+  // Video
+  'youtube.com', 'youtu.be', 'youtube-nocookie.com',
+  'vimeo.com',
+  'dailymotion.com',
+  'twitch.tv',
+  'tiktok.com', 'vm.tiktok.com',
+  // Social
+  'instagram.com',
+  'pinterest.com', 'pinterest.co.uk',
+  'pinimg.com',
+  'facebook.com', 'fb.com', 'fbsbx.com', 'fbcdn.net',
+  'twitter.com', 'x.com', 't.co',
+  'reddit.com', 'redd.it',
+  'tumblr.com',
+  'snapchat.com',
+  'threads.net',
+  'bsky.app',
+  // Generic blogs / UGC
+  'medium.com',
+  'substack.com',
+  'wikipedia.org', 'wikimedia.org',
+  'quora.com',
+  'blogspot.com',
+  'wordpress.com',
+  'squarespace.com',
+  'wixsite.com',
+  'weebly.com',
+  'tripod.com',
+  // News
+  'nytimes.com', 'wsj.com', 'bbc.com', 'bbc.co.uk', 'cnn.com',
+  'theguardian.com', 'huffpost.com', 'buzzfeed.com',
+]);
+
+const isBlockedHost = (host: string): boolean => {
+  if (BLOCKED_HOSTS.has(host)) return true;
+  for (const blocked of BLOCKED_HOSTS) {
+    if (host.endsWith('.' + blocked)) return true;
+  }
+  return false;
+};
 
 export type LensResult = {
   id: string;
@@ -106,6 +242,163 @@ const normalizeHost = (url: string): string => {
   }
 };
 
+/**
+ * Segments that indicate a URL is a category/shelf page rather than a
+ * specific product detail page. We aggressively filter these out because they
+ * return generic titles like "Handbags Shop All" that never match a single
+ * item the user is adding.
+ */
+const SHELF_URL_PATTERNS = [
+  /\/shop\/([^/?]+\/?)?$/i,
+  /\/shop\?/i,
+  /\/c\//i,
+  /\/category\//i,
+  /\/categories\//i,
+  /\/browse\//i,
+  /\/collection\//i,
+  /\/collections\/[^/?]+\/?$/i, // /collections/bags (shelf) but keep /collections/x/products/y
+  /\/all-[a-z-]+/i,
+  /\/gp\/browse/i,
+  /\/s\?k=/i,
+  /\/search\?/i,
+];
+
+const isShelfUrl = (url: string): boolean => {
+  try {
+    const u = new URL(url);
+    const path = u.pathname + u.search;
+    return SHELF_URL_PATTERNS.some(re => re.test(path));
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Titles that indicate a shelf/search page rather than a product listing.
+ */
+const SHELF_TITLE_PATTERNS = [
+  /shop all/i,
+  /shop by/i,
+  /^all [a-z]+/i,
+  /browse/i,
+  /category/i,
+  /search results/i,
+  /collection/i,
+];
+
+const isShelfTitle = (title: string): boolean =>
+  SHELF_TITLE_PATTERNS.some(re => re.test(title));
+
+/**
+ * Score a lens result by how well its title/source matches the detected
+ * attributes from the initial photo. Returns a 0..∞ score (higher = better).
+ *
+ * Much more effective than Vision's raw similarity score for our use case
+ * because we're filtering out same-category-different-product noise.
+ */
+export const scoreLensResultByAttributes = (
+  result: { title: string; source: string; similarity: number },
+  attrs: {
+    color?: string;
+    subtype?: string;
+    category?: string;
+    material?: string;
+    brand?: string;
+  },
+): number => {
+  const t = result.title.toLowerCase();
+  const s = result.source.toLowerCase();
+  let score = result.similarity * 2; // base from Vision
+
+  // Strong signal: specific detected color appears in title
+  if (attrs.color && t.includes(attrs.color.toLowerCase())) score += 5;
+  // Related color synonyms get a smaller boost
+  const colorSynonyms: Record<string, string[]> = {
+    burgundy: ['maroon', 'wine', 'oxblood', 'merlot', 'dark red'],
+    maroon: ['burgundy', 'wine', 'oxblood'],
+    wine: ['burgundy', 'maroon', 'merlot'],
+    navy: ['dark blue', 'midnight'],
+    charcoal: ['dark gray', 'dark grey', 'graphite'],
+    camel: ['tan', 'beige', 'caramel', 'nude'],
+    champagne: ['cream', 'ivory', 'off-white', 'nude'],
+    gray: ['grey'],
+    grey: ['gray'],
+  };
+  if (attrs.color) {
+    const syns = colorSynonyms[attrs.color.toLowerCase()] || [];
+    if (syns.some(syn => t.includes(syn))) score += 3;
+  }
+
+  // Subtype match (handbag, sneaker, jeans...)
+  if (attrs.subtype && t.includes(attrs.subtype.toLowerCase())) score += 4;
+
+  // Category match (fallback if subtype not detected)
+  if (attrs.category && t.includes(attrs.category.toLowerCase())) score += 2;
+
+  // Material match
+  if (attrs.material && t.includes(attrs.material.toLowerCase())) score += 2;
+
+  // Brand match
+  if (attrs.brand && (t.includes(attrs.brand.toLowerCase()) || s.includes(attrs.brand.toLowerCase()))) {
+    score += 3;
+  }
+
+  // Heavy penalty for shelf titles we already try to filter — belt & braces
+  if (isShelfTitle(result.title)) score -= 10;
+
+  return score;
+};
+
+/**
+ * Filter + rank lens results against detected attributes. Drops shelf pages,
+ * dedupes by (title+source), then ranks by attribute-match score. Returns
+ * only the top N that actually look like they could be the user's item.
+ */
+export const refineLensResults = (
+  results: LensResult[],
+  attrs: {
+    color?: string;
+    subtype?: string;
+    category?: string;
+    material?: string;
+    brand?: string;
+  },
+  limit = 6,
+): LensResult[] => {
+  // ── Drop junk ──
+  const cleaned = results.filter(r => {
+    if (!/^https?:\/\//i.test(r.imageUrl || '')) return false;
+    if (isBlockedHost(r.source)) return false;   // YouTube / Pinterest / blogs
+    if (isShelfUrl(r.url)) return false;
+    if (isShelfTitle(r.title)) return false;
+    // Require a shopping host — after the block filter, this keeps ONLY real
+    // retailers (clothes brands, marketplaces, resale). Lens results from
+    // random one-off pages rarely have usable product data.
+    if (!r.isShopping) return false;
+    return true;
+  });
+
+  // ── De-dupe by (title + source) ──
+  const seen = new Set<string>();
+  const deduped: LensResult[] = [];
+  for (const r of cleaned) {
+    const key = `${r.title.trim().toLowerCase()}|${r.source.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(r);
+  }
+
+  // ── Rank ──
+  const scored = deduped
+    .map(r => ({ r, s: scoreLensResultByAttributes(r, attrs) }))
+    .sort((a, b) => b.s - a.s);
+
+  // Require a minimum score so we don't return junk when nothing really matches
+  const passing = scored.filter(x => x.s > 0);
+
+  return passing.slice(0, limit).map(x => x.r);
+};
+
 const isShoppingHost = (host: string): boolean => {
   if (SHOPPING_HOSTS.has(host)) return true;
   // Subdomain match
@@ -128,10 +421,9 @@ export const searchByImage = async (imageUri: string): Promise<LensSearchRespons
   try {
     const base64 = await readImageAsBase64(imageUri);
 
-    const response = await fetch(`${VISION_ENDPOINT}?key=${env.GOOGLE_VISION_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    let data: any;
+    try {
+      data = await callAiProxy<any>('vision', {
         requests: [
           {
             image: { content: base64 },
@@ -142,20 +434,15 @@ export const searchByImage = async (imageUri: string): Promise<LensSearchRespons
             ],
           },
         ],
-      }),
-    });
-
-    if (!response.ok) {
-      const txt = await response.text();
+      });
+    } catch (err: any) {
       return {
         query: '',
         bestGuessLabels: [],
         results: [],
-        error: `Vision API ${response.status}: ${txt.substring(0, 120)}`,
+        error: `Vision proxy: ${err?.message?.substring(0, 120) ?? 'failed'}`,
       };
     }
-
-    const data = await response.json();
     const first = data.responses?.[0] ?? {};
     const web = first.webDetection ?? {};
     const labels = (first.labelAnnotations ?? []).map((l: any) => l.description);
@@ -182,6 +469,7 @@ export const searchByImage = async (imageUri: string): Promise<LensSearchRespons
       if (!p.url) return;
       const host = normalizeHost(p.url);
       if (!host || seen.has(p.url)) return;
+      if (isBlockedHost(host)) return;
       seen.add(p.url);
 
       // Pick a thumbnail: matching full image > partial > similar image.
@@ -209,8 +497,9 @@ export const searchByImage = async (imageUri: string): Promise<LensSearchRespons
     if (results.length < 4) {
       similarImages.forEach((img, idx) => {
         if (!img.url || seen.has(img.url)) return;
-        seen.add(img.url);
         const host = normalizeHost(img.url);
+        if (isBlockedHost(host)) return;
+        seen.add(img.url);
         results.push({
           id: `sim-${idx}`,
           title: host || 'Similar image',
@@ -536,6 +825,54 @@ const scoreEntry = (entry: LensResult, queryTokens: string[]): number => {
 };
 
 /**
+ * Score a curated-catalog entry against detected attributes — same signal
+ * as scoreLensResultByAttributes but against our in-memory catalog rather
+ * than live web results.
+ */
+export const rankCatalogByAttributes = (
+  attrs: {
+    color?: string;
+    subtype?: string;
+    category?: string;
+    material?: string;
+  },
+  limit = 6,
+): LensResult[] => {
+  const tokens: string[] = [];
+  if (attrs.color) tokens.push(attrs.color.toLowerCase());
+  if (attrs.subtype) tokens.push(attrs.subtype.toLowerCase());
+  if (attrs.category) tokens.push(attrs.category.toLowerCase());
+  if (attrs.material) tokens.push(attrs.material.toLowerCase());
+
+  if (tokens.length === 0) return [];
+
+  const colorSynonyms: Record<string, string[]> = {
+    burgundy: ['maroon', 'wine', 'oxblood'],
+    maroon: ['burgundy', 'wine'],
+    navy: ['dark blue'],
+    camel: ['tan', 'caramel'],
+    champagne: ['cream', 'ivory'],
+  };
+
+  const scored = FALLBACK_CATALOG.map(entry => {
+    const hay = entry.title.toLowerCase();
+    let s = 0;
+    for (const tok of tokens) {
+      if (hay.includes(tok)) s += 3;
+      const syns = colorSynonyms[tok] || [];
+      for (const syn of syns) if (hay.includes(syn)) s += 1.5;
+    }
+    return { entry, s };
+  });
+
+  return scored
+    .filter(x => x.s > 0)
+    .sort((a, b) => b.s - a.s)
+    .slice(0, limit)
+    .map(x => x.entry);
+};
+
+/**
  * Search for products by text query. Uses Google Custom Search (Image mode)
  * if configured, otherwise falls back to an in-memory curated catalog so the
  * feature still works in demos / offline.
@@ -548,52 +885,55 @@ export const searchProductsByText = async (
     return { query: '', bestGuessLabels: [], results: [] };
   }
 
-  // ── Google Custom Search path (if configured) ──
-  if (env.GOOGLE_CSE_ID && env.GOOGLE_CSE_API_KEY) {
+  // ── Google Custom Search path (proxied) ──
+  // CSE config now lives server-side in Supabase Secrets; clients only need
+  // to be signed in to invoke the proxy.
+  try {
+    let data: any;
     try {
-      const params = new URLSearchParams({
-        key: env.GOOGLE_CSE_API_KEY,
-        cx: env.GOOGLE_CSE_ID,
+      data = await callAiProxy<any>('cse', {
         q: trimmed,
         searchType: 'image',
         num: '10',
         safe: 'active',
       });
-      const resp = await fetch(
-        `https://www.googleapis.com/customsearch/v1?${params.toString()}`,
-      );
-      if (resp.ok) {
-        const data = await resp.json();
-        const items: any[] = data.items || [];
-        const results: LensResult[] = items.map((it, idx) => {
-          const pageUrl: string = it.image?.contextLink || it.link || '';
-          const host = normalizeHost(pageUrl);
-          return {
-            id: `cse-${idx}`,
-            title: (it.title || host || 'Result').substring(0, 80),
-            source: host,
-            url: pageUrl,
-            imageUrl: it.link || it.image?.thumbnailLink || '',
-            similarity: 1 - idx * 0.05,
-            isShopping: isShoppingHost(host),
-          };
-        });
-        // Shopping first
-        results.sort((a, b) => {
-          if (a.isShopping !== b.isShopping) return a.isShopping ? -1 : 1;
-          return b.similarity - a.similarity;
-        });
-        return {
-          query: trimmed,
-          bestGuessLabels: [trimmed],
-          results,
-        };
-      }
-      // Non-OK response falls through to catalog fallback
-      console.warn('[lensSearchService] CSE API error:', resp.status);
-    } catch (e: any) {
-      console.warn('[lensSearchService] CSE fetch failed, using catalog:', e?.message);
+    } catch (err: any) {
+      // 503 from proxy means CSE not configured server-side — silently skip
+      // and fall through to the curated catalog path below.
+      console.log('[lens] CSE proxy unavailable:', err?.message?.substring(0, 80));
+      data = null;
     }
+    if (data) {
+      const items: any[] = data.items || [];
+        const results: LensResult[] = items
+          .map((it, idx) => {
+            const pageUrl: string = it.image?.contextLink || it.link || '';
+            const host = normalizeHost(pageUrl);
+            return {
+              id: `cse-${idx}`,
+              title: (it.title || host || 'Result').substring(0, 80),
+              source: host,
+              url: pageUrl,
+              imageUrl: it.link || it.image?.thumbnailLink || '',
+              similarity: 1 - idx * 0.05,
+              isShopping: isShoppingHost(host),
+            };
+          })
+        // Drop YouTube / Pinterest / blogs — we want actual shoppable items.
+        .filter(r => !isBlockedHost(r.source));
+      // Shopping first
+      results.sort((a, b) => {
+        if (a.isShopping !== b.isShopping) return a.isShopping ? -1 : 1;
+        return b.similarity - a.similarity;
+      });
+      return {
+        query: trimmed,
+        bestGuessLabels: [trimmed],
+        results,
+      };
+    }
+  } catch (e: any) {
+    console.warn('[lensSearchService] CSE fetch failed, using catalog:', e?.message);
   }
 
   // ── Fallback: curated catalog with token-match scoring ──

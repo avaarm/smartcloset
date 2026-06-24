@@ -60,7 +60,7 @@ export class WearTrackingService {
         const { error } = await supabase.rpc('increment_wear_count', { item_id: itemId });
         // If the RPC doesn't exist, fall back to a read-update cycle
         if (error) {
-          const items = await getClothingItems();
+          const items = await getClothingItems({ all: true });
           const item = items.find(i => i.id === itemId);
           if (!item) throw new Error('Item not found');
           await updateClothingItem({
@@ -70,7 +70,7 @@ export class WearTrackingService {
           });
         }
       } else {
-        const items = await getClothingItems();
+        const items = await getClothingItems({ all: true });
         const item = items.find(i => i.id === itemId);
         if (!item) throw new Error('Item not found');
         await updateClothingItem({
@@ -81,6 +81,30 @@ export class WearTrackingService {
       }
     } catch (error) {
       console.error('Error marking item as worn:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Decrement an item's wearCount by 1. Used for the Undo path on
+   * "Mark as worn" when the user taps it by mistake. Floors at 0.
+   * Does NOT touch lastWorn — caller can pass a previous value if needed.
+   */
+  static async undoLastWear(
+    itemId: string,
+    previousLastWorn?: string,
+  ): Promise<void> {
+    try {
+      const items = await getClothingItems({ all: true });
+      const item = items.find(i => i.id === itemId);
+      if (!item) return;
+      await updateClothingItem({
+        ...item,
+        wearCount: Math.max(0, (item.wearCount || 1) - 1),
+        lastWorn: previousLastWorn,
+      });
+    } catch (error) {
+      console.error('Error undoing last wear:', error);
       throw error;
     }
   }

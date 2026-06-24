@@ -24,6 +24,23 @@ const extensions = [
 
 export default defineConfig({
   root: __dirname,
+  // .env lives at the project root (shared with the native build) and uses
+  // unprefixed keys. Whitelist the app's prefixes so they're exposed to the
+  // client without the VITE_ rename.
+  envDir: path.resolve(__dirname, '..'),
+  envPrefix: [
+    'VITE_',
+    'SUPABASE_',
+    'GOOGLE_',
+    'OPENAI_',
+    'APPLE_',
+    'APP_',
+    'ENABLE_',
+    'MAX_',
+    'IMAGE_',
+    'THUMBNAIL_',
+    'SENTRY_',
+  ],
   plugins: [
     react({
       babel: {

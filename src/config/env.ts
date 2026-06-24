@@ -60,16 +60,18 @@ export const env = {
   SUPABASE_URL: str(_SUPABASE_URL),
   SUPABASE_ANON_KEY: str(_SUPABASE_ANON_KEY),
 
-  // --- Google Cloud Vision (for AI clothing analysis, body profile, lens search) ---
+  // ─────────────────────────────────────────────────────────────────────────
+  // ⚠️ Secret API keys (Vision / OpenAI / CSE) are NO LONGER read client-side.
+  // They live in Supabase Secrets and are accessed via the ai-proxy Edge
+  // Function (supabase/functions/ai-proxy/index.ts). These fields stay here
+  // so .env stays backwards-compat for local dev, but app code should NOT
+  // reference them — use callAiProxy() instead.
+  // ─────────────────────────────────────────────────────────────────────────
   GOOGLE_VISION_API_KEY: str(_GOOGLE_VISION_API_KEY),
   GOOGLE_CLOUD_PROJECT_ID: str(_GOOGLE_CLOUD_PROJECT_ID),
   GOOGLE_VISION_LOCATION: str(_GOOGLE_VISION_LOCATION, 'us-west1'),
-
-  // --- Google Custom Search (for shopping results from reverse image search) ---
   GOOGLE_CSE_ID: str(_GOOGLE_CSE_ID),
   GOOGLE_CSE_API_KEY: str(_GOOGLE_CSE_API_KEY),
-
-  // --- OpenAI (optional alternative to Google Vision) ---
   OPENAI_API_KEY: str(_OPENAI_API_KEY),
 
   // --- Social auth (optional; stubs if missing) ---
@@ -98,17 +100,20 @@ export const env = {
 };
 
 /**
- * Helper: does the user have Google Vision credentials set up?
- * Used by AI features to decide whether to show real results or an "add your
- * API key" empty state.
+ * Helper: is AI Vision reachable?
+ *
+ * With the ai-proxy Edge Function in place, "reachable" means we have a
+ * Supabase backend to proxy through. Per-call auth (user signed in) is
+ * checked inside callAiProxy(); failures there fall back to mock results.
  */
 export const hasGoogleVision = (): boolean =>
-  env.ENABLE_VISION_API && env.GOOGLE_VISION_API_KEY.length > 0;
+  env.ENABLE_VISION_API && env.SUPABASE_URL.length > 0;
 
 /**
- * Helper: does the user have Google Custom Search set up for shopping results?
+ * Helper: is Google Custom Search reachable via the proxy?
+ * Same logic — server-side config is what matters; client just needs Supabase.
  */
 export const hasGoogleShopping = (): boolean =>
-  env.GOOGLE_CSE_ID.length > 0 && env.GOOGLE_CSE_API_KEY.length > 0;
+  env.SUPABASE_URL.length > 0;
 
 export default env;

@@ -9,7 +9,9 @@ import {
   StatusBar,
   Alert,
   Switch,
+  Platform,
 } from 'react-native';
+import { env } from '../config/env';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {
   saveAndShareBackup,
@@ -19,6 +21,10 @@ import {
 } from '../services/backupService';
 import { reseedAllDemoData } from '../services/seedDemoData';
 import { resetStorage } from '../services/storage';
+import {
+  getContributionHistory,
+  type ProductContribution,
+} from '../services/productContributions';
 import theme from '../styles/theme';
 import { supabase } from '../config/supabase';
 import { signOut } from '../services/authService';
@@ -51,10 +57,12 @@ const SettingsScreen = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const { currentMode, switchMode } = useAccountMode();
   const [availableModes, setAvailableModesState] = useState<AccountType[]>(['user']);
+  const [contributions, setContributions] = useState<ProductContribution[]>([]);
 
   useEffect(() => {
     loadBackupStats();
     loadAccountInfo();
+    getContributionHistory().then(setContributions).catch(() => {});
   }, []);
 
   const loadAccountInfo = async () => {
@@ -130,6 +138,60 @@ const SettingsScreen = () => {
         Alert.alert('Error', 'Failed to clear data.');
       }
     }
+  };
+
+  const handleDeleteAccount = async () => {
+    // Two-step confirmation: alert → typed-confirmation prompt (Apple guideline
+    // 5.1.1(v) requires the deletion be initiated by the user, not us, and
+    // permanent. We make accidental taps impossible.)
+    Alert.alert(
+      'Delete Account',
+      'This permanently deletes your account, all clothing items, outfits, body profile, stylist data, and any uploaded images. This cannot be undone.\n\nTo confirm, you\'ll be asked to type DELETE.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          style: 'destructive',
+          onPress: () => {
+            Alert.prompt(
+              'Type DELETE to confirm',
+              'Once confirmed, your account is gone.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete account',
+                  style: 'destructive',
+                  onPress: async (input?: string) => {
+                    if (input !== 'DELETE') {
+                      Alert.alert('Not deleted', 'You must type DELETE in caps to confirm.');
+                      return;
+                    }
+                    try {
+                      setLoading(true);
+                      const { error } = await supabase.rpc('delete_user_account');
+                      if (error) throw error;
+                      // RPC succeeded; sign out and wipe local cache.
+                      await clearAllData();
+                      await supabase.auth.signOut();
+                      Alert.alert('Account deleted', 'Your account and data have been removed.');
+                    } catch (e: any) {
+                      console.error('[SettingsScreen] account delete failed:', e);
+                      Alert.alert(
+                        'Could not delete account',
+                        e?.message || 'Please try again, or contact support.',
+                      );
+                    } finally {
+                      setLoading(false);
+                    }
+                  },
+                },
+              ],
+              'plain-text',
+            );
+          },
+        },
+      ],
+    );
   };
 
   const handleReseedDemoData = async () => {
@@ -255,6 +317,55 @@ const SettingsScreen = () => {
           )}
         </View>
 
+        {/* Community KB — shows user's contribution to the shared recognition database */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Community Knowledge Base</Text>
+          <View style={[styles.statsCard, { backgroundColor: '#EEF2FF', padding: 0 }]}>
+            <View style={{ padding: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                <Icon name="people-circle-outline" size={28} color="#4338CA" />
+                <Text
+                  style={{
+                    marginLeft: 10,
+                    fontSize: 32,
+                    fontWeight: '700',
+                    color: '#4338CA',
+                  }}
+                >
+                  {contributions.length}
+                </Text>
+                <Text style={{ marginLeft: 6, fontSize: 14, color: '#4338CA', paddingTop: 14 }}>
+                  {contributions.length === 1 ? 'item taught' : 'items taught'}
+                </Text>
+              </View>
+              <Text style={{ fontSize: 12, color: '#4338CA', lineHeight: 18 }}>
+                Every clothing item you add trains the recognition model. When
+                someone else uploads a similar photo, your contribution helps
+                auto-fill their form — no Vision API call needed.
+              </Text>
+              {contributions.length > 0 && (
+                <View style={{ flexDirection: 'row', marginTop: 12, flexWrap: 'wrap', gap: 6 }}>
+                  <View style={styles.contribBadge}>
+                    <Text style={styles.contribBadgeText}>
+                      {contributions.filter(c => c.source === 'lens_match').length} web
+                    </Text>
+                  </View>
+                  <View style={styles.contribBadge}>
+                    <Text style={styles.contribBadgeText}>
+                      {contributions.filter(c => c.source === 'kb_match').length} community
+                    </Text>
+                  </View>
+                  <View style={styles.contribBadge}>
+                    <Text style={styles.contribBadgeText}>
+                      {contributions.filter(c => c.source === 'manual').length} manual
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+
         {/* Data & Backup Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Data & Backup</Text>
@@ -331,17 +442,14 @@ const SettingsScreen = () => {
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Version</Text>
-              <Text style={styles.infoValue}>1.0.0</Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Build</Text>
-              <Text style={styles.infoValue}>52</Text>
+              <Text style={styles.infoValue}>{env.APP_VERSION}</Text>
             </View>
 
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Platform</Text>
-              <Text style={styles.infoValue}>iOS</Text>
+              <Text style={styles.infoValue}>
+                {Platform.OS === 'ios' ? 'iOS' : Platform.OS === 'android' ? 'Android' : 'Web'}
+              </Text>
             </View>
           </View>
         </View>
@@ -375,8 +483,23 @@ const SettingsScreen = () => {
           </TouchableOpacity>
 
           <Text style={styles.dangerWarning}>
-            This will permanently delete all your clothing items, outfits, and settings.
-            This action cannot be undone.
+            Wipes everything stored locally on this device. Your account stays.
+          </Text>
+
+          <TouchableOpacity
+            style={[styles.dangerButton, { marginTop: 16, borderColor: '#B91C1C' }]}
+            onPress={handleDeleteAccount}
+            disabled={loading}
+          >
+            <Icon name="alert-circle-outline" size={20} color="#B91C1C" />
+            <Text style={[styles.dangerButtonText, { color: '#B91C1C' }]}>
+              Delete Account
+            </Text>
+          </TouchableOpacity>
+
+          <Text style={styles.dangerWarning}>
+            Permanently deletes your account, all wardrobe data, body profile, and uploaded images.
+            This cannot be undone.
           </Text>
         </View>
 
@@ -436,6 +559,19 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
+  },
+  contribBadge: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  contribBadgeText: {
+    fontSize: 11,
+    color: '#4338CA',
+    fontWeight: '600',
   },
   statRow: {
     flexDirection: 'row',
