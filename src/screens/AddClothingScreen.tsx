@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Platform, ScrollView, ActivityIndicator, Alert, Switch } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Platform, ScrollView, ActivityIndicator, Alert, Switch, Pressable } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useCallback } from 'react';
 import * as ImagePicker from 'react-native-image-picker';
@@ -8,18 +8,27 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { saveClothingItem, updateClothingItem } from '../services/storage';
 import { ClothingCategory, Season, Occasion } from '../types/clothing';
+import type { MaterialComponent, MaterialTier } from '../types';
 import {
   analyzeClothingImage,
   isConfidentPrediction,
   shouldAutofillPrediction,
   generateNameFromRecognition,
+  pickBestPrice,
+  formatPrice,
   RecognitionResult,
 } from '../services/imageRecognition';
 import { copyImageToPermanentStorage } from '../services/imageStorage';
-import { searchByImage, type LensResult } from '../services/lensSearchService';
+import {
+  searchByImage,
+  refineLensResults,
+  rankCatalogByAttributes,
+  type LensResult,
+} from '../services/lensSearchService';
 import {
   buildFingerprint,
   hashImageBase64,
+  semanticFingerprint,
 } from '../services/imageFingerprint';
 import {
   lookupKnowledgeBase,
@@ -27,6 +36,7 @@ import {
   type KBMatch,
 } from '../services/productContributions';
 import MatchPickerSheet, { type PickedMatch } from './MatchPickerSheet';
+import MaterialsEditor from '../components/MaterialsEditor';
 import { readImageAsBase64 } from '../platform/fileSystem';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -50,9 +60,20 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   const [brand, setBrand] = useState(editItem?.brand || '');
   const [imageUri, setImageUri] = useState(editItem?.userImage || editItem?.imageUrl || editItem?.retailerImage || '');
   const [color, setColor] = useState(editItem?.color || '');
-  const [season, setSeason] = useState<Season | null>(editItem?.season?.[0] || null);
+  // Season state uses 'all' as a sentinel; at save time we expand it to the
+  // full [spring, summer, fall, winter] array so existing filters keep working.
+  const initialSeasonValue: Season | 'all' | null = (() => {
+    const arr = editItem?.season;
+    if (!arr || arr.length === 0) return null;
+    // Item covers every season → show "All Seasons" in picker
+    const hasAll = ['spring', 'summer', 'fall', 'winter'].every(s => arr.includes(s));
+    if (hasAll) return 'all';
+    return arr[0];
+  })();
+  const [season, setSeason] = useState<Season | 'all' | null>(initialSeasonValue);
   const [occasion, setOccasion] = useState<Occasion | null>(editItem?.occasion || null);
   const [cost, setCost] = useState(editItem?.cost?.toString() || '');
+  const [retailCost, setRetailCost] = useState(editItem?.retailCost?.toString() || '');
   const [purchaseDate, setPurchaseDate] = useState<Date>(editItem?.purchaseDate ? new Date(editItem.purchaseDate) : new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [tags, setTags] = useState(editItem?.tags?.join(', ') || '');
@@ -60,6 +81,11 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   const [favorite, setFavorite] = useState(editItem?.favorite || false);
   const [retailer, setRetailer] = useState(editItem?.retailer || '');
   const [errors, setErrors] = useState<{[key: string]: string}>({});
+
+  // Multi-tier material composition — feeds the fabric knowledge base.
+  const [materials, setMaterials] = useState<MaterialComponent[]>(
+    editItem?.materials || [],
+  );
   
   // AI recognition states
   const [analyzing, setAnalyzing] = useState(false);
@@ -70,6 +96,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   const [kbMatches, setKbMatches] = useState<KBMatch[]>([]);
   const [lensResults, setLensResults] = useState<LensResult[]>([]);
   const [fingerprint, setFingerprint] = useState<string | null>(null);
+  const [semanticFp, setSemanticFp] = useState<string | null>(null);
   const [imageHash, setImageHash] = useState<string | null>(null);
   const [visionLabels, setVisionLabels] = useState<string[]>([]);
   const [pickedMatch, setPickedMatch] = useState<PickedMatch | null>(null);
@@ -79,7 +106,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
     setCategory(value);
   }, []);
 
-  const onSeasonChange = useCallback((value: Season | null) => {
+  const onSeasonChange = useCallback((value: Season | 'all' | null) => {
     setSeason(value);
   }, []);
 
@@ -170,7 +197,10 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
       if (match.color && !color.trim()) {
         setColor(match.color.charAt(0).toUpperCase() + match.color.slice(1));
       }
-      if (match.cost != null && !cost) setCost(String(match.cost));
+      if (match.cost != null && !cost) setCost(String(Math.round(match.cost)));
+      if ((match as any).retailCost != null && !retailCost) {
+        setRetailCost(String(Math.round((match as any).retailCost)));
+      }
       if (match.material) {
         const current = tags.split(',').map((t: string) => t.trim()).filter(Boolean);
         if (!current.some((t: string) => t.toLowerCase() === match.material!.toLowerCase())) {
@@ -211,26 +241,42 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
       setRecognitionResult(result);
       setVisionLabels(result.rawLabels || []);
 
-      // ── 3. Build full fingerprint (image hash + top labels) ──
+      // ── 3. Build fingerprints ──
+      //   content+labels fp = legacy exact-match
+      //   semantic fp = crop/angle-tolerant (preferred for KB matching)
       if (base64) {
         const fp = buildFingerprint(base64, result);
+        const semFp = semanticFingerprint(result);
         setFingerprint(fp);
+        setSemanticFp(semFp);
 
         // ── 4. Kick off KB lookup + lens shopping search in parallel ──
         setMatchLoading(true);
         Promise.allSettled([
-          lookupKnowledgeBase(fp),
+          lookupKnowledgeBase(fp, semFp),
           searchByImage(uri),
         ])
           .then(([kbRes, lensRes]) => {
             if (kbRes.status === 'fulfilled') setKbMatches(kbRes.value);
             if (lensRes.status === 'fulfilled' && !lensRes.value.notConfigured) {
-              // Prefer shopping results with valid http(s) image URLs, cap at 8
-              setLensResults(
-                lensRes.value.results
-                  .filter(r => /^https?:\/\//i.test(r.imageUrl || '') && r.isShopping)
-                  .slice(0, 8),
-              );
+              // Refine against detected attributes — drops shelf pages, dedupes
+              // by (title+source), ranks by color/subtype/material/brand match.
+              const attrs = {
+                color: result.color,
+                subtype: result.subtype,
+                category: result.category,
+                material: result.material,
+                brand: result.brand,
+              };
+              const refined = refineLensResults(lensRes.value.results, attrs, 12);
+
+              // If web results were all junk, fall back to the curated
+              // catalog ranked by the same attributes — better to show a
+              // visually plausible option than three Macy's shelf pages.
+              const finalResults =
+                refined.length > 0 ? refined : rankCatalogByAttributes(attrs, 8);
+
+              setLensResults(finalResults);
             }
           })
           .finally(() => setMatchLoading(false));
@@ -252,8 +298,42 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         setOccasion(result.occasion as Occasion);
       }
 
-      if (result.color && shouldAutofillPrediction(result, 'color') && !color.trim()) {
+      // Color: ALWAYS auto-fill if detected (no confidence gate) — pixel-level
+      // color analysis is reliable and the user can override.
+      if (result.color && !color.trim()) {
         setColor(result.color.charAt(0).toUpperCase() + result.color.slice(1));
+      }
+
+      // Cost auto-fill — split by OCR-detected kind:
+      //   sale   → "You paid"   (what actually changed hands)
+      //   original → "Retail"   (MSRP / was)
+      //   plain  → "You paid"   unless retail is still blank and we have 2+ plain
+      //                          prices, in which case highest = retail, lowest = paid
+      if (result.prices && result.prices.length > 0) {
+        const sales = result.prices.filter(p => p.kind === 'sale');
+        const origs = result.prices.filter(p => p.kind === 'original');
+        const plains = result.prices.filter(p => p.kind === 'plain');
+
+        // Sale → paid
+        if (!cost && sales.length > 0) {
+          const min = sales.reduce((m, p) => (p.amount < m.amount ? p : m));
+          setCost(String(min.amount));
+        }
+        // Original → retail
+        if (!retailCost && origs.length > 0) {
+          const max = origs.reduce((m, p) => (p.amount > m.amount ? p : m));
+          setRetailCost(String(max.amount));
+        }
+        // Plain-only case: if we have 2+ and no sale/original context, the
+        // higher is almost always the MSRP and the lower is the sale price.
+        if (sales.length === 0 && origs.length === 0 && plains.length >= 2) {
+          const sorted = [...plains].sort((a, b) => a.amount - b.amount);
+          if (!cost) setCost(String(sorted[0].amount));
+          if (!retailCost) setRetailCost(String(sorted[sorted.length - 1].amount));
+        } else if (sales.length === 0 && plains.length === 1 && !cost) {
+          // Single plain price — put it in "paid"
+          setCost(String(plains[0].amount));
+        }
       }
 
       // Auto-generate a name from the recognized attributes if the user
@@ -263,13 +343,42 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         if (generated) setName(generated);
       }
 
-      // If the detected material isn't already in tags, add it as a tag so
-      // filtering/search picks it up.
-      if (result.material && shouldAutofillPrediction(result, 'material')) {
+      // Accumulate new tags from material and GPT-4 style descriptors in one
+      // setTags call to avoid the React batching race (both reads from same `tags`).
+      {
         const current = tags.split(',').map((t: string) => t.trim()).filter(Boolean);
-        if (!current.some((t: string) => t.toLowerCase() === result.material!.toLowerCase())) {
-          setTags(current.length > 0 ? `${tags}, ${result.material}` : result.material);
+        const toAdd: string[] = [];
+
+        if (result.material && shouldAutofillPrediction(result, 'material')) {
+          const mat = result.material.toLowerCase();
+          if (!current.some((t: string) => t.toLowerCase() === mat)) toAdd.push(mat);
         }
+
+        if (result.style && result.style.length > 0) {
+          result.style.slice(0, 3).forEach((s: string) => {
+            const lc = s.toLowerCase();
+            if (!current.some((t: string) => t.toLowerCase() === lc) && !toAdd.includes(lc)) {
+              toAdd.push(lc);
+            }
+          });
+        }
+
+        if (toAdd.length > 0) {
+          setTags(current.length > 0 ? `${tags}, ${toAdd.join(', ')}` : toAdd.join(', '));
+        }
+      }
+
+      // Seed the materials[] composition from the detected primary material
+      // if the user hasn't added any materials yet.
+      if (result.material && materials.length === 0) {
+        setMaterials([{ name: result.material.toLowerCase(), tier: 'primary' }]);
+      }
+
+      // Season auto-fill from GPT-4 analysis
+      if (result.season && result.season.length > 0 && !season) {
+        const ALL_SEASONS = ['spring', 'summer', 'fall', 'winter'];
+        const coversAll = ALL_SEASONS.every(s => result.season!.includes(s));
+        setSeason(coversAll ? 'all' : result.season[0] as Season);
       }
     } catch (error) {
       console.error('Error analyzing image:', error);
@@ -304,6 +413,18 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
     }
 
     try {
+      // Normalize materials — strip empty entries and de-dupe at same tier
+      const cleanMaterials = materials
+        .filter(m => m.name && m.name.trim().length > 0)
+        .map(m => ({
+          name: m.name.trim().toLowerCase(),
+          percentage:
+            m.percentage != null && Number.isFinite(m.percentage) && m.percentage > 0
+              ? Math.min(100, Math.round(m.percentage))
+              : undefined,
+          tier: m.tier || 'primary',
+        }));
+
       const itemData: any = {
         id: isEditing ? editItem.id : '',
         name: name.trim(),
@@ -316,6 +437,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         isWishlist: isWishlist,
         dateAdded: isEditing ? editItem.dateAdded : new Date().toISOString(),
         cost: cost ? parseFloat(cost) : undefined,
+        retailCost: retailCost ? parseFloat(retailCost) : undefined,
         purchaseDate: purchaseDate.toISOString(),
         tags: tags ? tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag) : [],
         notes: notes.trim(),
@@ -323,9 +445,14 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         retailer: retailer.trim(),
         wearCount: editItem?.wearCount || 0,
         lastWorn: editItem?.lastWorn,
+        materials: cleanMaterials.length > 0 ? cleanMaterials : undefined,
       };
       
-      if (season) {
+      if (season === 'all') {
+        // "All Seasons" expands to every individual season so existing filters
+        // (which check for specific seasons) still match this item.
+        itemData.season = ['spring', 'summer', 'fall', 'winter'];
+      } else if (season) {
         itemData.season = [season];
       }
       
@@ -340,8 +467,19 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
       // feeds the shared recognition KB. Non-blocking; silently ignored if
       // anything fails so save UX is never interrupted.
       if (!isEditing && fingerprint && imageHash) {
+        // Primary material for back-compat lookup: explicit primary-tier entry,
+        // else the first detected material in tags
+        const primaryMat =
+          cleanMaterials.find(m => m.tier === 'primary')?.name ||
+          itemData.tags?.find((t: string) =>
+            ['cotton', 'wool', 'leather', 'silk', 'linen', 'denim', 'cashmere', 'polyester'].includes(
+              t.toLowerCase(),
+            ),
+          );
+
         recordContribution({
           fingerprint,
+          semanticFp: semanticFp || undefined,
           imageHash,
           source: pickedMatch?.source ?? 'manual',
           name: itemData.name,
@@ -349,13 +487,10 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
           brand: itemData.brand || undefined,
           retailer: itemData.retailer || undefined,
           color: itemData.color || undefined,
-          material:
-            itemData.tags?.find((t: string) =>
-              ['cotton', 'wool', 'leather', 'silk', 'linen', 'denim', 'cashmere', 'polyester'].includes(
-                t.toLowerCase(),
-              ),
-            ) || undefined,
+          material: primaryMat || undefined,
+          materials: cleanMaterials.length > 0 ? cleanMaterials : undefined,
           cost: itemData.cost,
+          retailCost: itemData.retailCost,
           sourceUrl: pickedMatch?.sourceUrl,
           visionLabels: visionLabels.slice(0, 10),
         }).catch(err => console.warn('[AddClothing] contribution failed:', err));
@@ -433,6 +568,132 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
                     .join(' · ') || 'no attributes matched'
                 : 'Set GOOGLE_VISION_API_KEY in .env and rebuild.'}
             </Text>
+
+            {/* Color swatches — tap to set as the item's color */}
+            {recognitionResult.colors && recognitionResult.colors.length > 0 && (
+              <View style={{ flexDirection: 'row', marginTop: 8, gap: 6, flexWrap: 'wrap' }}>
+                {recognitionResult.colors.map((c, i) => {
+                  const selected = color.toLowerCase() === c.name.toLowerCase();
+                  return (
+                    <Pressable
+                      key={`${c.name}-${i}`}
+                      onPress={() => setColor(c.name.charAt(0).toUpperCase() + c.name.slice(1))}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingVertical: 4,
+                        paddingHorizontal: 8,
+                        borderRadius: 12,
+                        backgroundColor: selected ? '#4338CA' : '#FFFFFF',
+                        borderWidth: 1,
+                        borderColor: selected ? '#4338CA' : '#C7D2FE',
+                      }}
+                    >
+                      {c.hex ? (
+                        <View
+                          style={{
+                            width: 12,
+                            height: 12,
+                            borderRadius: 6,
+                            backgroundColor: c.hex,
+                            borderWidth: 1,
+                            borderColor: '#00000020',
+                            marginRight: 6,
+                          }}
+                        />
+                      ) : null}
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          color: selected ? '#FFFFFF' : '#4338CA',
+                          fontWeight: '500',
+                        }}
+                      >
+                        {c.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* Detected prices from OCR — each chip shows kind (Sale/Was/—) and taps to apply. */}
+            {recognitionResult.prices && recognitionResult.prices.length > 0 && (
+              <View style={{ marginTop: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                  <Text style={{ fontSize: 11, color: '#4338CA', fontWeight: '600' }}>
+                    Price{recognitionResult.prices.length > 1 ? 's' : ''} found:
+                  </Text>
+                  {recognitionResult.prices.slice(0, 4).map((p, i) => {
+                    // Original prices fill the retail field; sale/plain fill the paid field
+                    const targetsRetail = p.kind === 'original';
+                    const isSelected = targetsRetail
+                      ? retailCost === String(p.amount)
+                      : cost === String(p.amount);
+                    const bg = p.kind === 'sale'
+                      ? '#DCFCE7'
+                      : p.kind === 'original'
+                      ? '#FEE2E2'
+                      : '#FFFFFF';
+                    const border = p.kind === 'sale'
+                      ? '#86EFAC'
+                      : p.kind === 'original'
+                      ? '#FCA5A5'
+                      : '#C7D2FE';
+                    const textColor = p.kind === 'sale'
+                      ? '#065F46'
+                      : p.kind === 'original'
+                      ? '#991B1B'
+                      : '#4338CA';
+                    return (
+                      <Pressable
+                        key={`${p.raw}-${i}`}
+                        onPress={() =>
+                          targetsRetail
+                            ? setRetailCost(String(p.amount))
+                            : setCost(String(p.amount))
+                        }
+                        style={{
+                          paddingVertical: 3,
+                          paddingHorizontal: 8,
+                          borderRadius: 10,
+                          backgroundColor: isSelected ? textColor : bg,
+                          borderWidth: 1,
+                          borderColor: isSelected ? textColor : border,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        {p.kind !== 'plain' && (
+                          <Text
+                            style={{
+                              fontSize: 9,
+                              fontWeight: '700',
+                              color: isSelected ? '#FFFFFF' : textColor,
+                              textTransform: 'uppercase',
+                              letterSpacing: 0.5,
+                            }}
+                          >
+                            {p.kind === 'sale' ? 'Sale' : 'Was'}
+                          </Text>
+                        )}
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            color: isSelected ? '#FFFFFF' : textColor,
+                            fontWeight: '600',
+                            textDecorationLine: p.kind === 'original' ? 'line-through' : 'none',
+                          }}
+                        >
+                          {formatPrice(p)}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
           </View>
         )}
 
@@ -442,10 +703,154 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
             loading={matchLoading}
             kbMatches={kbMatches}
             lensResults={lensResults}
+            detection={recognitionResult}
             onPick={applyMatch}
             onSkip={dismissMatchSheet}
           />
         )}
+
+        {/* Similar-items price range — computed from lens match prices when OCR
+            didn't already find a price. Gives the user a reasonable suggestion
+            anchor instead of a blank cost field. */}
+        {(() => {
+          if (analyzing || recognitionResult?.prices?.length) return null;
+          const amounts = lensResults
+            .map(r => {
+              if (!r.price) return NaN;
+              const n = parseFloat(r.price.replace(/[^\d.]/g, ''));
+              return n;
+            })
+            .filter(n => Number.isFinite(n) && n >= 5 && n <= 25000) as number[];
+          if (amounts.length < 2) return null;
+          amounts.sort((a, b) => a - b);
+          const median = amounts[Math.floor(amounts.length / 2)];
+          const min = amounts[0];
+          const max = amounts[amounts.length - 1];
+          return (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#F5F3FF',
+                borderRadius: 10,
+                padding: 10,
+                marginHorizontal: 16,
+                marginTop: 8,
+                gap: 8,
+              }}
+            >
+              <Icon name="pricetags-outline" size={16} color="#4338CA" />
+              <Text style={{ fontSize: 12, color: '#4338CA', flex: 1 }}>
+                Similar items sell for{' '}
+                <Text style={{ fontWeight: '700' }}>${min}–${max}</Text>{' '}
+                (median ${median})
+              </Text>
+              <Pressable
+                onPress={() => setRetailCost(String(median))}
+                style={{
+                  paddingVertical: 4,
+                  paddingHorizontal: 10,
+                  backgroundColor: '#4338CA',
+                  borderRadius: 8,
+                }}
+              >
+                <Text style={{ fontSize: 11, color: '#FFFFFF', fontWeight: '600' }}>
+                  Use as new
+                </Text>
+              </Pressable>
+            </View>
+          );
+        })()}
+
+        {/* KB cost suggestions — paid and retail averages from community contributions. */}
+        {(() => {
+          if (analyzing) return null;
+          const paidCosts = kbMatches
+            .map(m => m.cost)
+            .filter((n): n is number => typeof n === 'number' && n > 0);
+          const retailCosts = kbMatches
+            .map(m => (m as any).retailCost)
+            .filter((n): n is number => typeof n === 'number' && n > 0);
+          if (paidCosts.length === 0 && retailCosts.length === 0) return null;
+
+          const avgPaid =
+            paidCosts.length > 0
+              ? Math.round(paidCosts.reduce((a, b) => a + b, 0) / paidCosts.length)
+              : null;
+          const avgRetail =
+            retailCosts.length > 0
+              ? Math.round(retailCosts.reduce((a, b) => a + b, 0) / retailCosts.length)
+              : null;
+
+          return (
+            <View
+              style={{
+                backgroundColor: '#EEF2FF',
+                borderRadius: 10,
+                padding: 10,
+                marginHorizontal: 16,
+                marginTop: 8,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <Icon name="people-outline" size={14} color="#4338CA" />
+                <Text style={{ fontSize: 11, color: '#4338CA', fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                  Community average
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {avgPaid != null && (
+                  <Pressable
+                    onPress={() => !cost && setCost(String(avgPaid))}
+                    disabled={!!cost}
+                    style={{
+                      flex: 1,
+                      backgroundColor: cost ? '#F3F1FF' : '#FFFFFF',
+                      borderWidth: 1,
+                      borderColor: '#C7D2FE',
+                      borderRadius: 8,
+                      padding: 8,
+                    }}
+                  >
+                    <Text style={{ fontSize: 10, color: '#6366F1', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      Used
+                    </Text>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#4338CA', marginTop: 2 }}>
+                      ${avgPaid}
+                    </Text>
+                    {!cost && (
+                      <Text style={{ fontSize: 10, color: '#6366F1', marginTop: 1 }}>Tap to use</Text>
+                    )}
+                  </Pressable>
+                )}
+                {avgRetail != null && (
+                  <Pressable
+                    onPress={() => !retailCost && setRetailCost(String(avgRetail))}
+                    disabled={!!retailCost}
+                    style={{
+                      flex: 1,
+                      backgroundColor: retailCost ? '#F3F1FF' : '#FFFFFF',
+                      borderWidth: 1,
+                      borderColor: '#C7D2FE',
+                      borderRadius: 8,
+                      padding: 8,
+                    }}
+                  >
+                    <Text style={{ fontSize: 10, color: '#6366F1', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      New
+                    </Text>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#4338CA', marginTop: 2 }}>
+                      ${avgRetail}
+                    </Text>
+                    {!retailCost && (
+                      <Text style={{ fontSize: 10, color: '#6366F1', marginTop: 1 }}>Tap to use</Text>
+                    )}
+                  </Pressable>
+                )}
+              </View>
+            </View>
+          );
+        })()}
 
         {/* Picked-match confirmation pill */}
         {pickedMatch && (
@@ -516,14 +921,59 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
           onChangeText={setColor}
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Cost (optional)"
-          value={cost}
-          onChangeText={setCost}
-          keyboardType="decimal-pad"
-        />
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.inputSubLabel}>Used</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="$0"
+              value={cost}
+              onChangeText={setCost}
+              keyboardType="decimal-pad"
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.inputSubLabel}>New</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="$0"
+              value={retailCost}
+              onChangeText={setRetailCost}
+              keyboardType="decimal-pad"
+            />
+          </View>
+        </View>
         {errors.cost && <Text style={styles.errorText}>{errors.cost}</Text>}
+
+        {/* Savings callout when both are filled */}
+        {(() => {
+          const paid = parseFloat(cost);
+          const retail = parseFloat(retailCost);
+          if (!Number.isFinite(paid) || !Number.isFinite(retail)) return null;
+          if (paid <= 0 || retail <= 0 || paid >= retail) return null;
+          const savings = retail - paid;
+          const percent = Math.round((savings / retail) * 100);
+          return (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#DCFCE7',
+                borderRadius: 8,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                marginTop: 4,
+                alignSelf: 'flex-start',
+                gap: 6,
+              }}
+            >
+              <Icon name="pricetag" size={12} color="#065F46" />
+              <Text style={{ fontSize: 12, color: '#065F46', fontWeight: '600' }}>
+                Saved ${savings.toFixed(savings % 1 === 0 ? 0 : 2)} ({percent}% off)
+              </Text>
+            </View>
+          );
+        })()}
 
         <Text style={[styles.sectionHeader, { marginTop: 8 }]}>Purchase Date</Text>
         <TouchableOpacity 
@@ -554,6 +1004,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
             itemStyle={{ color: '#1A1A1A', fontSize: 16 }}
           >
             <Picker.Item label="Select Season" value={null} color="#8B8B8B" />
+            <Picker.Item label="All Seasons" value="all" color="#1A1A1A" />
             <Picker.Item label="Spring" value="spring" color="#1A1A1A" />
             <Picker.Item label="Summer" value="summer" color="#1A1A1A" />
             <Picker.Item label="Fall" value="fall" color="#1A1A1A" />
@@ -585,6 +1036,8 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
           value={tags}
           onChangeText={setTags}
         />
+
+        <MaterialsEditor value={materials} onChange={setMaterials} />
 
         <Text style={[styles.sectionHeader, { marginTop: 8 }]}>Notes</Text>
         <TextInput
@@ -753,6 +1206,15 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#8B7FD9',
     fontWeight: '500',
+  },
+  inputSubLabel: {
+    fontSize: 11,
+    color: '#8B8B8B',
+    marginBottom: 4,
+    marginLeft: 4,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
   input: {
     height: 44,
