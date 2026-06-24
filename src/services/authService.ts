@@ -5,8 +5,14 @@ import { Session, User } from '@supabase/supabase-js';
 // crashes when client IDs are not yet configured.
 
 export const configureGoogleSignIn = () => {
-  // No-op until Google OAuth client IDs are added to .env
-  // Once configured, uncomment the block in signInWithGoogle below.
+  const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+  const { env } = require('../config/env');
+  if (!env.GOOGLE_IOS_CLIENT_ID) return;
+  GoogleSignin.configure({
+    iosClientId: env.GOOGLE_IOS_CLIENT_ID,
+    webClientId: env.GOOGLE_WEB_CLIENT_ID,
+    scopes: ['email', 'profile'],
+  });
 };
 
 // ─── Email Auth ───────────────────────────────────────────────────────────────
