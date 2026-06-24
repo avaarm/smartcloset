@@ -67,7 +67,7 @@ const WardrobeInsightsScreen: React.FC = () => {
       let active = true;
       (async () => {
         setLoading(true);
-        const data = await getClothingItems();
+        const data = await getClothingItems({ all: true });
         if (active) {
           setItems(data.filter(i => !i.isWishlist));
           setLoading(false);
@@ -114,11 +114,62 @@ const WardrobeInsightsScreen: React.FC = () => {
   }
 
   // ── Compute stats ──
-  const totalValue = items.reduce((sum, i) => sum + (i.cost || 0), 0);
+  // Spending = what you actually paid; the cost field is "Used" in the form.
+  const totalSpent = items.reduce((sum, i) => sum + (i.cost || 0), 0);
+
+  // Wardrobe value = retail/new price for each item, falling back to cost
+  // when retail wasn't recorded so the number isn't an underestimate.
+  const totalValue = items.reduce(
+    (sum, i) => sum + (i.retailCost || i.cost || 0),
+    0,
+  );
+
+  // Total savings: only count items where BOTH numbers are present and
+  // retail > paid. Otherwise the number is meaningless.
+  const totalSavings = items.reduce((sum, i) => {
+    if (i.cost && i.retailCost && i.retailCost > i.cost) {
+      return sum + (i.retailCost - i.cost);
+    }
+    return sum;
+  }, 0);
+  const savingsPercent =
+    totalValue > 0 ? Math.round((totalSavings / totalValue) * 100) : 0;
+
   const itemsWithCost = items.filter(i => i.cost && i.cost > 0);
-  const avgItemCost = itemsWithCost.length > 0
-    ? itemsWithCost.reduce((s, i) => s + (i.cost || 0), 0) / itemsWithCost.length
-    : 0;
+  const avgItemCost =
+    itemsWithCost.length > 0
+      ? itemsWithCost.reduce((s, i) => s + (i.cost || 0), 0) / itemsWithCost.length
+      : 0;
+
+  // Per-item savings ranked → "you saved the most on these"
+  const topSavers = items
+    .map(i => ({
+      item: i,
+      saved:
+        i.cost && i.retailCost && i.retailCost > i.cost
+          ? i.retailCost - i.cost
+          : 0,
+      percent:
+        i.cost && i.retailCost && i.retailCost > i.cost
+          ? Math.round(((i.retailCost - i.cost) / i.retailCost) * 100)
+          : 0,
+    }))
+    .filter(x => x.saved > 0)
+    .sort((a, b) => b.saved - a.saved)
+    .slice(0, 5);
+
+  // Idle money: high-value items barely worn — biggest opportunity to wear
+  // more (or sell). Uses retailCost when available, else cost.
+  const idleItems = items
+    .map(i => ({
+      item: i,
+      tiedUp: i.retailCost || i.cost || 0,
+      wears: i.wearCount || 0,
+    }))
+    .filter(x => x.tiedUp >= 50 && x.wears <= 1)
+    .sort((a, b) => b.tiedUp - a.tiedUp)
+    .slice(0, 5);
+  const idleTotal = idleItems.reduce((s, x) => s + x.tiedUp, 0);
 
   // Category breakdown
   const categoryBreakdown: Record<ClothingCategory, number> = {
@@ -174,21 +225,43 @@ const WardrobeInsightsScreen: React.FC = () => {
         </View>
       }
     >
-      {/* ── Summary KPIs ── */}
+      {/* ── Money KPIs ── */}
       <View style={s.kpiRow}>
         <Card style={s.kpiCard}>
-          <Text variant="overline" color="muted">Total Items</Text>
-          <Text variant="h2">{items.length}</Text>
+          <Text variant="overline" color="muted">You spent</Text>
+          <Text variant="h2">{formatCurrency(totalSpent)}</Text>
+          <Text variant="caption" color="muted">across {items.length} items</Text>
         </Card>
         <Card style={s.kpiCard}>
-          <Text variant="overline" color="muted">Wardrobe Value</Text>
+          <Text variant="overline" color="muted">Wardrobe value</Text>
           <Text variant="h2">{formatCurrency(totalValue)}</Text>
+          <Text variant="caption" color="muted">at retail / new</Text>
         </Card>
       </View>
 
+      {/* ── Savings hero card ── */}
+      {totalSavings > 0 && (
+        <Card style={[s.savingsHero, { backgroundColor: '#ECFDF5', borderColor: '#86EFAC' }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={s.savingsIcon}>
+              <Icon name="trending-down" size={20} color="#065F46" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text variant="overline" style={{ color: '#065F46' }}>Total saved</Text>
+              <Text variant="h2" style={{ color: '#065F46' }}>
+                {formatCurrency(totalSavings)}
+              </Text>
+              <Text variant="caption" style={{ color: '#065F46' }}>
+                {savingsPercent}% off retail across the wardrobe
+              </Text>
+            </View>
+          </View>
+        </Card>
+      )}
+
       <View style={s.kpiRow}>
         <Card style={s.kpiCard}>
-          <Text variant="overline" color="muted">Avg Item Cost</Text>
+          <Text variant="overline" color="muted">Avg item cost</Text>
           <Text variant="h2">{formatCurrency(avgItemCost)}</Text>
         </Card>
         <Card style={s.kpiCard}>
@@ -223,6 +296,89 @@ const WardrobeInsightsScreen: React.FC = () => {
           </View>
         ))}
       </Card>
+
+      {/* ── Top Savings ── biggest wins on the retail vs paid spread */}
+      {topSavers.length > 0 && (
+        <>
+          <Text variant="h3" style={s.sectionTitle}>Top Savings</Text>
+          <Card style={{ marginBottom: 20 }}>
+            {topSavers.map(({ item, saved, percent }, idx) => (
+              <Pressable
+                key={item.id}
+                style={[
+                  s.itemRow,
+                  idx < topSavers.length - 1 && {
+                    borderBottomWidth: 1,
+                    borderBottomColor: theme.colors.border,
+                  },
+                ]}
+                onPress={() => navigation.navigate('ItemDetails', { item })}
+              >
+                <Image
+                  source={{ uri: item.userImage || item.retailerImage }}
+                  style={s.thumb}
+                />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text variant="label" numberOfLines={1}>{item.name}</Text>
+                  <Text variant="caption" color="muted">
+                    Paid {formatCurrency(item.cost!)} · retail {formatCurrency(item.retailCost!)}
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text variant="label" style={{ color: '#059669' }}>
+                    -{formatCurrency(saved)}
+                  </Text>
+                  <Text variant="caption" color="muted">{percent}% off</Text>
+                </View>
+              </Pressable>
+            ))}
+          </Card>
+        </>
+      )}
+
+      {/* ── Idle Money ── valuable items barely worn */}
+      {idleItems.length > 0 && (
+        <>
+          <Text variant="h3" style={s.sectionTitle}>
+            Idle Money · {formatCurrency(idleTotal)}
+          </Text>
+          <Text variant="caption" color="muted" style={{ marginBottom: 8, paddingHorizontal: 4 }}>
+            Higher-value items barely worn. Try to wear, restyle, or sell.
+          </Text>
+          <Card style={{ marginBottom: 20 }}>
+            {idleItems.map(({ item, tiedUp, wears }, idx) => (
+              <Pressable
+                key={item.id}
+                style={[
+                  s.itemRow,
+                  idx < idleItems.length - 1 && {
+                    borderBottomWidth: 1,
+                    borderBottomColor: theme.colors.border,
+                  },
+                ]}
+                onPress={() => navigation.navigate('ItemDetails', { item })}
+              >
+                <Image
+                  source={{ uri: item.userImage || item.retailerImage }}
+                  style={s.thumb}
+                />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text variant="label" numberOfLines={1}>{item.name}</Text>
+                  <Text variant="caption" color="muted">
+                    {wears === 0 ? 'Never worn' : `${wears} wear`}
+                    {wears !== 1 && wears !== 0 ? 's' : ''}
+                    {item.brand ? ` · ${item.brand}` : ''}
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text variant="label">{formatCurrency(tiedUp)}</Text>
+                  <Text variant="caption" color="muted">tied up</Text>
+                </View>
+              </Pressable>
+            ))}
+          </Card>
+        </>
+      )}
 
       {/* ── Cost Per Wear ── */}
       {cpwItems.length > 0 && (
@@ -386,6 +542,18 @@ const s = StyleSheet.create({
   kpiCard: {
     flex: 1,
     alignItems: 'center',
+  },
+  savingsHero: {
+    marginBottom: 12,
+    borderWidth: 1,
+  },
+  savingsIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#86EFAC',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sectionTitle: {
     marginBottom: 12,

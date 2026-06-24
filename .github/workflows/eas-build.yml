@@ -1,0 +1,60 @@
+name: EAS Build
+
+# Cloud builds via Expo Application Services. EAS handles signing, simulator
+# vs device, and submission to TestFlight/Play Console.
+#
+# Setup:
+#   1. Repo Settings → Secrets → add EXPO_TOKEN (https://expo.dev/settings/access-tokens)
+#   2. `eas init` locally once to register the project ID into app.json
+#   3. `eas credentials` to seed Apple/Google signing keys
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'EAS build profile'
+        required: true
+        default: 'preview'
+        type: choice
+        options: [development, preview, production]
+      platform:
+        description: 'Target platform'
+        required: true
+        default: 'all'
+        type: choice
+        options: [ios, android, all]
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+
+concurrency:
+  group: eas-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build
+        env:
+          PROFILE: ${{ inputs.profile || 'preview' }}
+          PLATFORM: ${{ inputs.platform || 'all' }}
+        run: eas build --non-interactive --no-wait --profile $PROFILE --platform $PLATFORM

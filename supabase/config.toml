@@ -1,0 +1,6 @@
+# Supabase local config — committed to source so the team has a single source of truth.
+# Generate the rest with `supabase init` and merge.
+project_id = "smartcloset"
+
+[functions.ai-proxy]
+verify_jwt = true

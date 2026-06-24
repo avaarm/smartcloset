@@ -1,0 +1,2 @@
+# Migrations live here. Pull the current remote schema into a baseline:
+#   supabase db dump --schema public > supabase/migrations/00000000000000_baseline.sql

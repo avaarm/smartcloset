@@ -12,9 +12,8 @@
 import { env, hasGoogleVision } from '../config/env';
 import { readImageAsBase64 } from '../platform/fileSystem';
 import { classifySkinRgb } from './styleRulesEngine';
+import { callAiProxy } from './aiProxy';
 import type { SkinTone, Undertone } from './profileService';
-
-const VISION_ENDPOINT = 'https://vision.googleapis.com/v1/images:annotate';
 
 export type SkinAnalysisResult = {
   skinTone: SkinTone;
@@ -37,32 +36,23 @@ export const analyzeSkinFromPhoto = async (
   try {
     const base64 = await readImageAsBase64(imageUri);
 
-    const response = await fetch(
-      `${VISION_ENDPOINT}?key=${env.GOOGLE_VISION_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          requests: [
-            {
-              image: { content: base64 },
-              features: [
-                { type: 'FACE_DETECTION', maxResults: 1 },
-                { type: 'IMAGE_PROPERTIES' },
-              ],
-            },
-          ],
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      const err = await response.text();
-      console.warn('[bodyAnalysis] Vision API error:', response.status, err);
+    let data: any;
+    try {
+      data = await callAiProxy<any>('vision', {
+        requests: [
+          {
+            image: { content: base64 },
+            features: [
+              { type: 'FACE_DETECTION', maxResults: 1 },
+              { type: 'IMAGE_PROPERTIES' },
+            ],
+          },
+        ],
+      });
+    } catch (err: any) {
+      console.warn('[bodyAnalysis] Vision proxy error:', err?.message);
       return null;
     }
-
-    const data = await response.json();
     const first = data.responses?.[0];
     if (!first) return null;
 

@@ -1,10 +1,7 @@
 import { ClothingItem } from '../types';
 import { env } from '../config/env';
 import { readImageAsBase64 } from '../platform/fileSystem';
-
-// Configuration
-const GOOGLE_VISION_API_URL = 'https://vision.googleapis.com/v1/images:annotate';
-const PRODUCT_SEARCH_API_URL = 'https://vision.googleapis.com/v1/images:annotate';
+import { callAiProxy } from './aiProxy';
 
 // Types for Google Vision API responses
 export interface GoogleVisionAnalysis {
@@ -74,76 +71,40 @@ class GoogleVisionService {
   }
 
   /**
-   * Test API connection
+   * Test proxy + Vision connectivity end-to-end.
    */
   async testConnection(): Promise<{ success: boolean; message: string }> {
-    if (!this.apiKey) {
-      return { success: false, message: 'Google Vision API key not configured' };
-    }
-
     try {
-      // Test with a simple label detection on a small test image
       const testImageBase64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k=';
-      
-      const response = await fetch(`${GOOGLE_VISION_API_URL}?key=${this.apiKey}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          requests: [{
-            image: { content: testImageBase64 },
-            features: [{ type: 'LABEL_DETECTION', maxResults: 1 }]
-          }]
-        })
+      await callAiProxy<any>('vision', {
+        requests: [{
+          image: { content: testImageBase64 },
+          features: [{ type: 'LABEL_DETECTION', maxResults: 1 }],
+        }],
       });
-
-      if (response.ok) {
-        return { success: true, message: 'Google Vision API connected successfully' };
-      } else {
-        const error = await response.text();
-        return { success: false, message: `API Error: ${error}` };
-      }
-    } catch (error) {
-      return { success: false, message: `Connection failed: ${error}` };
+      return { success: true, message: 'Vision API reachable via proxy' };
+    } catch (error: any) {
+      return { success: false, message: `Connection failed: ${error?.message ?? error}` };
     }
   }
 
   /**
-   * Analyze clothing image with Google Vision API
+   * Analyze clothing image via the proxy.
    */
   async analyzeClothingImage(imageUri: string): Promise<GoogleVisionAnalysis> {
-    if (!this.apiKey) {
-      throw new Error('Google Vision API key not configured');
-    }
-
     try {
-      // Convert image to base64 if it's a local file
       const imageBase64 = await this.imageToBase64(imageUri);
-      
-      const response = await fetch(`${GOOGLE_VISION_API_URL}?key=${this.apiKey}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          requests: [{
-            image: { content: imageBase64 },
-            features: [
-              { type: 'LABEL_DETECTION', maxResults: 20 },
-              { type: 'OBJECT_LOCALIZATION', maxResults: 10 },
-              { type: 'TEXT_DETECTION' },
-              { type: 'IMAGE_PROPERTIES' },
-            ]
-          }]
-        })
+      const data = await callAiProxy<any>('vision', {
+        requests: [{
+          image: { content: imageBase64 },
+          features: [
+            { type: 'LABEL_DETECTION', maxResults: 20 },
+            { type: 'OBJECT_LOCALIZATION', maxResults: 10 },
+            { type: 'TEXT_DETECTION' },
+            { type: 'IMAGE_PROPERTIES' },
+          ],
+        }],
       });
-
-      if (!response.ok) {
-        throw new Error(`Google Vision API error: ${response.statusText}`);
-      }
-
-      const data = await response.json();
       const analysis = this.parseVisionResponse(data.responses[0]);
       
       // Get similar products
@@ -167,12 +128,9 @@ class GoogleVisionService {
     }
 
     try {
-      const response = await fetch(`${PRODUCT_SEARCH_API_URL}?key=${this.apiKey}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      let data: any;
+      try {
+        data = await callAiProxy<any>('vision', {
           requests: [{
             image: { content: imageBase64 },
             features: [{
@@ -181,19 +139,15 @@ class GoogleVisionService {
               productSearchParams: {
                 productSet: `projects/${this.projectId}/locations/${this.location}/productSets/${this.productSetId}`,
                 productCategories: ['apparel-v2'],
-                filter: 'style=fashion'
-              }
-            }]
-          }]
-        })
-      });
-
-      if (!response.ok) {
-        console.warn('Product Search API error:', response.statusText);
+                filter: 'style=fashion',
+              },
+            }],
+          }],
+        });
+      } catch (err: any) {
+        console.warn('Product Search proxy error:', err?.message);
         return [];
       }
-
-      const data = await response.json();
       return this.parseProductSearchResults(data.responses[0]);
     } catch (error) {
       console.warn('Product Search error:', error);

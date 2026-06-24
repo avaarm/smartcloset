@@ -2,6 +2,7 @@
   "extends": "@react-native/typescript-config/tsconfig.json",
   "exclude": [
     "**/*.old.ts",
-    "**/*.old.tsx"
+    "**/*.old.tsx",
+    "supabase/functions/**"
   ]
 }

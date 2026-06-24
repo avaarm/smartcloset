@@ -1,31 +1,38 @@
 /**
- * MatchPickerSheet — "Which one is this?" sheet shown after AI analysis.
+ * MatchPickerSheet — "Which one is this?" section shown after AI analysis.
  *
- * Renders a vertical list of candidate products:
- *   1. Knowledge-base matches (crowd-sourced, high confidence)  — shown first
- *   2. Lens shopping results (Vision web detection)              — shown next
+ * Three ordered result tiers:
+ *   1. Knowledge-base matches (crowd-sourced, high confidence)
+ *   2. Vision lens shopping results (web detection, filtered + ranked)
+ *   3. User-driven extra searches (text, URL paste, curated catalog browse)
  *
- * Tapping a candidate calls onPick with the full product details, which the
- * parent uses to auto-fill the Add Item form and record a contribution
- * (source = 'kb_match' or 'lens_match').
- *
- * "None of these" dismisses the sheet and lets the user fill manually; that
- * manual save becomes a contribution with source='manual', growing the KB.
+ * Tapping any candidate auto-fills the Add Item form + records a contribution
+ * to the KB (source = 'kb_match' | 'lens_match'). "Enter manually" dismisses
+ * the sheet — and that manual save also becomes a contribution (source =
+ * 'manual'), growing the KB either way.
  */
 
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import type { LensResult } from '../services/lensSearchService';
+import {
+  rankCatalogByAttributes,
+  searchProductsByText,
+  type LensResult,
+} from '../services/lensSearchService';
+import { fetchProductMetadata } from '../services/productUrlService';
 import type { KBMatch } from '../services/productContributions';
+import type { RecognitionResult } from '../services/imageRecognition';
 import theme from '../styles/theme';
 
 export type PickedMatch = {
@@ -35,7 +42,10 @@ export type PickedMatch = {
   retailer?: string;
   color?: string;
   material?: string;
+  /** What contributors paid on average (for KB matches) or the listed price (for lens matches). */
   cost?: number;
+  /** Retail / MSRP — only set for KB matches with that signal aggregated. */
+  retailCost?: number;
   sourceUrl?: string;
   imageUrl?: string;
   /** Where did this candidate come from. */
@@ -46,26 +56,100 @@ type Props = {
   loading: boolean;
   kbMatches: KBMatch[];
   lensResults: LensResult[];
+  /** Detection attributes used to re-rank any user-driven searches. */
+  detection?: RecognitionResult | null;
   onPick: (match: PickedMatch) => void;
   onSkip: () => void;
 };
+
+type ExtraSource = 'text' | 'url' | 'catalog';
 
 const MatchPickerSheet: React.FC<Props> = ({
   loading,
   kbMatches,
   lensResults,
+  detection,
   onPick,
   onSkip,
 }) => {
-  const hasResults = kbMatches.length > 0 || lensResults.length > 0;
+  // Additional results from user-driven searches (text / URL / catalog browse)
+  const [extraResults, setExtraResults] = useState<LensResult[]>([]);
+  const [extraLoading, setExtraLoading] = useState(false);
+  const [activeInput, setActiveInput] = useState<ExtraSource | null>(null);
+  const [textQuery, setTextQuery] = useState('');
+  const [urlQuery, setUrlQuery] = useState('');
+
+  const hasResults =
+    kbMatches.length > 0 || lensResults.length > 0 || extraResults.length > 0;
+
+  // ── Extra search handlers ──
+
+  const runTextSearch = useCallback(async () => {
+    const q = textQuery.trim();
+    if (!q) return;
+    setExtraLoading(true);
+    try {
+      const resp = await searchProductsByText(q);
+      // Only keep shopping-domain results with a real image URL —
+      // everything else (YouTube, Pinterest, blogs) is dropped upstream
+      // by lensSearchService, but belt-and-braces here too.
+      const shopOnly = resp.results.filter(
+        r => r.isShopping && /^https?:\/\//i.test(r.imageUrl || ''),
+      );
+      setExtraResults(prev => mergeUniqueById(prev, shopOnly));
+    } catch (err: any) {
+      console.warn('[MatchPicker] text search failed:', err?.message);
+    } finally {
+      setExtraLoading(false);
+    }
+  }, [textQuery]);
+
+  const runUrlLookup = useCallback(async () => {
+    const u = urlQuery.trim();
+    if (!u) return;
+    setExtraLoading(true);
+    try {
+      const result = await fetchProductMetadata(u);
+      if (result) {
+        setExtraResults(prev => mergeUniqueById(prev, [result]));
+        setUrlQuery('');
+      } else {
+        Alert.alert('Couldn\'t read that page', 'Try a different product URL.');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to fetch URL');
+    } finally {
+      setExtraLoading(false);
+    }
+  }, [urlQuery]);
+
+  const browseCatalog = useCallback(() => {
+    const attrs = {
+      color: detection?.color,
+      subtype: detection?.subtype,
+      category: detection?.category,
+      material: detection?.material,
+    };
+    const ranked = rankCatalogByAttributes(attrs, 12);
+    setExtraResults(prev => mergeUniqueById(prev, ranked));
+    setActiveInput(null);
+  }, [detection]);
+
+  const toggleInput = useCallback((src: ExtraSource) => {
+    setActiveInput(curr => (curr === src ? null : src));
+  }, []);
 
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Is it one of these?</Text>
+          <Text style={styles.title}>
+            {kbMatches.length > 0 ? '✨ Community match found' : 'Is it one of these?'}
+          </Text>
           <Text style={styles.subtitle}>
-            Pick the closest match to auto-fill, or skip to enter manually.
+            {kbMatches.length > 0
+              ? 'Other users added this item. Tap to auto-fill.'
+              : 'Pick the closest match, or search more to teach the app.'}
           </Text>
         </View>
         <Pressable onPress={onSkip} style={styles.skipButton}>
@@ -82,10 +166,12 @@ const MatchPickerSheet: React.FC<Props> = ({
 
       {!loading && !hasResults && (
         <View style={styles.emptyWrap}>
-          <Icon name="search-outline" size={24} color={theme.colors.mediumGray} />
+          <Icon name="sparkles-outline" size={28} color={theme.colors.accent} />
+          <Text style={styles.emptyTitle}>Be the first to add this!</Text>
           <Text style={styles.emptyText}>
-            No matches found. Add details manually below — your entry will
-            help future uploads.
+            Search more sources below, or fill in the details directly. Your
+            entry will teach the app to recognize this item next time — for you
+            and anyone else who uploads a similar photo.
           </Text>
         </View>
       )}
@@ -97,67 +183,168 @@ const MatchPickerSheet: React.FC<Props> = ({
               <KBCard key={`kb-${idx}`} match={m} onPick={onPick} />
             ))}
             {lensResults.map(r => (
-              <LensCard key={r.id} result={r} onPick={onPick} />
+              <LensCard key={`lens-${r.id}`} result={r} onPick={onPick} badge="Shop" />
+            ))}
+            {extraResults.map(r => (
+              <LensCard key={`extra-${r.id}`} result={r} onPick={onPick} badge="More" />
             ))}
           </View>
         </ScrollView>
+      )}
+
+      {/* ── More search options toolbar ── */}
+      <View style={styles.toolbar}>
+        <Text style={styles.toolbarLabel}>Search more:</Text>
+        <View style={styles.toolbarRow}>
+          <ToolbarButton
+            icon="search"
+            label="Text"
+            active={activeInput === 'text'}
+            onPress={() => toggleInput('text')}
+          />
+          <ToolbarButton
+            icon="link"
+            label="URL"
+            active={activeInput === 'url'}
+            onPress={() => toggleInput('url')}
+          />
+          <ToolbarButton
+            icon="grid-outline"
+            label="Browse"
+            active={false}
+            onPress={browseCatalog}
+          />
+        </View>
+      </View>
+
+      {/* Inline text search */}
+      {activeInput === 'text' && (
+        <View style={styles.inlineInputRow}>
+          <TextInput
+            style={styles.inlineInput}
+            placeholder="e.g. 'burgundy leather clutch'"
+            placeholderTextColor={theme.colors.mediumGray}
+            value={textQuery}
+            onChangeText={setTextQuery}
+            onSubmitEditing={runTextSearch}
+            returnKeyType="search"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <Pressable style={styles.inlineGoButton} onPress={runTextSearch}>
+            <Icon name="arrow-forward" size={16} color="#FFFFFF" />
+          </Pressable>
+        </View>
+      )}
+
+      {/* Inline URL paste */}
+      {activeInput === 'url' && (
+        <View style={styles.inlineInputRow}>
+          <TextInput
+            style={styles.inlineInput}
+            placeholder="https://www.bottegaveneta.com/..."
+            placeholderTextColor={theme.colors.mediumGray}
+            value={urlQuery}
+            onChangeText={setUrlQuery}
+            onSubmitEditing={runUrlLookup}
+            returnKeyType="done"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+          />
+          <Pressable style={styles.inlineGoButton} onPress={runUrlLookup}>
+            <Icon name="arrow-forward" size={16} color="#FFFFFF" />
+          </Pressable>
+        </View>
+      )}
+
+      {extraLoading && (
+        <View style={styles.extraLoadingWrap}>
+          <ActivityIndicator color={theme.colors.accent} size="small" />
+          <Text style={styles.loadingText}>Looking that up…</Text>
+        </View>
       )}
     </View>
   );
 };
 
-// ─── Cards ──────────────────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+const mergeUniqueById = (existing: LensResult[], incoming: LensResult[]): LensResult[] => {
+  const seen = new Set(existing.map(r => r.url));
+  const newOnes = incoming.filter(r => !seen.has(r.url));
+  return [...existing, ...newOnes];
+};
+
+// ─── Subcomponents ──────────────────────────────────────────────────────────
+
+const ToolbarButton: React.FC<{
+  icon: string;
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}> = ({ icon, label, active, onPress }) => (
+  <Pressable
+    onPress={onPress}
+    style={[styles.toolbarButton, active && styles.toolbarButtonActive]}
+  >
+    <Icon name={icon} size={14} color={active ? '#FFFFFF' : theme.colors.accent} />
+    <Text style={[styles.toolbarText, active && styles.toolbarTextActive]}>
+      {label}
+    </Text>
+  </Pressable>
+);
 
 const KBCard: React.FC<{
   match: KBMatch;
   onPick: (p: PickedMatch) => void;
-}> = ({ match, onPick }) => {
-  return (
-    <Pressable
-      style={({ pressed }) => [styles.card, pressed && { opacity: 0.7 }]}
-      onPress={() =>
-        onPick({
-          name: match.name,
-          category: match.category,
-          brand: match.brand,
-          retailer: match.retailer,
-          color: match.color,
-          material: match.material,
-          cost: match.cost,
-          sourceUrl: match.sourceUrl,
-          source: 'kb_match',
-        })
-      }
-    >
-      <View style={[styles.cardImage, styles.cardImageKB]}>
-        <Icon name="people" size={28} color="#FFFFFF" />
-      </View>
-      <View style={styles.cardBody}>
-        <View style={styles.kbBadge}>
-          <Text style={styles.kbBadgeText}>
-            Community · {match.confirmationCount}×
-          </Text>
-        </View>
-        <Text style={styles.cardTitle} numberOfLines={2}>
-          {match.name}
+}> = ({ match, onPick }) => (
+  <Pressable
+    style={({ pressed }) => [styles.card, pressed && { opacity: 0.7 }]}
+    onPress={() =>
+      onPick({
+        name: match.name,
+        category: match.category,
+        brand: match.brand,
+        retailer: match.retailer,
+        color: match.color,
+        material: match.material,
+        cost: match.cost,
+        retailCost: (match as any).retailCost,
+        sourceUrl: match.sourceUrl,
+        source: 'kb_match',
+      })
+    }
+  >
+    <View style={[styles.cardImage, styles.cardImageKB]}>
+      <Icon name="people" size={28} color="#FFFFFF" />
+    </View>
+    <View style={styles.cardBody}>
+      <View style={styles.kbBadge}>
+        <Text style={styles.kbBadgeText}>
+          Community · {match.confirmationCount}×
         </Text>
-        {(match.brand || match.retailer) && (
-          <Text style={styles.cardMeta} numberOfLines={1}>
-            {[match.brand, match.retailer].filter(Boolean).join(' · ')}
-          </Text>
-        )}
-        {match.cost != null && (
-          <Text style={styles.cardPrice}>${match.cost}</Text>
-        )}
       </View>
-    </Pressable>
-  );
-};
+      <Text style={styles.cardTitle} numberOfLines={2}>
+        {match.name}
+      </Text>
+      {(match.brand || match.retailer) && (
+        <Text style={styles.cardMeta} numberOfLines={1}>
+          {[match.brand, match.retailer].filter(Boolean).join(' · ')}
+        </Text>
+      )}
+      {match.cost != null && (
+        <Text style={styles.cardPrice}>${match.cost}</Text>
+      )}
+    </View>
+  </Pressable>
+);
 
 const LensCard: React.FC<{
   result: LensResult;
   onPick: (p: PickedMatch) => void;
-}> = ({ result, onPick }) => {
+  badge: string;
+}> = ({ result, onPick, badge }) => {
   const parsedCost = (() => {
     if (!result.price) return undefined;
     const n = parseFloat(result.price.replace(/[^\d.]/g, ''));
@@ -195,11 +382,9 @@ const LensCard: React.FC<{
         </View>
       )}
       <View style={styles.cardBody}>
-        {result.isShopping && (
-          <View style={styles.shopBadge}>
-            <Text style={styles.shopBadgeText}>Shop</Text>
-          </View>
-        )}
+        <View style={styles.shopBadge}>
+          <Text style={styles.shopBadgeText}>{badge}</Text>
+        </View>
         <Text style={styles.cardTitle} numberOfLines={2}>
           {result.title}
         </Text>
@@ -244,11 +429,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: theme.colors.mediumGray,
   },
+  extraLoadingWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    gap: 8,
+  },
 
   emptyWrap: {
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+  },
+  emptyTitle: {
+    marginTop: 8,
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.text,
   },
   emptyText: {
     marginTop: 6,
@@ -313,6 +511,70 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.colors.text,
     marginTop: 4,
+  },
+
+  toolbar: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  toolbarLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: theme.colors.mediumGray,
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  toolbarRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  toolbarButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    backgroundColor: '#FFFFFF',
+    gap: 5,
+  },
+  toolbarButtonActive: {
+    backgroundColor: theme.colors.accent,
+    borderColor: theme.colors.accent,
+  },
+  toolbarText: {
+    fontSize: 12,
+    color: theme.colors.accent,
+    fontWeight: '500',
+  },
+  toolbarTextActive: { color: '#FFFFFF' },
+
+  inlineInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 6,
+  },
+  inlineInput: {
+    flex: 1,
+    backgroundColor: theme.colors.mutedBackground,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: theme.colors.text,
+  },
+  inlineGoButton: {
+    backgroundColor: theme.colors.accent,
+    borderRadius: 10,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
