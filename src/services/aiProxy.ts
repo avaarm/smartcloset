@@ -6,6 +6,11 @@
  * their Supabase JWT and forwards the request server-side using secrets
  * stored in Supabase Secrets.
  *
+ * Dev fallback: if the proxy returns 503 (secrets not yet configured in
+ * Supabase) AND a key is present in the local .env, the call is made directly
+ * to the provider. This lets the feature work during development without
+ * requiring Supabase secret deployment.
+ *
  * Server: supabase/functions/ai-proxy/index.ts
  */
 
@@ -15,10 +20,25 @@ import { env } from '../config/env';
 export type AIProvider = 'vision' | 'openai' | 'openai-vision' | 'cse';
 
 const buildProxyUrl = (): string => {
-  // SUPABASE_URL is https://<project>.supabase.co — functions live at
-  // <project>.supabase.co/functions/v1/<name>
   const base = env.SUPABASE_URL.replace(/\/$/, '');
   return `${base}/functions/v1/ai-proxy`;
+};
+
+// Direct Google Vision call used as dev fallback when proxy secrets aren't set.
+const callGoogleVisionDirect = async (payload: unknown): Promise<unknown> => {
+  const resp = await fetch(
+    `https://vision.googleapis.com/v1/images:annotate?key=${env.GOOGLE_VISION_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  );
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`vision-direct ${resp.status}: ${text.substring(0, 200)}`);
+  }
+  return resp.json();
 };
 
 /**
@@ -44,6 +64,12 @@ export const callAiProxy = async <T = unknown>(
   });
 
   if (!resp.ok) {
+    // Dev fallback: proxy unavailable (not deployed = 404, secrets missing = 503)
+    // but we have a client-side key in .env — call the provider directly.
+    if ((resp.status === 503 || resp.status === 404) && provider === 'vision' && env.GOOGLE_VISION_API_KEY) {
+      console.log('[ai-proxy] vision proxy', resp.status, '— falling back to direct Vision API call');
+      return callGoogleVisionDirect(payload) as Promise<T>;
+    }
     const text = await resp.text();
     throw new Error(`ai-proxy ${provider} ${resp.status}: ${text.substring(0, 300)}`);
   }
