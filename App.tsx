@@ -423,14 +423,20 @@ const App = (): React.JSX.Element => {
     if (!showSplash) {
       configureGoogleSignIn();
 
-      // Check for existing session
+      // Check for existing session. Cap at 5 s so a paused/unreachable
+      // Supabase project doesn't leave the app stuck on the spinner.
+      const authTimeout = setTimeout(() => setIsAuthLoading(false), 5000);
       supabase.auth.getSession().then(({ data: { session: s } }) => {
+        clearTimeout(authTimeout);
         setSession(s);
         setIsAuthLoading(false);
         // Set crash reporting user context
         if (s?.user) {
           setCrashUser({ id: s.user.id, email: s.user.email });
         }
+      }).catch(() => {
+        clearTimeout(authTimeout);
+        setIsAuthLoading(false);
       });
 
       // Listen for auth state changes
