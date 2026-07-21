@@ -36,6 +36,10 @@ import { getSavedOutfits } from '../services/outfitService';
 import { supabase } from '../config/supabase';
 import { signOut } from '../services/authService';
 import { getBodyProfile } from '../services/profileService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getCurrentWeather, getCurrentLocation } from '../services/weatherService';
+import { WeatherData } from '../types/weather';
+import { STYLE_PREFS_KEY, StylePreference } from './StyleQuizScreen';
 
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -47,6 +51,9 @@ const HomeScreen: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [hasProfile, setHasProfile] = useState(true); // optimistic; avoid flash
   const [stats, setStats] = useState({ totalItems: 0, outfits: 0, wishlist: 0 });
+  const [wardrobeValue, setWardrobeValue] = useState<number>(0);
+  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [stylePrefs, setStylePrefs] = useState<StylePreference[]>([]);
 
   const loadData = useCallback(async () => {
     try {
@@ -61,15 +68,20 @@ const HomeScreen: React.FC = () => {
         setUserName(null);
       }
 
-      const [wardrobe, outfits, profile] = await Promise.all([
+      const [wardrobe, outfits, profile, rawStylePrefs] = await Promise.all([
         getClothingItems(),
         getSavedOutfits(),
         getBodyProfile().catch(() => null),
+        AsyncStorage.getItem(STYLE_PREFS_KEY),
       ]);
 
       const wishlist = wardrobe.filter(item => item.isWishlist);
-      setStats({ totalItems: wardrobe.length, outfits: outfits.length, wishlist: wishlist.length });
+      const owned = wardrobe.filter(item => !item.isWishlist);
+      const totalValue = owned.reduce((sum, item) => sum + (item.cost || 0), 0);
+      setStats({ totalItems: owned.length, outfits: outfits.length, wishlist: wishlist.length });
+      setWardrobeValue(totalValue);
       setHasProfile(!!profile);
+      if (rawStylePrefs) setStylePrefs(JSON.parse(rawStylePrefs));
 
       const sorted = [...wardrobe].sort((a, b) => {
         const dateA = a.dateAdded ? new Date(a.dateAdded).getTime() : 0;
@@ -77,6 +89,12 @@ const HomeScreen: React.FC = () => {
         return dateB - dateA;
       });
       setRecentItems(sorted.slice(0, 10));
+
+      // Load weather in the background (non-blocking)
+      getCurrentLocation()
+        .then(loc => getCurrentWeather(loc.latitude, loc.longitude))
+        .then(setWeather)
+        .catch(() => {});
     } catch (error) {
       console.error('[HomeScreen] load error:', error);
     } finally {
@@ -245,6 +263,102 @@ const HomeScreen: React.FC = () => {
         </Card>
       </View>
 
+      {/* WardrobeWorth stat */}
+      {wardrobeValue > 0 && (
+        <Pressable
+          onPress={() => navigation.navigate('WardrobeInsights')}
+          style={{ paddingHorizontal: 20, marginBottom: 16 }}
+          accessibilityRole="button"
+          accessibilityLabel={`WardrobeWorth: $${wardrobeValue.toFixed(0)}, view insights`}
+        >
+          <Card
+            style={[styles.worthCard, { backgroundColor: theme.colors.accent }]}
+            padding={0}
+          >
+            <View style={styles.worthInner}>
+              <View>
+                <Text variant="overline" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                  ★ WardrobeWorth
+                </Text>
+                <Text variant="h1" style={{ color: '#fff', marginTop: 2 }}>
+                  ${wardrobeValue >= 1000
+                    ? `${(wardrobeValue / 1000).toFixed(1)}k`
+                    : wardrobeValue.toFixed(0)}
+                </Text>
+                <Text variant="caption" style={{ color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>
+                  Across {stats.totalItems} item{stats.totalItems !== 1 ? 's' : ''}
+                </Text>
+              </View>
+              <Icon name="chevron-forward" size={20} color="rgba(255,255,255,0.6)" />
+            </View>
+          </Card>
+        </Pressable>
+      )}
+
+      {/* Weather outfit card */}
+      {weather && (
+        <Pressable
+          onPress={() => navigation.navigate('Outfits')}
+          style={{ paddingHorizontal: 20, marginBottom: 16 }}
+          accessibilityRole="button"
+          accessibilityLabel={`Weather: ${weather.temperature}°, ${weather.condition}. Tap for outfit ideas.`}
+        >
+          <Card style={styles.weatherCard} padding={0}>
+            <View style={styles.weatherInner}>
+              <Icon
+                name={
+                  weather.condition === 'sunny' ? 'sunny-outline'
+                  : weather.condition === 'rainy' || weather.condition === 'stormy' ? 'rainy-outline'
+                  : weather.condition === 'snowy' ? 'snow-outline'
+                  : weather.condition === 'foggy' ? 'partly-sunny-outline'
+                  : 'cloudy-outline'
+                }
+                size={28}
+                color={theme.colors.accent}
+              />
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <Text variant="h4">
+                  {Math.round(weather.temperature)}° · {weather.location}
+                </Text>
+                <Text variant="caption" color="muted" style={{ marginTop: 2 }}>
+                  {weather.condition === 'sunny' ? 'Light layers — a tee + light jacket works great'
+                  : weather.condition === 'rainy' || weather.condition === 'stormy' ? 'Grab a waterproof outer layer today'
+                  : weather.condition === 'snowy' ? 'Bundle up — coats, boots, and warm layers'
+                  : weather.condition === 'cloudy' ? 'A mid-layer is a safe bet'
+                  : 'Dress for comfort — see your outfit suggestions'}
+                </Text>
+              </View>
+              <Icon name="chevron-forward" size={18} color={theme.colors.textSubtle} />
+            </View>
+          </Card>
+        </Pressable>
+      )}
+
+      {/* Style quiz CTA — only if no style prefs set */}
+      {stylePrefs.length === 0 && stats.totalItems > 0 && (
+        <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
+          <Card bordered>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={[styles.actionIcon, { backgroundColor: theme.colors.accentSubtle, borderRadius: theme.radius.full }]}>
+                <Icon name="color-palette-outline" size={22} color={theme.colors.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text variant="h4">Discover your style DNA</Text>
+                <Text variant="caption" color="muted" style={{ marginTop: 2 }}>
+                  Take the 30-second style quiz for better outfit picks
+                </Text>
+              </View>
+              <Button
+                label="Start"
+                variant="secondary"
+                size="sm"
+                onPress={() => navigation.navigate('StyleQuiz')}
+              />
+            </View>
+          </Card>
+        </View>
+      )}
+
       {/* Quick actions */}
       <Text variant="overline" color="muted" style={styles.sectionLabel}>
         Quick actions
@@ -409,6 +523,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 12,
     marginTop: 4,
+  },
+  worthCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  worthInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+  },
+  weatherCard: {
+    borderRadius: 16,
+  },
+  weatherInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
   },
   recentItem: {
     width: 120,

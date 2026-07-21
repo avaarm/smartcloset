@@ -2,9 +2,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, Share, Alert } from 'react-native';
 import RNFS from 'react-native-fs';
 import { ClothingItem, Outfit } from '../types';
+import { supabase } from '../config/supabase';
+import { getClothingItems } from './storage';
 
 const STORAGE_KEY = '@smartcloset_items';
-const OUTFITS_KEY = '@smartcloset_outfits';
+const OUTFITS_KEY = '@smartcloset_saved_outfits';
 const BACKUP_VERSION = '1.0';
 
 export interface BackupData {
@@ -132,18 +134,27 @@ export const getBackupStats = async (): Promise<{
   storageSize: number;
 }> => {
   try {
-    const itemsData = await AsyncStorage.getItem(STORAGE_KEY);
+    const { data: { session } } = await supabase.auth.getSession();
     const outfitsData = await AsyncStorage.getItem(OUTFITS_KEY);
     const lastBackupDate = await AsyncStorage.getItem('@smartcloset_last_backup');
-
-    const items: ClothingItem[] = itemsData ? JSON.parse(itemsData) : [];
     const outfits: Outfit[] = outfitsData ? JSON.parse(outfitsData) : [];
 
-    // Calculate approximate storage size
-    const storageSize = (itemsData?.length || 0) + (outfitsData?.length || 0);
+    let itemsCount: number;
+    let storageSize: number;
+
+    if (session?.user?.id) {
+      const items = await getClothingItems({ all: true });
+      itemsCount = items.length;
+      storageSize = 0;
+    } else {
+      const itemsData = await AsyncStorage.getItem(STORAGE_KEY);
+      const items: ClothingItem[] = itemsData ? JSON.parse(itemsData) : [];
+      itemsCount = items.length;
+      storageSize = (itemsData?.length || 0) + (outfitsData?.length || 0);
+    }
 
     return {
-      itemsCount: items.length,
+      itemsCount,
       outfitsCount: outfits.length,
       lastBackup: lastBackupDate || undefined,
       storageSize,

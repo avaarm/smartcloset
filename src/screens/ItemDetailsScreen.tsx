@@ -122,12 +122,14 @@ const ItemDetailsScreen: React.FC = () => {
 
   const getLastWornText = () => {
     if (!lastWorn) return 'Never';
-    const lastWornDate = new Date(lastWorn);
+    const d = new Date(lastWorn);
     const now = new Date();
-    const diffTime = Math.abs(now.getTime() - lastWornDate.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) return 'Today';
+    // Compare calendar dates in local time (not raw UTC ms) to avoid timezone-induced off-by-one
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const wornDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const diffDays = Math.round((today.getTime() - wornDay.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 0) return 'Today';
     if (diffDays === 1) return 'Yesterday';
     if (diffDays < 7) return `${diffDays} days ago`;
     if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
@@ -317,6 +319,51 @@ const ItemDetailsScreen: React.FC = () => {
                   )}
                 </View>
               </View>
+            </View>
+          )}
+
+          {/* Resale estimate */}
+          {item.cost && item.cost > 0 && (
+            <View style={styles.detailsSection}>
+              <Text style={styles.sectionTitle}>Resale Estimate</Text>
+              <View style={styles.priceRow}>
+                {(() => {
+                  const base = item.cost;
+                  const wears = wearCount;
+                  // Premium brands retain value better
+                  const premiumBrands = ['gucci', 'lv', 'louis vuitton', 'prada', 'chanel', 'hermes', 'nike', "levi's", 'levis', 'adidas', 'new balance', 'dr. martens', 'patagonia', 'north face'];
+                  const isPremium = premiumBrands.some(b => (item.brand || '').toLowerCase().includes(b));
+                  // Base resale rate: 40% for normal, 55% for premium
+                  let rate = isPremium ? 0.55 : 0.40;
+                  // Adjust for wear count
+                  if (wears > 30) rate *= 0.7;
+                  else if (wears > 15) rate *= 0.85;
+                  else if (wears <= 3) rate *= 1.1; // barely worn premium
+                  const resaleEst = Math.round(base * rate);
+                  const netCpw = wears > 0 ? ((base - resaleEst) / wears).toFixed(2) : null;
+                  return (
+                    <>
+                      <View style={styles.priceCol}>
+                        <Text style={styles.priceLabel}>Paid</Text>
+                        <Text style={styles.priceValue}>${base.toFixed(0)}</Text>
+                      </View>
+                      <View style={styles.priceCol}>
+                        <Text style={styles.priceLabel}>Est. Resale</Text>
+                        <Text style={[styles.priceValue, { color: '#059669' }]}>${resaleEst}</Text>
+                      </View>
+                      <View style={styles.priceCol}>
+                        <Text style={styles.priceLabel}>Net CPW</Text>
+                        <Text style={styles.priceValue}>
+                          {netCpw ? `$${netCpw}` : '—'}
+                        </Text>
+                      </View>
+                    </>
+                  );
+                })()}
+              </View>
+              <Text style={{ fontSize: 11, color: theme.colors.textSubtle, marginTop: 8 }}>
+                Estimated resale based on brand, category, and wear count. Actual prices vary.
+              </Text>
             </View>
           )}
 
