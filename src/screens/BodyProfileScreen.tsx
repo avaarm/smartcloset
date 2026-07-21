@@ -201,6 +201,43 @@ const BodyProfileScreen: React.FC = () => {
           </>
         )}
 
+        {/* Additional analysis tools */}
+        <Text variant="overline" color="muted" style={styles.sectionLabel}>
+          More tools
+        </Text>
+        <Card padding={0}>
+          <Pressable
+            onPress={() => navigation.navigate('StyleQuiz')}
+            accessibilityRole="button"
+            accessibilityLabel="Take the style quiz"
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          >
+            <View style={[styles.toolRow, { borderBottomColor: theme.colors.border }]}>
+              <Icon name="color-wand-outline" size={20} color={theme.colors.accent} />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text variant="label">Style DNA Quiz</Text>
+                <Text variant="caption" color="muted">Find your aesthetic in 30 seconds</Text>
+              </View>
+              <Icon name="chevron-forward" size={18} color={theme.colors.textSubtle} />
+            </View>
+          </Pressable>
+          <Pressable
+            onPress={() => navigation.navigate('ColorSeason')}
+            accessibilityRole="button"
+            accessibilityLabel="Discover your color season"
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          >
+            <View style={[styles.toolRow, { borderBottomWidth: 0 }]}>
+              <Icon name="sunny-outline" size={20} color={theme.colors.accent} />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text variant="label">Color Season Analysis</Text>
+                <Text variant="caption" color="muted">Discover your 12-season palette</Text>
+              </View>
+              <Icon name="chevron-forward" size={18} color={theme.colors.textSubtle} />
+            </View>
+          </Pressable>
+        </Card>
+
         {/* Destructive */}
         <Button
           label="Clear profile"
@@ -265,6 +302,12 @@ const styles = StyleSheet.create({
   sizeCell: {
     flex: 1,
     alignItems: 'center',
+  },
+  toolRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
   },
 });
 

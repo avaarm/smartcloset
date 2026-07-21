@@ -40,7 +40,12 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
       const result = await signInWithGoogle();
       if (result.session) onSignInComplete?.(result.session);
     } catch (error: any) {
-      Alert.alert('Sign-In Error', error.message || 'Failed to sign in with Google');
+      const msg: string = error?.message || '';
+      const friendlyMessage =
+        msg.includes('AuthenticationServices') || msg.includes('error 1000')
+          ? 'Google Sign-In is not supported on this device. Please use Email or Sign in with Apple instead.'
+          : msg || 'Failed to sign in with Google';
+      Alert.alert('Sign-In Error', friendlyMessage);
     } finally {
       setLoading(false);
     }
@@ -61,6 +66,10 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
   const handleEmailSubmit = async () => {
     if (!email || !password) {
       Alert.alert('Missing Fields', 'Please enter your email and password.');
+      return;
+    }
+    if (isRegistering && !name.trim()) {
+      Alert.alert('Missing Fields', 'Please enter your name.');
       return;
     }
     setLoading(true);

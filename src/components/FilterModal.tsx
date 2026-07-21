@@ -131,7 +131,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 8 }}>
             {/* Sort Section */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Sort By</Text>
@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '85%',
-    minHeight: '55%',
+    minHeight: '70%',
     ...theme.shadows.card,
   },
   handle: {

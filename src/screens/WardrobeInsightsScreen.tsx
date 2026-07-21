@@ -200,6 +200,7 @@ const WardrobeInsightsScreen: React.FC = () => {
     colorCounts[c] = (colorCounts[c] || 0) + 1;
   });
   const topColors = Object.entries(colorCounts)
+    .filter(([color]) => color !== 'unknown')
     .sort(([, a], [, b]) => b - a)
     .slice(0, 8);
 
@@ -315,7 +316,7 @@ const WardrobeInsightsScreen: React.FC = () => {
                 onPress={() => navigation.navigate('ItemDetails', { item })}
               >
                 <Image
-                  source={{ uri: item.userImage || item.retailerImage }}
+                  source={{ uri: item.userImage || item.retailerImage || undefined }}
                   style={s.thumb}
                 />
                 <View style={{ flex: 1, marginLeft: 12 }}>
@@ -359,7 +360,7 @@ const WardrobeInsightsScreen: React.FC = () => {
                 onPress={() => navigation.navigate('ItemDetails', { item })}
               >
                 <Image
-                  source={{ uri: item.userImage || item.retailerImage }}
+                  source={{ uri: item.userImage || item.retailerImage || undefined }}
                   style={s.thumb}
                 />
                 <View style={{ flex: 1, marginLeft: 12 }}>
@@ -392,7 +393,7 @@ const WardrobeInsightsScreen: React.FC = () => {
                 onPress={() => navigation.navigate('ItemDetails', { item })}
               >
                 <Image
-                  source={{ uri: item.userImage || item.retailerImage }}
+                  source={{ uri: item.userImage || item.retailerImage || undefined }}
                   style={s.thumb}
                 />
                 <View style={{ flex: 1, marginLeft: 12 }}>
@@ -423,7 +424,7 @@ const WardrobeInsightsScreen: React.FC = () => {
                 onPress={() => navigation.navigate('ItemDetails', { item })}
               >
                 <Image
-                  source={{ uri: item.userImage || item.retailerImage }}
+                  source={{ uri: item.userImage || item.retailerImage || undefined }}
                   style={s.thumb}
                 />
                 <View style={{ flex: 1, marginLeft: 12 }}>
@@ -447,7 +448,7 @@ const WardrobeInsightsScreen: React.FC = () => {
             onPress={() => navigation.navigate('ItemDetails', { item })}
           >
             <Image
-              source={{ uri: item.userImage || item.retailerImage }}
+              source={{ uri: item.userImage || item.retailerImage || undefined }}
               style={s.thumb}
             />
             <View style={{ flex: 1, marginLeft: 12 }}>
@@ -520,6 +521,9 @@ const getColorHex = (name: string): string => {
     burgundy: '#800020', khaki: '#BDB76B', ivory: '#FFFFF0', charcoal: '#36454F',
     camel: '#C19A6B', sage: '#87AE73', mint: '#AAF0D1', lavender: '#B39DDB',
     mauve: '#E0B0FF', multicolor: '#888888', unknown: '#CCCCCC',
+    'dark gray': '#616161', 'light gray': '#BDBDBD', 'dark red': '#B71C1C',
+    'dark green': '#1B5E20', 'dark blue': '#0D47A1', 'lime': '#C6FF00',
+    'cyan': '#00BCD4', 'magenta': '#E91E63',
   };
   return map[name] || '#CCCCCC';
 };

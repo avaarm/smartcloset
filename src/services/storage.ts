@@ -61,7 +61,7 @@ const mapClothingItemToDb = (item: Partial<ClothingItem>, userId: string) => ({
   tags: item.tags || [],
   favorite: item.favorite || false,
   retailer: item.retailer,
-  materials: item.materials || null,
+  materials: item.materials,
 });
 
 // ─── Guest-mode AsyncStorage fallback ────────────────────────────────────────
@@ -233,7 +233,7 @@ export const updateClothingItem = async (updatedItem: ClothingItem): Promise<voi
         tags: updatedItem.tags,
         favorite: updatedItem.favorite,
         retailer: updatedItem.retailer,
-        materials: updatedItem.materials || null,
+        materials: updatedItem.materials,
         updated_at: new Date().toISOString(),
       })
       .eq('id', updatedItem.id);

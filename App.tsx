@@ -47,6 +47,8 @@ import CreateRecommendationScreen from './src/screens/CreateRecommendationScreen
 import AppointmentDetailsScreen from './src/screens/AppointmentDetailsScreen';
 import WardrobeInsightsScreen from './src/screens/WardrobeInsightsScreen';
 import OutfitCalendarScreen from './src/screens/OutfitCalendarScreen';
+import StyleQuizScreen from './src/screens/StyleQuizScreen';
+import ColorSeasonScreen from './src/screens/ColorSeasonScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -77,6 +79,16 @@ const WardrobeStack = () => {
       <Stack.Screen
         name="WardrobeInsights"
         component={WardrobeInsightsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="StyleQuiz"
+        component={StyleQuizScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="ColorSeason"
+        component={ColorSeasonScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>
@@ -156,6 +168,16 @@ const HomeStack = () => {
       <Stack.Screen
         name="OutfitCalendar"
         component={OutfitCalendarScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="StyleQuiz"
+        component={StyleQuizScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="ColorSeason"
+        component={ColorSeasonScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>
