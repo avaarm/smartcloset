@@ -303,6 +303,52 @@ const StylistDashboardScreen = ({ navigation }: StylistDashboardScreenProps) => 
           </View>
         )}
 
+        {/* Stylist Tools */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Stylist Tools</Text>
+          {[
+            {
+              icon: 'albums-outline',
+              color: '#8B5CF6',
+              bg: '#EDE9FE',
+              title: 'Lookbook Creator',
+              subtitle: 'Compose & present curated looks',
+              screen: 'Lookbook',
+            },
+            {
+              icon: 'shirt-outline',
+              color: '#0EA5E9',
+              bg: '#E0F2FE',
+              title: 'Capsule Builder',
+              subtitle: 'Build a capsule · see outfit combos',
+              screen: 'CapsuleWardrobe',
+            },
+            {
+              icon: 'checkmark-done-outline',
+              color: '#059669',
+              bg: '#D1FAE5',
+              title: 'Wardrobe Audit',
+              subtitle: 'Keep · Donate · Store — item by item',
+              screen: 'WardrobeEdit',
+            },
+          ].map(tool => (
+            <TouchableOpacity
+              key={tool.screen}
+              style={styles.toolRow}
+              onPress={() => navigation.navigate(tool.screen)}
+            >
+              <View style={[styles.toolIcon, { backgroundColor: tool.bg }]}>
+                <Icon name={tool.icon} size={22} color={tool.color} />
+              </View>
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <Text style={styles.toolTitle}>{tool.title}</Text>
+                <Text style={styles.toolSubtitle}>{tool.subtitle}</Text>
+              </View>
+              <Icon name="chevron-forward" size={18} color="#9CA3AF" />
+            </TouchableOpacity>
+          ))}
+        </View>
+
         {/* Tips Section */}
         <View style={styles.section}>
           <View style={styles.tipCard}>
@@ -567,6 +613,36 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#78350F',
     lineHeight: 18,
+  },
+  toolRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  toolIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toolTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  toolSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
   },
 });
 

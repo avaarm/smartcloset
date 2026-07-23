@@ -49,6 +49,9 @@ import WardrobeInsightsScreen from './src/screens/WardrobeInsightsScreen';
 import OutfitCalendarScreen from './src/screens/OutfitCalendarScreen';
 import StyleQuizScreen from './src/screens/StyleQuizScreen';
 import ColorSeasonScreen from './src/screens/ColorSeasonScreen';
+import WardrobeEditScreen from './src/screens/WardrobeEditScreen';
+import LookbookScreen from './src/screens/LookbookScreen';
+import CapsuleWardrobeScreen from './src/screens/CapsuleWardrobeScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -263,6 +266,21 @@ const StylistDashboardStack = () => {
         component={AppointmentDetailsScreen}
         options={{ headerShown: false }}
       />
+      <Stack.Screen
+        name="WardrobeEdit"
+        component={WardrobeEditScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Lookbook"
+        component={LookbookScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="CapsuleWardrobe"
+        component={CapsuleWardrobeScreen}
+        options={{ headerShown: false }}
+      />
     </Stack.Navigator>
   );
 };
@@ -288,6 +306,21 @@ const ClientsStack = () => {
       <Stack.Screen
         name="AppointmentDetails"
         component={AppointmentDetailsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="WardrobeEdit"
+        component={WardrobeEditScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Lookbook"
+        component={LookbookScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="CapsuleWardrobe"
+        component={CapsuleWardrobeScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

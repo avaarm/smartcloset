@@ -350,6 +350,31 @@ const ClientDetailsScreen = ({ navigation, route }: ClientDetailsScreenProps) =>
           </View>
         )}
 
+        {/* Session tools */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Session Tools</Text>
+          {[
+            { icon: 'checkmark-done-outline', color: '#059669', bg: '#D1FAE5', label: 'Wardrobe Audit', sub: 'Keep · Donate · Store', screen: 'WardrobeEdit' },
+            { icon: 'albums-outline', color: '#8B5CF6', bg: '#EDE9FE', label: 'Lookbook', sub: 'Compose curated looks', screen: 'Lookbook' },
+            { icon: 'shirt-outline', color: '#0EA5E9', bg: '#E0F2FE', label: 'Capsule Builder', sub: 'Build & score a capsule', screen: 'CapsuleWardrobe' },
+          ].map(t => (
+            <TouchableOpacity
+              key={t.screen}
+              style={styles.toolRow}
+              onPress={() => navigation.navigate(t.screen, { clientId: client.id, clientName: client.name })}
+            >
+              <View style={[styles.toolIcon, { backgroundColor: t.bg }]}>
+                <Icon name={t.icon} size={20} color={t.color} />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.toolLabel}>{t.label}</Text>
+                <Text style={styles.toolSub}>{t.sub}</Text>
+              </View>
+              <Icon name="chevron-forward" size={16} color="#9CA3AF" />
+            </TouchableOpacity>
+          ))}
+        </View>
+
         {/* Notes */}
         {client.notes && (
           <View style={styles.section}>
@@ -774,6 +799,36 @@ const styles = StyleSheet.create({
   recStatusText: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  toolRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  toolIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toolLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 1,
+  },
+  toolSub: {
+    fontSize: 12,
+    color: '#6B7280',
   },
 });
 
