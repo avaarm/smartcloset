@@ -11,6 +11,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {
@@ -20,6 +21,14 @@ import {
   signUpWithEmail,
 } from '../services/authService';
 import { Session } from '@supabase/supabase-js';
+
+const GOLD = '#C4975A';
+const GOLD_LIGHT = '#D4A86A';
+const BLACK = '#080604';
+const SURFACE = '#0F0D0A';
+const CREAM = '#F5EDE0';
+const MUTED = 'rgba(245,237,224,0.45)';
+const BORDER = 'rgba(196,151,90,0.25)';
 
 type SignInScreenProps = {
   onSignInComplete?: (session: Session) => void;
@@ -98,63 +107,63 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
   if (showEmailForm) {
     return (
       <View style={styles.root}>
-        <StatusBar barStyle="light-content" />
+        <StatusBar barStyle="light-content" backgroundColor={BLACK} />
         <SafeAreaView style={styles.safeArea}>
           <KeyboardAvoidingView
             style={styles.emailFormContainer}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           >
-            <TouchableOpacity onPress={() => setShowEmailForm(false)} style={styles.backButton}>
-              <Icon name="arrow-back" size={24} color="#FFFFFF" />
+            <TouchableOpacity onPress={() => setShowEmailForm(false)} style={styles.backButton} hitSlop={16}>
+              <Icon name="arrow-back" size={22} color={CREAM} />
             </TouchableOpacity>
 
-            <Text style={styles.brandTitle}>
-              {isRegistering ? 'Create Account' : 'Welcome Back'}
-            </Text>
-            <Text style={styles.subtitle}>
-              {isRegistering
-                ? 'Sign up with your email address'
-                : 'Sign in to your account'}
-            </Text>
+            <View style={styles.emailFormHeader}>
+              <Text style={styles.goldAccentLine}>— Account</Text>
+              <Text style={styles.emailFormTitle}>
+                {isRegistering ? 'Create\nAccount' : 'Welcome\nBack'}
+              </Text>
+            </View>
 
-            {isRegistering && (
+            <View style={styles.formFields}>
+              {isRegistering && (
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Full name"
+                  placeholderTextColor={MUTED}
+                  value={name}
+                  onChangeText={setName}
+                  autoCapitalize="words"
+                />
+              )}
               <TextInput
                 style={styles.textInput}
-                placeholder="Name"
-                placeholderTextColor="rgba(255,255,255,0.4)"
-                value={name}
-                onChangeText={setName}
-                autoCapitalize="words"
+                placeholder="Email address"
+                placeholderTextColor={MUTED}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
               />
-            )}
-            <TextInput
-              style={styles.textInput}
-              placeholder="Email"
-              placeholderTextColor="rgba(255,255,255,0.4)"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-            <TextInput
-              style={styles.textInput}
-              placeholder="Password"
-              placeholderTextColor="rgba(255,255,255,0.4)"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+              <TextInput
+                style={styles.textInput}
+                placeholder="Password"
+                placeholderTextColor={MUTED}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+              />
+            </View>
 
             <TouchableOpacity
-              style={[styles.emailButton, loading && styles.disabledButton]}
+              style={[styles.primaryButton, loading && styles.disabledButton]}
               onPress={handleEmailSubmit}
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <ActivityIndicator color={BLACK} />
               ) : (
-                <Text style={styles.emailButtonText}>
-                  {isRegistering ? 'Sign Up' : 'Sign In'}
+                <Text style={styles.primaryButtonText}>
+                  {isRegistering ? 'Create Account' : 'Sign In'}
                 </Text>
               )}
             </TouchableOpacity>
@@ -163,13 +172,12 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
               onPress={() => setIsRegistering(!isRegistering)}
               style={styles.toggleContainer}
             >
-              <Text style={styles.footerText}>
-                {isRegistering
-                  ? 'Already have an account? '
-                  : "Don't have an account? "}
-              </Text>
-              <Text style={styles.footerLink}>
-                {isRegistering ? 'Sign In' : 'Sign Up'}
+              <Text style={styles.toggleText}>
+                {isRegistering ? 'Already have an account?' : "Don't have an account?"}
+                {'  '}
+                <Text style={styles.toggleLink}>
+                  {isRegistering ? 'Sign In' : 'Sign Up'}
+                </Text>
               </Text>
             </TouchableOpacity>
           </KeyboardAvoidingView>
@@ -180,22 +188,26 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="light-content" backgroundColor={BLACK} />
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.headerContainer}>
-          <Text style={styles.brandTitle}>SmartCloset</Text>
-          <Text style={styles.subtitle}>
-            Register today to start building a wardrobe you truly love.
+        {/* Hero */}
+        <View style={styles.heroContainer}>
+          <Text style={styles.heroAccent}>Est. 2024</Text>
+          <Text style={styles.brandTitle}>Smart{'\n'}Closet</Text>
+          <View style={styles.goldDivider} />
+          <Text style={styles.heroSubtitle}>
+            Your personal wardrobe,{'\n'}curated to perfection.
           </Text>
         </View>
 
+        {/* Buttons */}
         <View style={styles.buttonsContainer}>
           <TouchableOpacity
             style={[styles.socialButton, loading && styles.disabledButton]}
             onPress={handleAppleSignIn}
             disabled={loading}
           >
-            <Icon name="logo-apple" size={20} color="#111" />
+            <Icon name="logo-apple" size={18} color={CREAM} />
             <Text style={styles.socialLabel}>Continue with Apple</Text>
           </TouchableOpacity>
 
@@ -204,30 +216,29 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
             onPress={handleGoogleSignIn}
             disabled={loading}
           >
-            <Icon name="logo-google" size={20} color="#111" />
+            <Icon name="logo-google" size={18} color={CREAM} />
             <Text style={styles.socialLabel}>Continue with Google</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.emailButton, loading && styles.disabledButton]}
+            style={[styles.primaryButton, loading && styles.disabledButton]}
             onPress={() => { setShowEmailForm(true); setIsRegistering(true); }}
             disabled={loading}
           >
-            <Text style={styles.emailButtonText}>Register with Email</Text>
+            {loading
+              ? <ActivityIndicator color={BLACK} />
+              : <Text style={styles.primaryButtonText}>Create Account</Text>
+            }
           </TouchableOpacity>
 
-          {loading && (
-            <ActivityIndicator color="#8B7FD9" style={{ marginTop: 16 }} />
-          )}
-
-          <View style={styles.footerTextContainer}>
-            <Text style={styles.footerText}>Already have an account? </Text>
+          <View style={styles.footerRow}>
+            <Text style={styles.footerText}>Have an account?</Text>
             <TouchableOpacity onPress={() => { setShowEmailForm(true); setIsRegistering(false); }}>
-              <Text style={styles.footerLink}>Log in</Text>
+              <Text style={styles.footerLink}>  Sign in</Text>
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity onPress={onGuestContinue} style={styles.guestContainer}>
+          <TouchableOpacity onPress={onGuestContinue} style={styles.guestButton}>
             <Text style={styles.guestText}>Continue as guest</Text>
           </TouchableOpacity>
         </View>
@@ -239,116 +250,169 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: BLACK,
   },
   safeArea: {
     flex: 1,
     justifyContent: 'space-between',
   },
-  headerContainer: {
-    paddingHorizontal: 24,
-    paddingTop: 60,
+
+  // Hero section
+  heroContainer: {
+    paddingHorizontal: 32,
+    paddingTop: 56,
+  },
+  heroAccent: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: GOLD,
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    marginBottom: 20,
   },
   brandTitle: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    textAlign: 'center',
+    fontSize: 60,
+    fontWeight: '300',
+    color: CREAM,
+    letterSpacing: -1,
+    lineHeight: 64,
   },
-  subtitle: {
-    marginTop: 12,
+  goldDivider: {
+    width: 40,
+    height: 1.5,
+    backgroundColor: GOLD,
+    marginTop: 24,
+    marginBottom: 20,
+  },
+  heroSubtitle: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.7)',
-    textAlign: 'center',
-    lineHeight: 22,
+    color: MUTED,
+    lineHeight: 24,
+    fontWeight: '300',
   },
+
+  // Buttons section
   buttonsContainer: {
     paddingHorizontal: 24,
-    paddingBottom: 40,
+    paddingBottom: 44,
+    gap: 12,
   },
   socialButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    backgroundColor: SURFACE,
+    borderRadius: 2,
     paddingVertical: 16,
-    marginBottom: 12,
-    gap: 12,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   socialLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111',
+    fontSize: 15,
+    fontWeight: '400',
+    color: CREAM,
+    letterSpacing: 0.3,
   },
-  emailButton: {
-    marginTop: 8,
-    borderRadius: 12,
-    backgroundColor: '#8B7FD9',
-    paddingVertical: 16,
+  primaryButton: {
+    borderRadius: 2,
+    backgroundColor: GOLD,
+    paddingVertical: 17,
     alignItems: 'center',
   },
-  emailButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+  primaryButtonText: {
+    color: BLACK,
+    fontSize: 15,
     fontWeight: '600',
+    letterSpacing: 0.5,
   },
-  footerTextContainer: {
+  footerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 24,
+    marginTop: 4,
   },
   footerText: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.7)',
+    color: MUTED,
   },
   footerLink: {
     fontSize: 14,
-    color: '#8B7FD9',
-    fontWeight: '600',
+    color: GOLD_LIGHT,
+    fontWeight: '500',
   },
-  guestContainer: {
-    marginTop: 20,
+  guestButton: {
     alignItems: 'center',
+    paddingVertical: 8,
   },
   guestText: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.5)',
-    textDecorationLine: 'underline',
+    fontSize: 13,
+    color: 'rgba(245,237,224,0.3)',
+    letterSpacing: 0.3,
   },
+  disabledButton: {
+    opacity: 0.5,
+  },
+
+  // Email form
   emailFormContainer: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: 28,
+    paddingTop: 24,
+    paddingBottom: 40,
     justifyContent: 'center',
   },
   backButton: {
     position: 'absolute',
-    top: 16,
-    left: 0,
+    top: 24,
+    left: 20,
     padding: 8,
   },
-  textInput: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    color: '#FFFFFF',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+  emailFormHeader: {
+    marginBottom: 40,
   },
-  disabledButton: {
-    opacity: 0.6,
+  goldAccentLine: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: GOLD,
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    marginBottom: 12,
+  },
+  emailFormTitle: {
+    fontSize: 44,
+    fontWeight: '300',
+    color: CREAM,
+    letterSpacing: -0.5,
+    lineHeight: 50,
+  },
+  formFields: {
+    gap: 12,
+    marginBottom: 28,
+  },
+  textInput: {
+    backgroundColor: SURFACE,
+    borderRadius: 2,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    fontSize: 15,
+    color: CREAM,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   toggleContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
     marginTop: 24,
+  },
+  toggleText: {
+    fontSize: 14,
+    color: MUTED,
+    textAlign: 'center',
+  },
+  toggleLink: {
+    color: GOLD_LIGHT,
+    fontWeight: '500',
   },
 });
 
 export default SignInScreen;
-

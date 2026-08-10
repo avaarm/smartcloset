@@ -10,16 +10,25 @@ import {
   RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import LinearGradient from 'react-native-linear-gradient';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   getStylistProfile,
   getStylistStats,
   getUpcomingAppointments,
-  getActiveClients,
 } from '../services/stylistService';
 import { StylistProfile, StylistStats, Appointment } from '../types/stylist';
-import theme from '../styles/theme';
+
+const GOLD = '#C4975A';
+const GOLD_SUBTLE = 'rgba(196,151,90,0.15)';
+const INK = '#100E0B';
+const CREAM = '#FDFAF5';
+const SURFACE = '#FFFFFF';
+const MUTED_BG = '#F7F3EC';
+const MUTED_TEXT = '#6B5F52';
+const BORDER = '#EDE5D8';
+const CHARCOAL_HEADER = '#0F0D0A';
+const CREAM_HEADER = '#F5EDE0';
+const MUTED_HEADER = 'rgba(245,237,224,0.5)';
 
 type StylistDashboardScreenProps = {
   navigation: NativeStackNavigationProp<any>;
@@ -32,9 +41,7 @@ const StylistDashboardScreen = ({ navigation }: StylistDashboardScreenProps) => 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
+  useEffect(() => { loadDashboardData(); }, []);
 
   const loadDashboardData = async () => {
     try {
@@ -44,10 +51,9 @@ const StylistDashboardScreen = ({ navigation }: StylistDashboardScreenProps) => 
         getStylistStats(),
         getUpcomingAppointments(),
       ]);
-
       setProfile(profileData);
       setStats(statsData);
-      setUpcomingAppointments(appointments.slice(0, 3)); // Show next 3
+      setUpcomingAppointments(appointments.slice(0, 3));
     } catch (error) {
       console.error('Error loading dashboard data:', error);
     } finally {
@@ -56,593 +62,508 @@ const StylistDashboardScreen = ({ navigation }: StylistDashboardScreenProps) => 
     }
   };
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadDashboardData();
-  };
+  const onRefresh = () => { setRefreshing(true); loadDashboardData(); };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
-
-    if (date.toDateString() === today.toDateString()) {
-      return 'Today';
-    } else if (date.toDateString() === tomorrow.toDateString()) {
-      return 'Tomorrow';
-    }
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    if (date.toDateString() === today.toDateString()) return 'Today';
+    if (date.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
+    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   };
 
-  const getAppointmentIcon = (type: string) => {
-    switch (type) {
-      case 'consultation':
-        return 'chatbubbles-outline';
-      case 'shopping':
-        return 'cart-outline';
-      case 'wardrobe-audit':
-        return 'file-tray-full-outline';
-      case 'styling-session':
-        return 'color-palette-outline';
-      case 'virtual':
-        return 'videocam-outline';
-      default:
-        return 'calendar-outline';
-    }
-  };
+  const apptTypeLabel = (type: string) =>
+    type.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 
   if (loading || !stats) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading dashboard...</Text>
+      <SafeAreaView style={styles.root}>
+        <View style={styles.loader}>
+          <View style={styles.goldDot} />
         </View>
       </SafeAreaView>
     );
   }
 
+  const TOOLS = [
+    { icon: 'albums-outline', title: 'Lookbook Creator', sub: 'Compose & present curated looks', screen: 'Lookbook' },
+    { icon: 'shirt-outline', title: 'Capsule Builder', sub: 'Build a capsule · see outfit combos', screen: 'CapsuleWardrobe' },
+    { icon: 'checkmark-done-outline', title: 'Wardrobe Audit', sub: 'Keep · Donate · Store — item by item', screen: 'WardrobeEdit' },
+  ];
+
+  const ACTIONS = [
+    { icon: 'person-add-outline', label: 'New Client', screen: 'AddClient' },
+    { icon: 'calendar-outline', label: 'Schedule', screen: 'CreateAppointment' },
+    { icon: 'bulb-outline', label: 'Recommend', screen: 'CreateRecommendation' },
+    { icon: 'people-outline', label: 'Clients', screen: 'ClientsList' },
+  ];
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.colors.primary} />
-      
-      {/* Header */}
-      <LinearGradient
-        colors={theme.colors.gradient.primary}
-        style={styles.header}
-      >
-        <View style={styles.headerContent}>
-          <View>
-            <Text style={styles.greeting}>Welcome back,</Text>
-            <Text style={styles.stylistName}>{profile?.name || 'Stylist'}</Text>
+    <View style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor={CHARCOAL_HEADER} />
+
+      {/* ── Editorial header ── */}
+      <SafeAreaView style={styles.headerSafe}>
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <View style={styles.headerLeft}>
+              <Text style={styles.headerEyebrow}>Dashboard</Text>
+              <Text style={styles.headerName}>{profile?.name || 'Stylist'}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.profileAvatar}
+              onPress={() => navigation.navigate('StylistProfile')}
+            >
+              <Icon name="person-outline" size={20} color={GOLD} />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            style={styles.profileButton}
-            onPress={() => navigation.navigate('StylistProfile')}
-          >
-            <Icon name="person-circle-outline" size={40} color="#FFFFFF" />
-          </TouchableOpacity>
+
+          {/* Stat strip */}
+          <View style={styles.statStrip}>
+            {[
+              { value: stats?.activeClients ?? 0, label: 'Clients', nav: 'ClientsList' },
+              { value: stats?.upcomingAppointments ?? 0, label: 'Upcoming', nav: 'AppointmentsList' },
+              { value: stats?.completedSessions ?? 0, label: 'Sessions' },
+              { value: profile?.rating?.toFixed(1) ?? '—', label: 'Rating' },
+            ].map((s, i) => (
+              <TouchableOpacity
+                key={i}
+                style={[styles.statItem, i < 3 && styles.statItemBorder]}
+                onPress={() => s.nav && navigation.navigate(s.nav)}
+                activeOpacity={s.nav ? 0.7 : 1}
+              >
+                <Text style={styles.statValue}>{s.value}</Text>
+                <Text style={styles.statLabel}>{s.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
-      </LinearGradient>
+      </SafeAreaView>
 
       <ScrollView
-        style={styles.container}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={GOLD} />}
       >
-        {/* Stats Grid */}
-        <View style={styles.statsGrid}>
-          <TouchableOpacity
-            style={styles.statCard}
-            onPress={() => navigation.navigate('ClientsList')}
-          >
-            <View style={[styles.statIcon, { backgroundColor: '#EDE9FE' }]}>
-              <Icon name="people-outline" size={24} color={theme.colors.primary} />
-            </View>
-            <Text style={styles.statValue}>{stats?.activeClients || 0}</Text>
-            <Text style={styles.statLabel}>Active Clients</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.statCard}
-            onPress={() => navigation.navigate('AppointmentsList')}
-          >
-            <View style={[styles.statIcon, { backgroundColor: '#DBEAFE' }]}>
-              <Icon name="calendar-outline" size={24} color="#3B82F6" />
-            </View>
-            <Text style={styles.statValue}>{stats?.upcomingAppointments || 0}</Text>
-            <Text style={styles.statLabel}>Upcoming</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.statCard}>
-            <View style={[styles.statIcon, { backgroundColor: '#D1FAE5' }]}>
-              <Icon name="checkmark-done-outline" size={24} color="#10B981" />
-            </View>
-            <Text style={styles.statValue}>{stats?.completedSessions || 0}</Text>
-            <Text style={styles.statLabel}>Completed</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.statCard}>
-            <View style={[styles.statIcon, { backgroundColor: '#FEF3C7' }]}>
-              <Icon name="star-outline" size={24} color="#F59E0B" />
-            </View>
-            <Text style={styles.statValue}>{profile?.rating?.toFixed(1) || 'N/A'}</Text>
-            <Text style={styles.statLabel}>Rating</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Quick Actions */}
+        {/* ── Quick Actions ── */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.actionsGrid}>
-            <TouchableOpacity
-              style={styles.actionCard}
-              onPress={() => navigation.navigate('AddClient')}
-            >
-              <LinearGradient
-                colors={['#8B7FD9', '#A599E9']}
-                style={styles.actionGradient}
-              >
-                <Icon name="person-add-outline" size={28} color="#FFFFFF" />
-                <Text style={styles.actionText}>Add Client</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionCard}
-              onPress={() => navigation.navigate('CreateAppointment')}
-            >
-              <LinearGradient
-                colors={['#3B82F6', '#60A5FA']}
-                style={styles.actionGradient}
-              >
-                <Icon name="calendar-outline" size={28} color="#FFFFFF" />
-                <Text style={styles.actionText}>Schedule</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionCard}
-              onPress={() => navigation.navigate('CreateRecommendation')}
-            >
-              <LinearGradient
-                colors={['#10B981', '#34D399']}
-                style={styles.actionGradient}
-              >
-                <Icon name="bulb-outline" size={28} color="#FFFFFF" />
-                <Text style={styles.actionText}>Recommend</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionCard}
-              onPress={() => navigation.navigate('ClientsList')}
-            >
-              <LinearGradient
-                colors={['#F59E0B', '#FBBF24']}
-                style={styles.actionGradient}
-              >
-                <Icon name="people-outline" size={28} color="#FFFFFF" />
-                <Text style={styles.actionText}>Clients</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Upcoming Appointments */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Upcoming Appointments</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('AppointmentsList')}>
-              <Text style={styles.seeAllText}>See All</Text>
-            </TouchableOpacity>
-          </View>
-
-          {upcomingAppointments.length > 0 ? (
-            upcomingAppointments.map((appointment) => (
+          <Text style={styles.sectionLabel}>Quick Actions</Text>
+          <View style={styles.actionsRow}>
+            {ACTIONS.map(a => (
               <TouchableOpacity
-                key={appointment.id}
-                style={styles.appointmentCard}
-                onPress={() => navigation.navigate('AppointmentDetails', { appointment })}
+                key={a.screen}
+                style={styles.actionPill}
+                onPress={() => navigation.navigate(a.screen)}
               >
-                <View style={styles.appointmentIcon}>
-                  <Icon
-                    name={getAppointmentIcon(appointment.type)}
-                    size={24}
-                    color={theme.colors.primary}
-                  />
+                <View style={styles.actionIconWrap}>
+                  <Icon name={a.icon} size={20} color={GOLD} />
                 </View>
-                <View style={styles.appointmentInfo}>
-                  <Text style={styles.appointmentClient}>{appointment.clientName}</Text>
-                  <Text style={styles.appointmentType}>
-                    {appointment.type.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                  </Text>
-                  <Text style={styles.appointmentTime}>
-                    {formatDate(appointment.date)} • {appointment.startTime}
-                  </Text>
-                </View>
-                <View style={styles.appointmentStatus}>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      appointment.status === 'confirmed' && styles.statusConfirmed,
-                    ]}
-                  >
-                    <Text style={styles.statusText}>
-                      {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
-                    </Text>
-                  </View>
-                </View>
+                <Text style={styles.actionLabel}>{a.label}</Text>
               </TouchableOpacity>
-            ))
-          ) : (
-            <View style={styles.emptyState}>
-              <Icon name="calendar-outline" size={48} color="#D1D5DB" />
-              <Text style={styles.emptyStateText}>No upcoming appointments</Text>
-            </View>
-          )}
+            ))}
+          </View>
         </View>
 
-        {/* Revenue Summary */}
-        {stats != null && stats.totalRevenue != null && stats.totalRevenue > 0 && (
+        {/* ── Revenue banner ── */}
+        {stats?.totalRevenue != null && stats.totalRevenue > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Revenue</Text>
-            <View style={styles.revenueCard}>
-              <LinearGradient
-                colors={['#10B981', '#059669']}
-                style={styles.revenueGradient}
-              >
-                <Icon name="cash-outline" size={32} color="#FFFFFF" />
+            <View style={styles.revenueBanner}>
+              <View>
+                <Text style={styles.revenueEyebrow}>Total Earnings</Text>
                 <Text style={styles.revenueAmount}>
                   {'$' + stats.totalRevenue.toLocaleString()}
                 </Text>
-                <Text style={styles.revenueLabel}>Total Earnings</Text>
-              </LinearGradient>
+              </View>
+              <Icon name="trending-up-outline" size={28} color={GOLD} />
             </View>
           </View>
         )}
 
-        {/* Stylist Tools */}
+        {/* ── Upcoming Appointments ── */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Stylist Tools</Text>
-          {[
-            {
-              icon: 'albums-outline',
-              color: '#8B5CF6',
-              bg: '#EDE9FE',
-              title: 'Lookbook Creator',
-              subtitle: 'Compose & present curated looks',
-              screen: 'Lookbook',
-            },
-            {
-              icon: 'shirt-outline',
-              color: '#0EA5E9',
-              bg: '#E0F2FE',
-              title: 'Capsule Builder',
-              subtitle: 'Build a capsule · see outfit combos',
-              screen: 'CapsuleWardrobe',
-            },
-            {
-              icon: 'checkmark-done-outline',
-              color: '#059669',
-              bg: '#D1FAE5',
-              title: 'Wardrobe Audit',
-              subtitle: 'Keep · Donate · Store — item by item',
-              screen: 'WardrobeEdit',
-            },
-          ].map(tool => (
-            <TouchableOpacity
-              key={tool.screen}
-              style={styles.toolRow}
-              onPress={() => navigation.navigate(tool.screen)}
-            >
-              <View style={[styles.toolIcon, { backgroundColor: tool.bg }]}>
-                <Icon name={tool.icon} size={22} color={tool.color} />
-              </View>
-              <View style={{ flex: 1, marginLeft: 14 }}>
-                <Text style={styles.toolTitle}>{tool.title}</Text>
-                <Text style={styles.toolSubtitle}>{tool.subtitle}</Text>
-              </View>
-              <Icon name="chevron-forward" size={18} color="#9CA3AF" />
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionLabel}>Upcoming</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('AppointmentsList')}>
+              <Text style={styles.seeAll}>View all</Text>
             </TouchableOpacity>
-          ))}
+          </View>
+
+          {upcomingAppointments.length > 0 ? (
+            <View style={styles.appointmentList}>
+              {upcomingAppointments.map((appt, idx) => (
+                <TouchableOpacity
+                  key={appt.id}
+                  style={[styles.apptRow, idx < upcomingAppointments.length - 1 && styles.apptRowBorder]}
+                  onPress={() => navigation.navigate('AppointmentDetails', { appointment: appt })}
+                >
+                  <View style={styles.apptDateBox}>
+                    <Text style={styles.apptDay}>
+                      {new Date(appt.date).toLocaleDateString('en-US', { day: '2-digit' })}
+                    </Text>
+                    <Text style={styles.apptMonth}>
+                      {new Date(appt.date).toLocaleDateString('en-US', { month: 'short' })}
+                    </Text>
+                  </View>
+                  <View style={styles.apptInfo}>
+                    <Text style={styles.apptClient}>{appt.clientName}</Text>
+                    <Text style={styles.apptType}>{apptTypeLabel(appt.type)}</Text>
+                    <Text style={styles.apptTime}>{appt.startTime}</Text>
+                  </View>
+                  <View style={[
+                    styles.apptStatus,
+                    appt.status === 'confirmed' && styles.apptStatusConfirmed,
+                  ]}>
+                    <Text style={[
+                      styles.apptStatusText,
+                      appt.status === 'confirmed' && styles.apptStatusTextConfirmed,
+                    ]}>
+                      {appt.status.charAt(0).toUpperCase() + appt.status.slice(1)}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyText}>No upcoming appointments</Text>
+            </View>
+          )}
         </View>
 
-        {/* Tips Section */}
+        {/* ── Stylist Tools ── */}
         <View style={styles.section}>
-          <View style={styles.tipCard}>
-            <Icon name="bulb-outline" size={24} color="#F59E0B" />
-            <View style={styles.tipContent}>
-              <Text style={styles.tipTitle}>Pro Tip</Text>
-              <Text style={styles.tipText}>
-                Follow up with clients within 24 hours after a session to maintain engagement
-                and gather feedback.
-              </Text>
-            </View>
+          <Text style={styles.sectionLabel}>Stylist Tools</Text>
+          <View style={styles.toolList}>
+            {TOOLS.map((tool, idx) => (
+              <TouchableOpacity
+                key={tool.screen}
+                style={[styles.toolRow, idx < TOOLS.length - 1 && styles.toolRowBorder]}
+                onPress={() => navigation.navigate(tool.screen)}
+              >
+                <View style={styles.toolIconWrap}>
+                  <Icon name={tool.icon} size={20} color={GOLD} />
+                </View>
+                <View style={styles.toolText}>
+                  <Text style={styles.toolTitle}>{tool.title}</Text>
+                  <Text style={styles.toolSub}>{tool.sub}</Text>
+                </View>
+                <Icon name="chevron-forward" size={16} color={BORDER} />
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
+
+        {/* Bottom padding */}
+        <View style={{ height: 32 }} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  root: {
     flex: 1,
-    backgroundColor: '#F8F7FF',
+    backgroundColor: CREAM,
   },
-  loadingContainer: {
+  loader: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  loadingText: {
-    fontSize: 16,
-    color: theme.colors.textSecondary,
+  goldDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: GOLD,
+  },
+
+  // Header
+  headerSafe: {
+    backgroundColor: CHARCOAL_HEADER,
   },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 24,
+    backgroundColor: CHARCOAL_HEADER,
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    paddingBottom: 0,
   },
-  headerContent: {
+  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 24,
+  },
+  headerLeft: {},
+  headerEyebrow: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: GOLD,
+    letterSpacing: 2.5,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  headerName: {
+    fontSize: 30,
+    fontWeight: '300',
+    color: CREAM_HEADER,
+    letterSpacing: -0.3,
+  },
+  profileAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(196,151,90,0.12)',
     alignItems: 'center',
-  },
-  greeting: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    opacity: 0.9,
-  },
-  stylistName: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginTop: 4,
-  },
-  profileButton: {
-    width: 44,
-    height: 44,
     justifyContent: 'center',
-    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(196,151,90,0.3)',
   },
-  container: {
-    flex: 1,
-  },
-  statsGrid: {
+
+  // Stat strip
+  statStrip: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(196,151,90,0.15)',
+    marginTop: 8,
   },
-  statCard: {
+  statItem: {
     flex: 1,
-    minWidth: '45%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
+    paddingVertical: 16,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
   },
-  statIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
+  statItemBorder: {
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(196,151,90,0.15)',
   },
   statValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: theme.colors.text,
-    marginBottom: 4,
+    fontSize: 24,
+    fontWeight: '300',
+    color: CREAM_HEADER,
+    marginBottom: 2,
   },
   statLabel: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
+    fontSize: 10,
+    fontWeight: '500',
+    color: MUTED_HEADER,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
+
+  // Scroll
+  scroll: { flex: 1 },
+  scrollContent: { paddingTop: 4 },
+
+  // Section
   section: {
-    paddingHorizontal: 16,
-    paddingTop: 24,
+    paddingHorizontal: 20,
+    paddingTop: 28,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'baseline',
     marginBottom: 16,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: theme.colors.text,
-  },
-  seeAllText: {
-    fontSize: 14,
+  sectionLabel: {
+    fontSize: 11,
     fontWeight: '600',
-    color: theme.colors.primary,
+    color: MUTED_TEXT,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginBottom: 16,
   },
-  actionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginTop: 12,
-  },
-  actionCard: {
-    flex: 1,
-    minWidth: '45%',
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  actionGradient: {
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 100,
-  },
-  actionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginTop: 8,
-  },
-  appointmentCard: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  appointmentIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F3F0FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  appointmentInfo: {
-    flex: 1,
-  },
-  appointmentClient: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.text,
-    marginBottom: 4,
-  },
-  appointmentType: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    marginBottom: 2,
-  },
-  appointmentTime: {
+  seeAll: {
     fontSize: 13,
-    color: theme.colors.mediumGray,
+    color: GOLD,
+    fontWeight: '500',
   },
-  appointmentStatus: {
+
+  // Quick actions
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  actionPill: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: SURFACE,
+    borderRadius: 8,
+    paddingVertical: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    shadowColor: INK,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  actionIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: GOLD_SUBTLE,
+    alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 8,
   },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: '#F3F4F6',
-  },
-  statusConfirmed: {
-    backgroundColor: '#D1FAE5',
-  },
-  statusText: {
+  actionLabel: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#10B981',
+    fontWeight: '500',
+    color: INK,
+    letterSpacing: 0.2,
   },
-  emptyState: {
+
+  // Revenue
+  revenueBanner: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 32,
+    justifyContent: 'space-between',
+    backgroundColor: CHARCOAL_HEADER,
+    borderRadius: 8,
+    paddingHorizontal: 22,
+    paddingVertical: 20,
   },
-  emptyStateText: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    marginTop: 12,
-  },
-  revenueCard: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginTop: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  revenueGradient: {
-    padding: 24,
-    alignItems: 'center',
+  revenueEyebrow: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: GOLD,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginBottom: 6,
   },
   revenueAmount: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginTop: 12,
+    fontSize: 32,
+    fontWeight: '300',
+    color: CREAM_HEADER,
+    letterSpacing: -0.5,
   },
-  revenueLabel: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    opacity: 0.9,
-    marginTop: 4,
+
+  // Appointments
+  appointmentList: {
+    backgroundColor: SURFACE,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: BORDER,
+    overflow: 'hidden',
   },
-  tipCard: {
+  apptRow: {
     flexDirection: 'row',
-    backgroundColor: '#FFFBEB',
-    borderRadius: 12,
-    padding: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: '#F59E0B',
-    marginTop: 12,
-    marginBottom: 24,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 14,
   },
-  tipContent: {
-    flex: 1,
-    marginLeft: 12,
+  apptRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
   },
-  tipTitle: {
+  apptDateBox: {
+    width: 40,
+    alignItems: 'center',
+  },
+  apptDay: {
+    fontSize: 20,
+    fontWeight: '300',
+    color: INK,
+    lineHeight: 22,
+  },
+  apptMonth: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: GOLD,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  apptInfo: { flex: 1 },
+  apptClient: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#92400E',
-    marginBottom: 4,
+    color: INK,
+    marginBottom: 2,
   },
-  tipText: {
-    fontSize: 13,
-    color: '#78350F',
-    lineHeight: 18,
+  apptType: {
+    fontSize: 12,
+    color: MUTED_TEXT,
+    marginBottom: 1,
+  },
+  apptTime: {
+    fontSize: 12,
+    color: MUTED_TEXT,
+  },
+  apptStatus: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 2,
+    backgroundColor: MUTED_BG,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  apptStatusConfirmed: {
+    backgroundColor: GOLD_SUBTLE,
+    borderColor: 'rgba(196,151,90,0.3)',
+  },
+  apptStatusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: MUTED_TEXT,
+    letterSpacing: 0.5,
+  },
+  apptStatusTextConfirmed: {
+    color: '#8B6520',
+  },
+  emptyBox: {
+    paddingVertical: 32,
+    alignItems: 'center',
+    backgroundColor: SURFACE,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: MUTED_TEXT,
+  },
+
+  // Tools
+  toolList: {
+    backgroundColor: SURFACE,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: BORDER,
+    overflow: 'hidden',
   },
   toolRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 14,
   },
-  toolIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+  toolRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+  },
+  toolIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: GOLD_SUBTLE,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  toolText: { flex: 1 },
   toolTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
+    color: INK,
     marginBottom: 2,
   },
-  toolSubtitle: {
-    fontSize: 13,
-    color: '#6B7280',
+  toolSub: {
+    fontSize: 12,
+    color: MUTED_TEXT,
   },
 });
 
