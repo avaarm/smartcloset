@@ -25,7 +25,6 @@ import {
   getContributionHistory,
   type ProductContribution,
 } from '../services/productContributions';
-import theme from '../styles/theme';
 import { supabase } from '../config/supabase';
 import { signOut } from '../services/authService';
 import {
@@ -38,6 +37,21 @@ import {
 } from '../services/accountService';
 import { AccountType } from '../types/stylist';
 import { useAccountMode } from '../context/AccountModeContext';
+
+// ─── Luxury palette (matches StylistDashboard / SignIn) ───────────────────────
+const GOLD = '#C4975A';
+const GOLD_SUBTLE = 'rgba(196,151,90,0.10)';
+const GOLD_BORDER = 'rgba(196,151,90,0.35)';
+const INK = '#100E0B';
+const IVORY = '#FDFAF5';
+const WARM_MUTED = '#F7F3EC';
+const BORDER = '#EDE5D8';
+const CHARCOAL = '#0F0D0A';
+const CREAM_HEADER = '#F5EDE0';
+const MUTED_HEADER = 'rgba(245,237,224,0.50)';
+const TEXT_MUTED = '#6B5F52';
+const TEXT_SUBTLE = '#A8987E';
+// ──────────────────────────────────────────────────────────────────────────────
 
 const SettingsScreen = () => {
   const [backupStats, setBackupStats] = useState<{
@@ -77,11 +91,9 @@ const SettingsScreen = () => {
       setUserName(null);
       setUserEmail(null);
     }
-    await getCurrentMode(); // ensures AsyncStorage is initialized
+    await getCurrentMode();
     if (session?.user) {
-      // Authenticated users can access all modes
-      const allModes: AccountType[] = ['user', 'stylist', 'client'];
-      setAvailableModesState(allModes);
+      setAvailableModesState(['user', 'stylist', 'client']);
     } else {
       const modes = await getAvailableModes();
       setAvailableModesState(modes);
@@ -141,9 +153,6 @@ const SettingsScreen = () => {
   };
 
   const handleDeleteAccount = async () => {
-    // Two-step confirmation: alert → typed-confirmation prompt (Apple guideline
-    // 5.1.1(v) requires the deletion be initiated by the user, not us, and
-    // permanent. We make accidental taps impossible.)
     Alert.alert(
       'Delete Account',
       'This permanently deletes your account, all clothing items, outfits, body profile, stylist data, and any uploaded images. This cannot be undone.\n\nTo confirm, you\'ll be asked to type DELETE.',
@@ -170,7 +179,6 @@ const SettingsScreen = () => {
                       setLoading(true);
                       const { error } = await supabase.rpc('delete_user_account');
                       if (error) throw error;
-                      // RPC succeeded; sign out and wipe local cache.
                       await clearAllData();
                       await supabase.auth.signOut();
                       Alert.alert('Account deleted', 'Your account and data have been removed.');
@@ -206,8 +214,8 @@ const SettingsScreen = () => {
           onPress: async () => {
             try {
               setLoading(true);
-              await resetStorage();       // wipes & re-seeds wardrobe + saved outfits
-              await reseedAllDemoData();  // re-seeds everything else
+              await resetStorage();
+              await reseedAllDemoData();
               await loadBackupStats();
               Alert.alert(
                 'Demo Data Reset',
@@ -244,268 +252,235 @@ const SettingsScreen = () => {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
+  const initials = userName
+    ? userName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
+    : '?';
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <ScrollView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={CHARCOAL} />
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+
+        {/* ── Header ─────────────────────────────────────────────────────── */}
         <View style={styles.header}>
+          <Text style={styles.headerEyebrow}>Profile</Text>
           <Text style={styles.headerTitle}>Settings</Text>
-          <Text style={styles.headerSubtitle}>Manage your SmartCloset</Text>
+          <View style={styles.headerDivider} />
         </View>
 
-        {/* Account Section */}
+        {/* ── Account ────────────────────────────────────────────────────── */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
+          <Text style={styles.sectionLabel}>Account</Text>
 
           {isAuthenticated ? (
             <>
+              {/* Profile card */}
               <View style={styles.profileCard}>
-                <View style={styles.profileAvatar}>
-                  <Icon name="person" size={28} color="#FFFFFF" />
+                <View style={styles.avatarRing}>
+                  <View style={styles.avatarInner}>
+                    <Text style={styles.avatarInitials}>{initials}</Text>
+                  </View>
                 </View>
                 <View style={styles.profileInfo}>
                   <Text style={styles.profileName}>{userName}</Text>
                   <Text style={styles.profileEmail}>{userEmail}</Text>
-                  <View style={styles.modeBadge}>
-                    <Icon name={getModeIcon(currentMode)} size={12} color={theme.colors.primary} />
-                    <Text style={styles.modeBadgeText}>{getModeName(currentMode)}</Text>
+                  <View style={styles.modePill}>
+                    <Icon name={getModeIcon(currentMode)} size={11} color={GOLD} />
+                    <Text style={styles.modePillText}>{getModeName(currentMode)}</Text>
                   </View>
                 </View>
               </View>
 
-              <Text style={styles.subsectionTitle}>Account Mode</Text>
+              {/* Mode switcher */}
+              <Text style={styles.subsectionLabel}>Account Mode</Text>
               {availableModes.map((mode) => (
                 <TouchableOpacity
                   key={mode}
-                  style={[
-                    styles.modeOption,
-                    currentMode === mode && styles.modeOptionActive,
-                  ]}
+                  style={[styles.modeCard, currentMode === mode && styles.modeCardActive]}
                   onPress={() => handleModeSwitch(mode)}
+                  activeOpacity={0.7}
                 >
-                  <View style={styles.modeOptionLeft}>
+                  <View style={[styles.modeIconWrap, currentMode === mode && { backgroundColor: GOLD_SUBTLE }]}>
                     <Icon
                       name={getModeIcon(mode)}
-                      size={20}
-                      color={currentMode === mode ? theme.colors.primary : theme.colors.textSecondary}
+                      size={18}
+                      color={currentMode === mode ? GOLD : TEXT_SUBTLE}
                     />
-                    <View style={styles.modeOptionText}>
-                      <Text style={[
-                        styles.modeOptionTitle,
-                        currentMode === mode && styles.modeOptionTitleActive,
-                      ]}>{getModeName(mode)}</Text>
-                      <Text style={styles.modeOptionDesc}>{getModeDescription(mode)}</Text>
-                    </View>
+                  </View>
+                  <View style={styles.modeTextWrap}>
+                    <Text style={[styles.modeName, currentMode === mode && { color: GOLD }]}>
+                      {getModeName(mode)}
+                    </Text>
+                    <Text style={styles.modeDesc}>{getModeDescription(mode)}</Text>
                   </View>
                   {currentMode === mode && (
-                    <Icon name="checkmark-circle" size={22} color={theme.colors.primary} />
+                    <Icon name="checkmark-circle" size={20} color={GOLD} />
                   )}
                 </TouchableOpacity>
               ))}
 
-              <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-                <Icon name="log-out-outline" size={20} color="#EF4444" />
-                <Text style={styles.signOutButtonText}>Sign Out</Text>
+              <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.7}>
+                <Icon name="log-out-outline" size={18} color="#C0392B" />
+                <Text style={styles.signOutText}>Sign Out</Text>
               </TouchableOpacity>
             </>
           ) : (
             <View style={styles.guestCard}>
-              <Icon name="person-outline" size={32} color={theme.colors.textSecondary} />
-              <Text style={styles.guestText}>You're using SmartCloset as a guest</Text>
-              <Text style={styles.guestSubtext}>Sign in to sync your wardrobe across devices</Text>
+              <View style={styles.guestAvatarRing}>
+                <Icon name="person-outline" size={28} color={TEXT_SUBTLE} />
+              </View>
+              <Text style={styles.guestHeading}>Browsing as Guest</Text>
+              <Text style={styles.guestBody}>Sign in to sync your wardrobe across devices and unlock all features.</Text>
+              <View style={styles.goldDivider} />
             </View>
           )}
         </View>
 
-        {/* Community KB — shows user's contribution to the shared recognition database */}
+        {/* ── Community Knowledge Base ────────────────────────────────────── */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Community Knowledge Base</Text>
-          <View style={[styles.statsCard, { backgroundColor: '#EEF2FF', padding: 0 }]}>
-            <View style={{ padding: 16 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                <Icon name="people-circle-outline" size={28} color="#4338CA" />
-                <Text
-                  style={{
-                    marginLeft: 10,
-                    fontSize: 32,
-                    fontWeight: '700',
-                    color: '#4338CA',
-                  }}
-                >
-                  {contributions.length}
-                </Text>
-                <Text style={{ marginLeft: 6, fontSize: 14, color: '#4338CA', paddingTop: 14 }}>
+          <Text style={styles.sectionLabel}>Community</Text>
+          <View style={styles.kbCard}>
+            <View style={styles.kbTop}>
+              <View style={styles.kbIconWrap}>
+                <Icon name="people-outline" size={20} color={GOLD} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.kbCount}>{contributions.length}</Text>
+                <Text style={styles.kbLabel}>
                   {contributions.length === 1 ? 'item taught' : 'items taught'}
                 </Text>
               </View>
-              <Text style={{ fontSize: 12, color: '#4338CA', lineHeight: 18 }}>
-                Every clothing item you add trains the recognition model. When
-                someone else uploads a similar photo, your contribution helps
-                auto-fill their form — no Vision API call needed.
-              </Text>
-              {contributions.length > 0 && (
-                <View style={{ flexDirection: 'row', marginTop: 12, flexWrap: 'wrap', gap: 6 }}>
-                  <View style={styles.contribBadge}>
-                    <Text style={styles.contribBadgeText}>
-                      {contributions.filter(c => c.source === 'lens_match').length} web
-                    </Text>
-                  </View>
-                  <View style={styles.contribBadge}>
-                    <Text style={styles.contribBadgeText}>
-                      {contributions.filter(c => c.source === 'kb_match').length} community
-                    </Text>
-                  </View>
-                  <View style={styles.contribBadge}>
-                    <Text style={styles.contribBadgeText}>
-                      {contributions.filter(c => c.source === 'manual').length} manual
-                    </Text>
-                  </View>
-                </View>
-              )}
             </View>
+            <Text style={styles.kbBody}>
+              Every clothing item you add trains the recognition model. Your contributions help other members auto-fill their wardrobes.
+            </Text>
+            {contributions.length > 0 && (
+              <View style={styles.kbBadgeRow}>
+                {[
+                  { label: `${contributions.filter(c => c.source === 'lens_match').length} web`, key: 'web' },
+                  { label: `${contributions.filter(c => c.source === 'kb_match').length} community`, key: 'kb' },
+                  { label: `${contributions.filter(c => c.source === 'manual').length} manual`, key: 'manual' },
+                ].map(b => (
+                  <View key={b.key} style={styles.kbBadge}>
+                    <Text style={styles.kbBadgeText}>{b.label}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
         </View>
 
-        {/* Data & Backup Section */}
+        {/* ── Data & Backup ───────────────────────────────────────────────── */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Data & Backup</Text>
+          <Text style={styles.sectionLabel}>Data & Backup</Text>
 
-          <View style={styles.statsCard}>
-            <View style={styles.statRow}>
-              <Icon name="shirt-outline" size={24} color={theme.colors.primary} />
-              <View style={styles.statContent}>
-                <Text style={styles.statLabel}>Clothing Items</Text>
-                <Text style={styles.statValue}>{backupStats.itemsCount}</Text>
+          <View style={styles.statsTable}>
+            {[
+              { icon: 'shirt-outline', label: 'Clothing Items', value: String(backupStats.itemsCount) },
+              { icon: 'albums-outline', label: 'Saved Outfits', value: String(backupStats.outfitsCount) },
+              { icon: 'server-outline', label: 'Storage Used', value: formatStorageSize(backupStats.storageSize) },
+              { icon: 'time-outline', label: 'Last Backup', value: formatDate(backupStats.lastBackup) },
+            ].map((row, i) => (
+              <View key={row.label} style={[styles.tableRow, i === 3 && { borderBottomWidth: 0 }]}>
+                <View style={styles.tableIconWrap}>
+                  <Icon name={row.icon} size={16} color={GOLD} />
+                </View>
+                <Text style={styles.tableLabel}>{row.label}</Text>
+                <Text style={styles.tableValue}>{row.value}</Text>
               </View>
-            </View>
-
-            <View style={styles.statRow}>
-              <Icon name="albums-outline" size={24} color={theme.colors.primary} />
-              <View style={styles.statContent}>
-                <Text style={styles.statLabel}>Saved Outfits</Text>
-                <Text style={styles.statValue}>{backupStats.outfitsCount}</Text>
-              </View>
-            </View>
-
-            <View style={styles.statRow}>
-              <Icon name="server-outline" size={24} color={theme.colors.primary} />
-              <View style={styles.statContent}>
-                <Text style={styles.statLabel}>Storage Used</Text>
-                <Text style={styles.statValue}>
-                  {formatStorageSize(backupStats.storageSize)}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.statRow}>
-              <Icon name="time-outline" size={24} color={theme.colors.primary} />
-              <View style={styles.statContent}>
-                <Text style={styles.statLabel}>Last Backup</Text>
-                <Text style={styles.statValue}>
-                  {formatDate(backupStats.lastBackup)}
-                </Text>
-              </View>
-            </View>
+            ))}
           </View>
 
           <TouchableOpacity
-            style={styles.primaryButton}
+            style={styles.goldButton}
             onPress={handleExportData}
             disabled={loading}
+            activeOpacity={0.8}
           >
-            <Icon name="download-outline" size={20} color="#FFFFFF" />
-            <Text style={styles.primaryButtonText}>
-              {loading ? 'Exporting...' : 'Export Data'}
-            </Text>
+            <Icon name="download-outline" size={18} color={INK} />
+            <Text style={styles.goldButtonText}>{loading ? 'Exporting…' : 'Export Data'}</Text>
           </TouchableOpacity>
 
-          <View style={styles.settingRow}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Auto Backup</Text>
-              <Text style={styles.settingDescription}>
-                Automatically backup data when changes are made
-              </Text>
+          <View style={styles.toggleRow}>
+            <View style={{ flex: 1, marginRight: 16 }}>
+              <Text style={styles.toggleLabel}>Auto Backup</Text>
+              <Text style={styles.toggleDesc}>Backup automatically when changes are made</Text>
             </View>
             <Switch
               value={autoBackupEnabled}
               onValueChange={toggleAutoBackup}
-              trackColor={{ false: '#D1D5DB', true: '#C4B5FD' }}
-              thumbColor={autoBackupEnabled ? theme.colors.primary : '#f4f3f4'}
+              trackColor={{ false: BORDER, true: GOLD }}
+              thumbColor={IVORY}
             />
           </View>
         </View>
 
-        {/* App Information */}
+        {/* ── About ───────────────────────────────────────────────────────── */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About</Text>
-
-          <View style={styles.infoCard}>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Version</Text>
-              <Text style={styles.infoValue}>{env.APP_VERSION}</Text>
+          <Text style={styles.sectionLabel}>About</Text>
+          <View style={styles.statsTable}>
+            <View style={styles.tableRow}>
+              <Text style={styles.tableLabel}>Version</Text>
+              <Text style={styles.tableValue}>{env.APP_VERSION}</Text>
             </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Platform</Text>
-              <Text style={styles.infoValue}>
+            <View style={[styles.tableRow, { borderBottomWidth: 0 }]}>
+              <Text style={styles.tableLabel}>Platform</Text>
+              <Text style={styles.tableValue}>
                 {Platform.OS === 'ios' ? 'iOS' : Platform.OS === 'android' ? 'Android' : 'Web'}
               </Text>
             </View>
           </View>
         </View>
 
-        {/* Danger Zone */}
+        {/* ── Danger Zone ─────────────────────────────────────────────────── */}
         <View style={styles.section}>
-          <Text style={styles.dangerSectionTitle}>Danger Zone</Text>
+          <Text style={styles.dangerSectionLabel}>Danger Zone</Text>
 
           <TouchableOpacity
-            style={[styles.dangerButton, { borderColor: '#8B7FD9', backgroundColor: '#F3F1FF' }]}
+            style={[styles.dangerButton, { borderColor: GOLD_BORDER, backgroundColor: GOLD_SUBTLE }]}
             onPress={handleReseedDemoData}
             disabled={loading}
+            activeOpacity={0.7}
           >
-            <Icon name="refresh-outline" size={20} color="#6B5FC4" />
-            <Text style={[styles.dangerButtonText, { color: '#6B5FC4' }]}>
-              Reset Demo Data
-            </Text>
+            <Icon name="refresh-outline" size={18} color={GOLD} />
+            <Text style={[styles.dangerButtonText, { color: GOLD }]}>Reset Demo Data</Text>
           </TouchableOpacity>
-
-          <Text style={[styles.dangerWarning, { marginBottom: 16 }]}>
-            Replaces all data with a fresh sample set (wardrobe, outfits, stylist &
-            client content). Useful for testing every feature from a known state.
+          <Text style={styles.dangerNote}>
+            Replaces all data with a fresh sample set — wardrobe, outfits, stylist & client content. Useful for testing from a known state.
           </Text>
 
           <TouchableOpacity
             style={styles.dangerButton}
             onPress={handleClearData}
+            activeOpacity={0.7}
           >
-            <Icon name="trash-outline" size={20} color="#EF4444" />
+            <Icon name="trash-outline" size={18} color="#C0392B" />
             <Text style={styles.dangerButtonText}>Clear All Data</Text>
           </TouchableOpacity>
-
-          <Text style={styles.dangerWarning}>
+          <Text style={styles.dangerNote}>
             Wipes everything stored locally on this device. Your account stays.
           </Text>
 
           <TouchableOpacity
-            style={[styles.dangerButton, { marginTop: 16, borderColor: '#B91C1C' }]}
+            style={[styles.dangerButton, { marginTop: 8, borderColor: '#922B21' }]}
             onPress={handleDeleteAccount}
             disabled={loading}
+            activeOpacity={0.7}
           >
-            <Icon name="alert-circle-outline" size={20} color="#B91C1C" />
-            <Text style={[styles.dangerButtonText, { color: '#B91C1C' }]}>
-              Delete Account
-            </Text>
+            <Icon name="alert-circle-outline" size={18} color="#922B21" />
+            <Text style={[styles.dangerButtonText, { color: '#922B21' }]}>Delete Account</Text>
           </TouchableOpacity>
-
-          <Text style={styles.dangerWarning}>
-            Permanently deletes your account, all wardrobe data, body profile, and uploaded images.
-            This cannot be undone.
+          <Text style={styles.dangerNote}>
+            Permanently deletes your account, wardrobe, body profile, and all uploaded images. Cannot be undone.
           </Text>
         </View>
 
+        {/* ── Footer ─────────────────────────────────────────────────────── */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Made with 💜 for fashion lovers</Text>
+          <View style={styles.footerDivider} />
+          <Text style={styles.footerText}>Smart Closet · Est. 2024</Text>
         </View>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -514,301 +489,413 @@ const SettingsScreen = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: CHARCOAL,
   },
   container: {
     flex: 1,
-    backgroundColor: '#F8F7FF',
+    backgroundColor: IVORY,
   },
+
+  // Header (dark charcoal band)
   header: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 24,
+    backgroundColor: CHARCOAL,
+    paddingHorizontal: 28,
+    paddingTop: 28,
+    paddingBottom: 28,
+  },
+  headerEyebrow: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: GOLD,
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    marginBottom: 10,
   },
   headerTitle: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: theme.colors.text,
-    marginBottom: 4,
+    fontSize: 36,
+    fontWeight: '300',
+    color: CREAM_HEADER,
+    letterSpacing: -0.5,
   },
-  headerSubtitle: {
-    fontSize: 16,
-    color: theme.colors.textSecondary,
-  },
-  section: {
-    backgroundColor: '#FFFFFF',
+  headerDivider: {
+    width: 32,
+    height: 1,
+    backgroundColor: GOLD,
     marginTop: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 20,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.colors.text,
-    marginBottom: 16,
-  },
-  dangerSectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#EF4444',
-    marginBottom: 16,
-  },
-  statsCard: {
-    backgroundColor: '#F8F7FF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  contribBadge: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#C7D2FE',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  contribBadgeText: {
-    fontSize: 11,
-    color: '#4338CA',
-    fontWeight: '600',
-  },
-  statRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
+
+  // Sections
+  section: {
+    backgroundColor: IVORY,
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 4,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: BORDER,
   },
-  statContent: {
-    flex: 1,
-    marginLeft: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  statLabel: {
-    fontSize: 16,
-    color: theme.colors.text,
-  },
-  statValue: {
-    fontSize: 16,
+  sectionLabel: {
+    fontSize: 10,
     fontWeight: '600',
-    color: theme.colors.primary,
+    color: TEXT_SUBTLE,
+    letterSpacing: 2.5,
+    textTransform: 'uppercase',
+    marginBottom: 18,
   },
-  primaryButton: {
-    backgroundColor: theme.colors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-    gap: 8,
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+  dangerSectionLabel: {
+    fontSize: 10,
     fontWeight: '600',
+    color: '#C0392B',
+    letterSpacing: 2.5,
+    textTransform: 'uppercase',
+    marginBottom: 18,
   },
-  settingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  settingInfo: {
-    flex: 1,
-    marginRight: 16,
-  },
-  settingLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: theme.colors.text,
-    marginBottom: 4,
-  },
-  settingDescription: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-  },
-  infoCard: {
-    backgroundColor: '#F8F7FF',
-    borderRadius: 12,
-    padding: 16,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  infoLabel: {
-    fontSize: 16,
-    color: theme.colors.text,
-  },
-  infoValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.textSecondary,
-  },
-  dangerButton: {
-    backgroundColor: '#FEF2F2',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
-    marginBottom: 12,
-    gap: 8,
-  },
-  dangerButtonText: {
-    color: '#EF4444',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  dangerWarning: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
+
+  // Profile card
   profileCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8F7FF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: WARM_MUTED,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 18,
+    marginBottom: 24,
   },
-  profileAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: theme.colors.primary,
-    justifyContent: 'center',
+  avatarRing: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 1.5,
+    borderColor: GOLD,
     alignItems: 'center',
-    marginRight: 14,
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  avatarInner: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: GOLD_SUBTLE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitials: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: GOLD,
+    letterSpacing: 1,
   },
   profileInfo: {
     flex: 1,
   },
   profileName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.colors.text,
+    fontSize: 17,
+    fontWeight: '500',
+    color: INK,
     marginBottom: 2,
   },
   profileEmail: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    marginBottom: 6,
-  },
-  modeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EDE9FE',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    gap: 4,
-  },
-  modeBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: theme.colors.primary,
-  },
-  subsectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.colors.textSecondary,
-    marginBottom: 10,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  modeOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    fontSize: 13,
+    color: TEXT_MUTED,
     marginBottom: 8,
   },
-  modeOptionActive: {
-    borderColor: theme.colors.primary,
-    backgroundColor: '#F8F7FF',
-  },
-  modeOptionLeft: {
+  modePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    backgroundColor: GOLD_SUBTLE,
+    borderWidth: 1,
+    borderColor: GOLD_BORDER,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 2,
+    gap: 5,
+  },
+  modePillText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: GOLD,
+    letterSpacing: 0.3,
+  },
+
+  subsectionLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: TEXT_SUBTLE,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginBottom: 12,
+  },
+
+  // Mode cards
+  modeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 2,
+    padding: 14,
+    marginBottom: 8,
+    backgroundColor: IVORY,
     gap: 12,
   },
-  modeOptionText: {
+  modeCardActive: {
+    borderColor: GOLD_BORDER,
+    backgroundColor: GOLD_SUBTLE,
+  },
+  modeIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: WARM_MUTED,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modeTextWrap: {
     flex: 1,
   },
-  modeOptionTitle: {
-    fontSize: 15,
+  modeName: {
+    fontSize: 14,
     fontWeight: '500',
-    color: theme.colors.text,
+    color: INK,
     marginBottom: 2,
   },
-  modeOptionTitleActive: {
-    color: theme.colors.primary,
-    fontWeight: '600',
-  },
-  modeOptionDesc: {
+  modeDesc: {
     fontSize: 12,
-    color: theme.colors.textSecondary,
+    color: TEXT_MUTED,
+    lineHeight: 16,
   },
+
   signOutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
+    paddingVertical: 13,
     marginTop: 12,
-    borderRadius: 12,
-    backgroundColor: '#FEF2F2',
+    marginBottom: 8,
+    borderRadius: 2,
     borderWidth: 1,
-    borderColor: '#FEE2E2',
+    borderColor: 'rgba(192,57,43,0.25)',
+    backgroundColor: 'rgba(192,57,43,0.04)',
     gap: 8,
   },
-  signOutButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#EF4444',
+  signOutText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#C0392B',
+    letterSpacing: 0.2,
   },
+
+  // Guest state
   guestCard: {
     alignItems: 'center',
-    padding: 24,
-    backgroundColor: '#F8F7FF',
-    borderRadius: 12,
-  },
-  guestText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: theme.colors.text,
-    marginTop: 12,
-  },
-  guestSubtext: {
-    fontSize: 13,
-    color: theme.colors.textSecondary,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  footer: {
     paddingVertical: 32,
+    paddingBottom: 24,
+  },
+  guestAvatarRing: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: WARM_MUTED,
+    marginBottom: 16,
+  },
+  guestHeading: {
+    fontSize: 17,
+    fontWeight: '500',
+    color: INK,
+    marginBottom: 6,
+  },
+  guestBody: {
+    fontSize: 14,
+    color: TEXT_MUTED,
+    textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 280,
+  },
+  goldDivider: {
+    width: 32,
+    height: 1,
+    backgroundColor: GOLD,
+    marginTop: 24,
+  },
+
+  // Community KB
+  kbCard: {
+    backgroundColor: '#FBF4E8',
+    borderWidth: 1,
+    borderColor: GOLD_BORDER,
+    borderRadius: 4,
+    padding: 18,
+    marginBottom: 8,
+  },
+  kbTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 14,
+  },
+  kbIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: GOLD_SUBTLE,
+    borderWidth: 1,
+    borderColor: GOLD_BORDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  kbCount: {
+    fontSize: 28,
+    fontWeight: '300',
+    color: GOLD,
+    lineHeight: 32,
+  },
+  kbLabel: {
+    fontSize: 12,
+    color: TEXT_MUTED,
+    marginTop: 1,
+  },
+  kbBody: {
+    fontSize: 13,
+    color: TEXT_MUTED,
+    lineHeight: 19,
+    marginBottom: 12,
+  },
+  kbBadgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  kbBadge: {
+    borderWidth: 1,
+    borderColor: GOLD_BORDER,
+    borderRadius: 2,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    backgroundColor: IVORY,
+  },
+  kbBadgeText: {
+    fontSize: 11,
+    color: GOLD,
+    fontWeight: '500',
+  },
+
+  // Stats table
+  statsTable: {
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 4,
+    backgroundColor: IVORY,
+    marginBottom: 18,
+    overflow: 'hidden',
+  },
+  tableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+    gap: 10,
+  },
+  tableIconWrap: {
+    width: 28,
     alignItems: 'center',
   },
-  footerText: {
+  tableLabel: {
+    flex: 1,
     fontSize: 14,
-    color: theme.colors.textSecondary,
+    color: INK,
+  },
+  tableValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: GOLD,
+  },
+
+  goldButton: {
+    backgroundColor: GOLD,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 15,
+    borderRadius: 2,
+    marginBottom: 16,
+    gap: 8,
+  },
+  goldButtonText: {
+    color: INK,
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+
+  toggleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+    marginBottom: 8,
+  },
+  toggleLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: INK,
+    marginBottom: 3,
+  },
+  toggleDesc: {
+    fontSize: 12,
+    color: TEXT_MUTED,
+    lineHeight: 16,
+  },
+
+  // Danger zone
+  dangerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(192,57,43,0.25)',
+    backgroundColor: 'rgba(192,57,43,0.04)',
+    marginBottom: 8,
+    gap: 8,
+  },
+  dangerButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#C0392B',
+    letterSpacing: 0.2,
+  },
+  dangerNote: {
+    fontSize: 12,
+    color: TEXT_SUBTLE,
+    lineHeight: 17,
+    textAlign: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+
+  footer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  footerDivider: {
+    width: 24,
+    height: 1,
+    backgroundColor: BORDER,
+    marginBottom: 16,
+  },
+  footerText: {
+    fontSize: 12,
+    color: TEXT_SUBTLE,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
 });
 

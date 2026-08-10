@@ -214,7 +214,19 @@ const HomeScreen: React.FC = () => {
       {/* Hero */}
       <View style={styles.hero}>
         <View style={{ flex: 1 }}>
-          <Text variant="h1" style={{ marginBottom: 4 }}>
+          <Text
+            style={{
+              fontSize: 10,
+              fontWeight: '500',
+              color: theme.colors.accent,
+              letterSpacing: 2.5,
+              textTransform: 'uppercase',
+              marginBottom: 10,
+            }}
+          >
+            Smart Closet
+          </Text>
+          <Text variant="h1" style={{ marginBottom: 4, fontWeight: '300' }}>
             {greeting}
           </Text>
           <Text variant="body" color="muted">
@@ -229,6 +241,7 @@ const HomeScreen: React.FC = () => {
           accessibilityLabel={isAuthenticated ? 'Sign out of your account' : 'Sign in to your account'}
         />
       </View>
+      <View style={{ marginHorizontal: 20, height: 1, backgroundColor: theme.colors.border, marginBottom: 8 }} />
 
       {/* Stats */}
       <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
@@ -384,12 +397,12 @@ const HomeScreen: React.FC = () => {
               style={[
                 styles.actionIcon,
                 {
-                  backgroundColor: theme.colors.muted,
+                  backgroundColor: theme.colors.accentSubtle,
                   borderRadius: theme.radius.full,
                 },
               ]}
             >
-              <Icon name={a.icon} size={22} color={theme.colors.text} />
+              <Icon name={a.icon} size={22} color={theme.colors.accent} />
             </View>
             <Text variant="h4" style={{ marginTop: 12 }}>
               {a.label}
