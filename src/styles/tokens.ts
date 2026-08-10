@@ -243,24 +243,24 @@ type ColorPalette = {
 };
 
 export const lightPalette: ColorPalette = {
-  background: '#FAFAF9',         // warm off-white
+  background: '#FDFAF5',         // warm ivory
   surface: '#FFFFFF',
   surfaceElevated: '#FFFFFF',
-  muted: '#F5F5F4',
+  muted: '#F7F3EC',
 
-  text: '#0C0A09',
-  textMuted: '#57534E',
-  textSubtle: '#A8A29E',
-  textInverse: '#FAFAF9',
+  text: '#100E0B',
+  textMuted: '#6B5F52',
+  textSubtle: '#A8987E',
+  textInverse: '#FDFAF5',
 
-  border: '#E7E5E4',
-  borderStrong: '#D6D3D1',
-  focusRing: '#0C0A09',
+  border: '#EDE5D8',
+  borderStrong: '#DACFBB',
+  focusRing: '#C4975A',
 
-  accent: '#0C0A09',             // near-black accent à la 21st.dev
-  accentHover: '#1C1917',
-  accentSubtle: '#F5F5F4',
-  accentText: '#FAFAF9',
+  accent: '#C4975A',             // champagne gold
+  accentHover: '#A8803E',
+  accentSubtle: '#FBF4E8',
+  accentText: '#FFFFFF',
 
   success: '#16A34A',
   successSubtle: '#DCFCE7',
@@ -271,43 +271,43 @@ export const lightPalette: ColorPalette = {
   info: '#2563EB',
   infoSubtle: '#DBEAFE',
 
-  skeletonBase: '#F5F5F4',
-  skeletonHighlight: '#EAE8E6',
+  skeletonBase: '#F7F3EC',
+  skeletonHighlight: '#EDE5D8',
 
   // Legacy aliases
-  primary: '#0C0A09',
-  accentDark: '#1C1917',
-  accentLight: '#44403C',
-  textSecondary: '#57534E',
-  lightGray: '#E7E5E4',
-  mediumGray: '#A8A29E',
-  darkGray: '#44403C',
+  primary: '#C4975A',
+  accentDark: '#A8803E',
+  accentLight: '#D4A96A',
+  textSecondary: '#6B5F52',
+  lightGray: '#EDE5D8',
+  mediumGray: '#A8987E',
+  darkGray: '#6B5F52',
   cardBackground: '#FFFFFF',
-  mutedBackground: '#F5F5F4',
-  shadowColor: '#0F172A',
-  categoryTag: '#F5F5F4',
+  mutedBackground: '#F7F3EC',
+  shadowColor: '#100E0B',
+  categoryTag: '#F7F3EC',
   error: '#DC2626',
 };
 
 export const darkPalette: ColorPalette = {
-  background: '#0C0A09',
-  surface: '#1C1917',
-  surfaceElevated: '#292524',
-  muted: '#1C1917',
+  background: '#080604',
+  surface: '#111009',
+  surfaceElevated: '#1C1810',
+  muted: '#111009',
 
-  text: '#FAFAF9',
-  textMuted: '#A8A29E',
-  textSubtle: '#78716C',
-  textInverse: '#0C0A09',
+  text: '#F5EDE0',
+  textMuted: '#A89070',
+  textSubtle: '#6E5E48',
+  textInverse: '#080604',
 
-  border: '#292524',
-  borderStrong: '#44403C',
-  focusRing: '#FAFAF9',
+  border: '#221E16',
+  borderStrong: '#352D1E',
+  focusRing: '#C4975A',
 
-  accent: '#FAFAF9',
-  accentHover: '#E7E5E4',
-  accentSubtle: '#1C1917',
-  accentText: '#0C0A09',
+  accent: '#C4975A',            // same gold in dark — reads as luxury
+  accentHover: '#D4A86A',
+  accentSubtle: '#1A1509',
+  accentText: '#080604',
 
   success: '#22C55E',
   successSubtle: 'rgba(34,197,94,0.15)',
@@ -318,21 +318,21 @@ export const darkPalette: ColorPalette = {
   info: '#3B82F6',
   infoSubtle: 'rgba(59,130,246,0.15)',
 
-  skeletonBase: '#1C1917',
-  skeletonHighlight: '#292524',
+  skeletonBase: '#111009',
+  skeletonHighlight: '#1C1810',
 
   // Legacy aliases
-  primary: '#FAFAF9',
-  accentDark: '#E7E5E4',
-  accentLight: '#A8A29E',
-  textSecondary: '#A8A29E',
-  lightGray: '#292524',
-  mediumGray: '#78716C',
-  darkGray: '#A8A29E',
-  cardBackground: '#1C1917',
-  mutedBackground: '#1C1917',
+  primary: '#C4975A',
+  accentDark: '#A8803E',
+  accentLight: '#D4A86A',
+  textSecondary: '#A89070',
+  lightGray: '#221E16',
+  mediumGray: '#6E5E48',
+  darkGray: '#A89070',
+  cardBackground: '#111009',
+  mutedBackground: '#111009',
   shadowColor: '#000000',
-  categoryTag: '#1C1917',
+  categoryTag: '#111009',
   error: '#EF4444',
 };
 
