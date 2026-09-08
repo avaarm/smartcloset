@@ -39,6 +39,9 @@ export interface ClothingItem {
   tags?: string[];
   favorite?: boolean;
   retailer?: string;
+  occasion?: string;
+  pattern?: string;
+  material?: string;
   /** Full material composition with tier + percentage — seeds the fabric DB. */
   materials?: MaterialComponent[];
 }

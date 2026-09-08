@@ -114,7 +114,7 @@ const StylistDashboardScreen = ({ navigation }: StylistDashboardScreenProps) => 
             </View>
             <TouchableOpacity
               style={styles.profileAvatar}
-              onPress={() => navigation.navigate('StylistProfile')}
+              onPress={() => navigation.navigate('StylistProfileView')}
             >
               <Icon name="person-outline" size={20} color={GOLD} />
             </TouchableOpacity>
@@ -124,7 +124,7 @@ const StylistDashboardScreen = ({ navigation }: StylistDashboardScreenProps) => 
           <View style={styles.statStrip}>
             {[
               { value: stats?.activeClients ?? 0, label: 'Clients', nav: 'ClientsList' },
-              { value: stats?.upcomingAppointments ?? 0, label: 'Upcoming', nav: 'AppointmentsList' },
+              { value: stats?.upcomingAppointments ?? 0, label: 'Upcoming', nav: 'ClientsList' },
               { value: stats?.completedSessions ?? 0, label: 'Sessions' },
               { value: profile?.rating?.toFixed(1) ?? '—', label: 'Rating' },
             ].map((s, i) => (
@@ -186,7 +186,7 @@ const StylistDashboardScreen = ({ navigation }: StylistDashboardScreenProps) => 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionLabel}>Upcoming</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('AppointmentsList')}>
+            <TouchableOpacity onPress={() => navigation.navigate('ClientsList')}>
               <Text style={styles.seeAll}>View all</Text>
             </TouchableOpacity>
           </View>

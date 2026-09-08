@@ -134,7 +134,7 @@ const ClientDetailsScreen = ({ navigation, route }: ClientDetailsScreenProps) =>
           <View style={styles.headerActions}>
             <TouchableOpacity
               style={styles.headerButton}
-              onPress={() => navigation.navigate('EditClient', { client })}
+              onPress={() => Alert.alert('Edit Client', 'Client editing coming in next update.')}
             >
               <Icon name="create-outline" size={24} color="#FFFFFF" />
             </TouchableOpacity>
@@ -212,7 +212,7 @@ const ClientDetailsScreen = ({ navigation, route }: ClientDetailsScreenProps) =>
 
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => navigation.navigate('AddNote', { clientId: client.id })}
+              onPress={() => Alert.alert('Add Note', 'Notes coming in next update.')}
             >
               <Icon name="document-text-outline" size={24} color={theme.colors.primary} />
               <Text style={styles.actionButtonText}>Add Note</Text>
@@ -391,7 +391,7 @@ const ClientDetailsScreen = ({ navigation, route }: ClientDetailsScreenProps) =>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Recent Appointments</Text>
               <TouchableOpacity
-                onPress={() => navigation.navigate('AppointmentsList', { clientId: client.id })}
+                onPress={() => navigation.navigate('CreateAppointment', { clientId: client.id })}
               >
                 <Text style={styles.seeAllText}>See All</Text>
               </TouchableOpacity>
@@ -439,7 +439,7 @@ const ClientDetailsScreen = ({ navigation, route }: ClientDetailsScreenProps) =>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Recommendations</Text>
               <TouchableOpacity
-                onPress={() => navigation.navigate('RecommendationsList', { clientId: client.id })}
+                onPress={() => navigation.navigate('CreateRecommendation', { clientId: client.id, clientName: client.name })}
               >
                 <Text style={styles.seeAllText}>See All</Text>
               </TouchableOpacity>
