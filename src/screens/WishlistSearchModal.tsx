@@ -519,7 +519,7 @@ const styles = StyleSheet.create({
   hintBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F3FF',
+    backgroundColor: theme.colors.muted,
     marginHorizontal: 16,
     marginTop: 12,
     padding: 12,

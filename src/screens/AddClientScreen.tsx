@@ -15,20 +15,27 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../styles/ThemeProvider';
 import { Text } from '../ui';
-import { addClient, getStylistProfile } from '../services/stylistService';
+import { addClient, updateClient, getStylistProfile } from '../services/stylistService';
+import { Client } from '../types/stylist';
 
 type Props = {
   navigation: any;
+  route?: { params?: { editClient?: Client } };
 };
 
-const AddClientScreen = ({ navigation }: Props) => {
+const AddClientScreen = ({ navigation, route }: Props) => {
   const { theme } = useTheme();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [notes, setNotes] = useState('');
-  const [styles_, setStyles] = useState('');
-  const [budget, setBudget] = useState('');
+  const editingClient = route?.params?.editClient;
+  const [name, setName] = useState(editingClient?.name || '');
+  const [email, setEmail] = useState(editingClient?.email || '');
+  const [phone, setPhone] = useState(editingClient?.phone || '');
+  const [notes, setNotes] = useState(editingClient?.notes || '');
+  const [styles_, setStyles] = useState(editingClient?.preferences?.style?.join(', ') || '');
+  const [budget, setBudget] = useState(
+    editingClient?.preferences?.budget?.max !== undefined
+      ? String(editingClient.preferences.budget.max)
+      : ''
+  );
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -38,26 +45,37 @@ const AddClientScreen = ({ navigation }: Props) => {
     }
     try {
       setSaving(true);
-      const profile = await getStylistProfile();
-      await addClient({
-        stylistId: profile?.id || 'stylist_sample_001',
-        name: name.trim(),
-        email: email.trim(),
-        phone: phone.trim() || undefined,
-        notes: notes.trim() || undefined,
-        preferences: {
-          style: styles_.trim() ? styles_.split(',').map(s => s.trim()) : [],
-          budget: budget.trim()
-            ? { min: 0, max: Number(budget) || 500 }
-            : undefined,
-        },
-        goals: [],
-        wardrobeAccess: false,
-      });
+      const preferences = {
+        style: styles_.trim() ? styles_.split(',').map(s => s.trim()) : [],
+        budget: budget.trim()
+          ? { min: 0, max: Number(budget) || 500 }
+          : undefined,
+      };
+      if (editingClient) {
+        await updateClient(editingClient.id, {
+          name: name.trim(),
+          email: email.trim(),
+          phone: phone.trim() || undefined,
+          notes: notes.trim() || undefined,
+          preferences: { ...editingClient.preferences, ...preferences },
+        });
+      } else {
+        const profile = await getStylistProfile();
+        await addClient({
+          stylistId: profile?.id || 'stylist_sample_001',
+          name: name.trim(),
+          email: email.trim(),
+          phone: phone.trim() || undefined,
+          notes: notes.trim() || undefined,
+          preferences,
+          goals: [],
+          wardrobeAccess: false,
+        });
+      }
       navigation.goBack();
     } catch (e) {
-      console.error('Error adding client:', e);
-      Alert.alert('Error', 'Failed to add client.');
+      console.error('Error saving client:', e);
+      Alert.alert('Error', 'Failed to save client.');
     } finally {
       setSaving(false);
     }
@@ -79,7 +97,9 @@ const AddClientScreen = ({ navigation }: Props) => {
         <Pressable onPress={() => navigation.goBack()} hitSlop={12}>
           <Icon name="arrow-back" size={24} color={theme.colors.text} />
         </Pressable>
-        <Text variant="h3" style={{ flex: 1, marginLeft: 12 }}>Add Client</Text>
+        <Text variant="h3" style={{ flex: 1, marginLeft: 12 }}>
+          {editingClient ? 'Edit Client' : 'Add Client'}
+        </Text>
         <Pressable
           onPress={handleSave}
           disabled={saving}

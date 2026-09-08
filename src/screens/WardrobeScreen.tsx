@@ -47,9 +47,14 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
   useEffect(() => {
     const loadClothes = async () => {
       setLoading(true);
-      const items = await getClothingItems();
-      setClothes(items);
-      setLoading(false);
+      try {
+        const items = await getClothingItems();
+        setClothes(items);
+      } catch (error) {
+        console.error('Error loading clothes:', error);
+      } finally {
+        setLoading(false);
+      }
     };
     loadClothes();
   }, []);
@@ -57,9 +62,14 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', async () => {
       setLoading(true);
-      const items = await getClothingItems();
-      setClothes(items);
-      setLoading(false);
+      try {
+        const items = await getClothingItems();
+        setClothes(items);
+      } catch (error) {
+        console.error('Error loading clothes:', error);
+      } finally {
+        setLoading(false);
+      }
     });
     return unsubscribe;
   }, [navigation]);

@@ -304,6 +304,16 @@ const ClientsStack = () => {
         options={{ headerShown: false }}
       />
       <Stack.Screen
+        name="CreateAppointment"
+        component={CreateAppointmentScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="CreateRecommendation"
+        component={CreateRecommendationScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
         name="AppointmentDetails"
         component={AppointmentDetailsScreen}
         options={{ headerShown: false }}

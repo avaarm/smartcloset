@@ -241,10 +241,11 @@ export const getSavedOutfits = async (): Promise<Outfit[]> => {
     let itemsMap: Record<string, ClothingItem> = {};
 
     if (allItemIds.length > 0) {
-      const { data: itemRows } = await supabase
+      const { data: itemRows, error: itemsError } = await supabase
         .from('clothing_items')
         .select('*')
         .in('id', allItemIds);
+      if (itemsError) throw itemsError;
       if (itemRows) {
         const { mapDbToClothingItem } = require('./storage');
         for (const row of itemRows) {

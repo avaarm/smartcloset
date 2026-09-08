@@ -28,18 +28,26 @@ const getAuthUserId = async (): Promise<string | null> => {
   }
 };
 
-/** Get the stylist_profiles.id for the current user (cached after first lookup). */
+/** Get the stylist_profiles.id for the current user (cached per userId after first lookup). */
 let _cachedStylistId: string | null = null;
+let _cachedForUserId: string | null = null;
 const getStylistProfileId = async (): Promise<string | null> => {
-  if (_cachedStylistId) return _cachedStylistId;
   const userId = await getAuthUserId();
   if (!userId) return null;
-  const { data } = await supabase
+  if (_cachedStylistId && _cachedForUserId === userId) return _cachedStylistId;
+  const { data, error } = await supabase
     .from('stylist_profiles')
     .select('id')
     .eq('user_id', userId)
     .single();
-  if (data) _cachedStylistId = data.id;
+  if (error) {
+    console.error('[stylistService] getStylistProfileId failed:', error.message);
+    return null;
+  }
+  if (data) {
+    _cachedStylistId = data.id;
+    _cachedForUserId = userId;
+  }
   return data?.id ?? null;
 };
 
@@ -223,6 +231,7 @@ export const createStylistProfile = async (
       .single();
     if (error) throw error;
     _cachedStylistId = data.id;
+    _cachedForUserId = userId;
     await setAccountType('stylist');
     return mapDbToProfile(data);
   } catch (error) {

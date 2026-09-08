@@ -61,14 +61,19 @@ const OutfitCalendarScreen: React.FC = () => {
       let active = true;
       (async () => {
         setLoading(true);
-        const [allItems, allOutfits] = await Promise.all([
-          getClothingItems(),
-          getSavedOutfits(),
-        ]);
-        if (active) {
-          setItems(allItems.filter(i => !i.isWishlist));
-          setOutfits(allOutfits);
-          setLoading(false);
+        try {
+          const [allItems, allOutfits] = await Promise.all([
+            getClothingItems(),
+            getSavedOutfits(),
+          ]);
+          if (active) {
+            setItems(allItems.filter(i => !i.isWishlist));
+            setOutfits(allOutfits);
+          }
+        } catch (error) {
+          console.error('Error loading calendar data:', error);
+        } finally {
+          if (active) setLoading(false);
         }
       })();
       return () => { active = false; };

@@ -205,7 +205,7 @@ export const getClothingItems = async (
     return (data || []).map(mapDbToClothingItem);
   } catch (error) {
     console.error('Error getting clothing items:', error);
-    return [];
+    throw error;
   }
 };
 
