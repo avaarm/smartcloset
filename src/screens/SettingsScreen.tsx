@@ -436,18 +436,22 @@ const SettingsScreen = () => {
         <View style={styles.section}>
           <Text style={styles.dangerSectionLabel}>Danger Zone</Text>
 
-          <TouchableOpacity
-            style={[styles.dangerButton, { borderColor: GOLD_BORDER, backgroundColor: GOLD_SUBTLE }]}
-            onPress={handleReseedDemoData}
-            disabled={loading}
-            activeOpacity={0.7}
-          >
-            <Icon name="refresh-outline" size={18} color={GOLD} />
-            <Text style={[styles.dangerButtonText, { color: GOLD }]}>Reset Demo Data</Text>
-          </TouchableOpacity>
-          <Text style={styles.dangerNote}>
-            Replaces all data with a fresh sample set — wardrobe, outfits, stylist & client content. Useful for testing from a known state.
-          </Text>
+          {__DEV__ && (
+            <>
+              <TouchableOpacity
+                style={[styles.dangerButton, { borderColor: GOLD_BORDER, backgroundColor: GOLD_SUBTLE }]}
+                onPress={handleReseedDemoData}
+                disabled={loading}
+                activeOpacity={0.7}
+              >
+                <Icon name="refresh-outline" size={18} color={GOLD} />
+                <Text style={[styles.dangerButtonText, { color: GOLD }]}>Reset Demo Data</Text>
+              </TouchableOpacity>
+              <Text style={styles.dangerNote}>
+                Replaces all data with a fresh sample set — wardrobe, outfits, stylist & client content. Dev only.
+              </Text>
+            </>
+          )}
 
           <TouchableOpacity
             style={styles.dangerButton}

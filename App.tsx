@@ -528,7 +528,7 @@ const App = (): React.JSX.Element => {
   if (isAuthLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#8B7FD9" />
+        <ActivityIndicator size="large" color="#C4975A" />
       </View>
     );
   }
@@ -554,16 +554,17 @@ const App = (): React.JSX.Element => {
 };
 
 const tabScreenOptions = {
-  tabBarActiveTintColor: '#8B7FD9',
+  tabBarActiveTintColor: '#C4975A',
   tabBarInactiveTintColor: '#9CA3AF',
   tabBarStyle: {
     height: Platform.OS === 'ios' ? 88 : 60,
     paddingBottom: Platform.OS === 'ios' ? 30 : 8,
     paddingTop: 8,
-    backgroundColor: '#ffffff',
-    borderTopWidth: 0,
+    backgroundColor: '#FDFAF5',
+    borderTopWidth: 1,
+    borderTopColor: '#EDE5D8',
     elevation: 10,
-    shadowColor: 'rgba(139, 127, 217, 0.15)',
+    shadowColor: 'rgba(196, 151, 90, 0.10)',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -575,7 +576,7 @@ const tabScreenOptions = {
   },
   headerStyle: {
     backgroundColor: '#FFFFFF',
-    shadowColor: 'rgba(139, 127, 217, 0.1)',
+    shadowColor: 'rgba(196, 151, 90, 0.08)',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
