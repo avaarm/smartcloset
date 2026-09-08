@@ -37,7 +37,7 @@ const OutfitCard: React.FC<OutfitCardProps> = ({ outfit, onSave, onDelete, onMar
           </TouchableOpacity>
         ) : (
           <TouchableOpacity onPress={onSave} style={styles.actionButton}>
-            <Icon name="bookmark-outline" size={22} color="#8B7FD9" />
+            <Icon name="bookmark-outline" size={22} color="#C4975A" />
           </TouchableOpacity>
         )}
       </View>
@@ -66,7 +66,7 @@ const OutfitCard: React.FC<OutfitCardProps> = ({ outfit, onSave, onDelete, onMar
         {outfit.items.map((item, index) => (
           <View key={item.id + index} style={styles.itemCard}>
             <Image 
-              source={{ uri: item.retailerImage || item.userImage || 'https://via.placeholder.com/120x160' }} 
+              source={{ uri: item.retailerImage || item.userImage || undefined }} 
               style={styles.itemImage} 
               resizeMode="cover"
             />

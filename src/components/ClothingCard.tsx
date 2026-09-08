@@ -13,7 +13,7 @@ const ClothingCard = ({ item, onPress }: ClothingCardProps) => {
   return (
     <Pressable onPress={onPress} style={styles.card}>
       <Image
-        source={{ uri: imageError ? 'https://via.placeholder.com/150' : (item.retailerImage || item.userImage || 'https://via.placeholder.com/150') }}
+        source={imageError ? undefined : { uri: item.retailerImage || item.userImage || undefined }}
         style={styles.image}
         resizeMode="cover"
         onError={() => setImageError(true)}

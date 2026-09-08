@@ -120,7 +120,7 @@ const CreateOutfitScreen: React.FC = () => {
     <View style={styles.selectedItemCard}>
       <Image
         source={{
-          uri: item.userImage || item.retailerImage || 'https://via.placeholder.com/80',
+          uri: item.userImage || item.retailerImage || undefined,
         }}
         style={styles.selectedItemImage}
       />
@@ -145,7 +145,7 @@ const CreateOutfitScreen: React.FC = () => {
       >
         <Image
           source={{
-            uri: item.userImage || item.retailerImage || 'https://via.placeholder.com/100',
+            uri: item.userImage || item.retailerImage || undefined,
           }}
           style={styles.availableItemImage}
         />

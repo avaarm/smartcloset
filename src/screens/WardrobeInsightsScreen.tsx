@@ -31,7 +31,7 @@ const CATEGORY_COLORS: Record<ClothingCategory, string> = {
   bottoms: '#6B8E6B',
   dresses: '#D4748A',
   outerwear: '#C4A962',
-  shoes: '#8B7FD9',
+  shoes: '#C4975A',
   accessories: '#E8915B',
 };
 

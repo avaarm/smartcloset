@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Courier',
   },
   button: {
-    backgroundColor: '#8B7FD9',
+    backgroundColor: '#C4975A',
     paddingHorizontal: 32,
     paddingVertical: 16,
     borderRadius: 12,
