@@ -82,7 +82,7 @@ const ClothingItem: React.FC<Props> = ({ item, onEdit, onDelete, onPress, showAc
     >
       <Animated.View style={[styles.container, { transform: [{ scale: scaleAnim }] }]}>
         <Image 
-          source={{ uri: imageError ? 'https://via.placeholder.com/100x120' : (item.userImage || item.retailerImage || 'https://via.placeholder.com/100x120') }} 
+          source={imageError ? undefined : { uri: item.userImage || item.retailerImage || undefined }}
           style={styles.image}
           onError={() => setImageError(true)}
         />

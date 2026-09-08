@@ -476,7 +476,6 @@ export const loadSampleMessagingData = async (): Promise<void> => {
     await AsyncStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(sampleMessages));
     await AsyncStorage.setItem(STORAGE_KEYS.RELATIONSHIPS, JSON.stringify(sampleRelationships));
     
-    console.log('Sample messaging data loaded successfully');
   } catch (error) {
     console.error('Error loading sample messaging data:', error);
     throw error;

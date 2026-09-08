@@ -70,7 +70,6 @@ export const addAvailableMode = async (mode: AccountType): Promise<void> => {
 export const switchToPersonalMode = async (): Promise<void> => {
   try {
     await setCurrentMode('user');
-    console.log('Switched to Personal Mode');
   } catch (error) {
     console.error('Error switching to personal mode:', error);
     throw error;
@@ -89,7 +88,6 @@ export const switchToStylistMode = async (): Promise<void> => {
     
     await setCurrentMode('stylist');
     await addAvailableMode('stylist');
-    console.log('Switched to Stylist Mode');
   } catch (error) {
     console.error('Error switching to stylist mode:', error);
     throw error;
@@ -108,7 +106,6 @@ export const switchToClientMode = async (): Promise<void> => {
     
     await setCurrentMode('client');
     await addAvailableMode('client');
-    console.log('Switched to Client Mode');
   } catch (error) {
     console.error('Error switching to client mode:', error);
     throw error;
@@ -170,7 +167,6 @@ export const setupStylistAccount = async (stylistId: string): Promise<void> => {
   try {
     await addAvailableMode('stylist');
     await updateUserProfile({ stylistId });
-    console.log('Stylist account setup complete');
   } catch (error) {
     console.error('Error setting up stylist account:', error);
     throw error;
@@ -181,7 +177,6 @@ export const setupClientAccount = async (clientId: string): Promise<void> => {
   try {
     await addAvailableMode('client');
     await updateUserProfile({ clientId });
-    console.log('Client account setup complete');
   } catch (error) {
     console.error('Error setting up client account:', error);
     throw error;
@@ -271,7 +266,6 @@ export const initializeAccount = async (): Promise<void> => {
       await setCurrentMode('user');
     }
     
-    console.log('Account initialized:', profile);
   } catch (error) {
     console.error('Error initializing account:', error);
     throw error;
@@ -299,7 +293,6 @@ export const loadSampleAccountData = async (): Promise<void> => {
     await AsyncStorage.setItem(STORAGE_KEYS.AVAILABLE_MODES, JSON.stringify(['user', 'stylist', 'client']));
     await AsyncStorage.setItem(STORAGE_KEYS.CURRENT_MODE, 'user');
     
-    console.log('Sample account data loaded successfully');
   } catch (error) {
     console.error('Error loading sample account data:', error);
     throw error;

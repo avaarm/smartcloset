@@ -158,7 +158,7 @@ const MyStylistScreen = ({ navigation }: any) => {
       {/* Stylist Profile Card */}
       <View style={styles.profileCard}>
         <Image
-          source={{ uri: stylist.profileImage || 'https://via.placeholder.com/120' }}
+          source={{ uri: stylist.profileImage || undefined }}
           style={styles.profileImage}
         />
         <Text style={styles.stylistName}>{stylist.name}</Text>

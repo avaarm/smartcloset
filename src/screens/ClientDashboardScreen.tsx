@@ -126,7 +126,7 @@ const ClientDashboardScreen = ({ navigation }: any) => {
           onPress={() => navigation.navigate('MyStylist')}
         >
           <Image
-            source={{ uri: stylist.profileImage || 'https://via.placeholder.com/80' }}
+            source={{ uri: stylist.profileImage || undefined }}
             style={styles.stylistImage}
           />
           <View style={styles.stylistInfo}>

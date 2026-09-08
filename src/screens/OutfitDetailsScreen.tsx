@@ -180,7 +180,7 @@ const OutfitDetailsScreen = () => {
               <View key={item.id + index} style={styles.itemCard}>
                 <Image
                   source={{
-                    uri: item.retailerImage || item.userImage || 'https://via.placeholder.com/120x160',
+                    uri: item.retailerImage || item.userImage || undefined,
                   }}
                   style={styles.itemImage}
                   resizeMode="cover"

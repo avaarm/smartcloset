@@ -1041,7 +1041,6 @@ export const loadSampleStylistData = async (): Promise<void> => {
     ];
 
     await AsyncStorage.setItem(APPOINTMENTS_KEY, JSON.stringify(sampleAppointments));
-    console.log('Sample stylist data loaded successfully');
   } catch (error) {
     console.error('Error loading sample stylist data:', error);
     throw error;

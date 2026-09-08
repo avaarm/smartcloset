@@ -534,7 +534,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
             </View>
           ) : (
             <View style={styles.placeholder}>
-              <Icon name="camera-outline" size={40} color="#8B7FD9" />
+              <Icon name="camera-outline" size={40} color="#C4975A" />
               <Text style={styles.placeholderText}>Add Photo</Text>
               <Text style={styles.aiHintText}>AI will analyze your photo</Text>
             </View>
@@ -1059,7 +1059,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
             value={favorite}
             onValueChange={setFavorite}
             trackColor={{ false: '#D1D5DB', true: '#FFC0CB' }}
-            thumbColor={favorite ? '#8B7FD9' : '#f4f3f4'}
+            thumbColor={favorite ? '#C4975A' : '#f4f3f4'}
           />
         </View>
         
@@ -1198,13 +1198,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#8B7FD9',
+    borderColor: '#C4975A',
     borderStyle: 'dashed',
   },
   placeholderText: {
     marginTop: 12,
     fontSize: 15,
-    color: '#8B7FD9',
+    color: '#C4975A',
     fontWeight: '500',
   },
   inputSubLabel: {
@@ -1273,7 +1273,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   saveButton: {
-    backgroundColor: '#8B7FD9',
+    backgroundColor: '#C4975A',
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
@@ -1303,7 +1303,7 @@ const styles = StyleSheet.create({
   },
   aiHintText: {
     fontSize: 12,
-    color: '#8B7FD9',
+    color: '#C4975A',
     marginTop: 4,
   },
   aiSuggestionContainer: {
@@ -1313,7 +1313,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 16,
     borderLeftWidth: 4,
-    borderLeftColor: '#8B7FD9',
+    borderLeftColor: '#C4975A',
   },
   aiSuggestionTitle: {
     fontSize: 16,

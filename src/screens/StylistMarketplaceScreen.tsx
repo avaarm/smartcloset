@@ -110,7 +110,7 @@ const StylistMarketplaceScreen = ({ navigation }: any) => {
       )}
 
       <Image
-        source={{ uri: item.profileImage || 'https://via.placeholder.com/100' }}
+        source={{ uri: item.profileImage || undefined }}
         style={styles.stylistImage}
       />
 
@@ -179,7 +179,7 @@ const StylistMarketplaceScreen = ({ navigation }: any) => {
               onPress={() => navigation.navigate('StylistProfileView', { stylistId: item.stylistId })}
             >
               <Image
-                source={{ uri: item.profileImage || 'https://via.placeholder.com/120' }}
+                source={{ uri: item.profileImage || undefined }}
                 style={styles.featuredImage}
               />
               <View style={styles.featuredOverlay}>

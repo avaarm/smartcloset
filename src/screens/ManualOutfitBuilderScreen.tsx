@@ -150,7 +150,7 @@ const ManualOutfitBuilderScreen = () => {
       >
         <Image
           source={{
-            uri: item.retailerImage || item.userImage || 'https://via.placeholder.com/150',
+            uri: item.retailerImage || item.userImage || undefined,
           }}
           style={styles.itemImage}
           resizeMode="cover"
@@ -190,7 +190,7 @@ const ManualOutfitBuilderScreen = () => {
               <View key={item.id} style={styles.selectedItemPreview}>
                 <Image
                   source={{
-                    uri: item.retailerImage || item.userImage || 'https://via.placeholder.com/80',
+                    uri: item.retailerImage || item.userImage || undefined,
                   }}
                   style={styles.selectedItemImage}
                   resizeMode="cover"
@@ -335,7 +335,7 @@ const ManualOutfitBuilderScreen = () => {
                           uri:
                             item.retailerImage ||
                             item.userImage ||
-                            'https://via.placeholder.com/100',
+                            undefined,
                         }}
                         style={styles.previewItemImage}
                         resizeMode="cover"

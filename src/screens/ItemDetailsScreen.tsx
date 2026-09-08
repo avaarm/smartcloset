@@ -209,7 +209,7 @@ const ItemDetailsScreen: React.FC = () => {
               uri:
                 item.retailerImage ||
                 item.userImage ||
-                'https://via.placeholder.com/400x500',
+                undefined,
             }}
             style={styles.image}
             resizeMode="cover"

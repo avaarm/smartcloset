@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
   smartCameraButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#8B7FD9',
+    backgroundColor: '#C4975A',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 8,
@@ -443,7 +443,7 @@ const styles = StyleSheet.create({
   },
   productPrice: {
     fontSize: 12,
-    color: '#8B7FD9',
+    color: '#C4975A',
     marginTop: 2,
   },
   productSimilarity: {
@@ -457,7 +457,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#eee',
   },
   useResultsButton: {
-    backgroundColor: '#8B7FD9',
+    backgroundColor: '#C4975A',
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',

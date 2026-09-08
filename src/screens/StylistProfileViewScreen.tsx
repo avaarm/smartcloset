@@ -53,7 +53,7 @@ const StylistProfileViewScreen = ({ route, navigation }: any) => {
   };
 
   const handleMessage = () => {
-    Alert.alert('Coming Soon', 'Messaging will be available after booking your first session');
+    navigation.navigate('MessagesMain');
   };
 
   const renderStars = (rating: number) => {
@@ -95,7 +95,7 @@ const StylistProfileViewScreen = ({ route, navigation }: any) => {
         {/* Header Image */}
         <View style={styles.headerContainer}>
           <Image
-            source={{ uri: listing.profileImage || 'https://via.placeholder.com/400' }}
+            source={{ uri: listing.profileImage || undefined }}
             style={styles.headerImage}
           />
           {listing.featured && (
