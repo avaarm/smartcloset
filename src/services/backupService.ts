@@ -94,10 +94,12 @@ export const saveAndShareBackup = async (): Promise<void> => {
       type: 'application/json',
     };
 
-    await Share.share(shareOptions);
-    
-    // Clean up file after sharing (optional)
-    // await RNFS.unlink(path);
+    try {
+      await Share.share(shareOptions);
+    } finally {
+      // Clean up the temporary backup file regardless of share outcome
+      await RNFS.unlink(path).catch(() => {});
+    }
   } catch (error) {
     console.error('Error saving and sharing backup:', error);
     throw error;

@@ -105,7 +105,11 @@ class GoogleVisionService {
           ],
         }],
       });
-      const analysis = this.parseVisionResponse(data.responses[0]);
+      const raw = data.responses?.[0];
+      if (!raw) {
+        throw new Error('Vision: empty response');
+      }
+      const analysis = this.parseVisionResponse(raw);
       
       // Get similar products
       const similarProducts = await this.findSimilarProducts(imageBase64);
@@ -148,7 +152,7 @@ class GoogleVisionService {
         console.warn('Product Search proxy error:', err?.message);
         return [];
       }
-      return this.parseProductSearchResults(data.responses[0]);
+      return this.parseProductSearchResults(data.responses?.[0] ?? {});
     } catch (error) {
       console.warn('Product Search error:', error);
       return [];

@@ -27,12 +27,12 @@ import { getClothingItems } from '../services/storage';
 // ─── Category colors ────────────────────────────────────────────────────────
 
 const CATEGORY_COLORS: Record<ClothingCategory, string> = {
-  tops: '#4F86F7',
-  bottoms: '#6B8E6B',
-  dresses: '#D4748A',
+  tops: '#D9B978',
+  bottoms: '#9C7A4A',
+  dresses: '#C48A82',
   outerwear: '#C4A962',
   shoes: '#C4975A',
-  accessories: '#E8915B',
+  accessories: '#8A6D4E',
 };
 
 const CATEGORY_ICONS: Record<ClothingCategory, string> = {
@@ -67,10 +67,15 @@ const WardrobeInsightsScreen: React.FC = () => {
       let active = true;
       (async () => {
         setLoading(true);
-        const data = await getClothingItems({ all: true });
-        if (active) {
-          setItems(data.filter(i => !i.isWishlist));
-          setLoading(false);
+        try {
+          const data = await getClothingItems({ all: true });
+          if (active) {
+            setItems(data.filter(i => !i.isWishlist));
+          }
+        } catch (error) {
+          console.error('Error loading wardrobe insights:', error);
+        } finally {
+          if (active) setLoading(false);
         }
       })();
       return () => { active = false; };

@@ -186,7 +186,7 @@ const StylistDashboardScreen = ({ navigation }: StylistDashboardScreenProps) => 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionLabel}>Upcoming</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('ClientsList')}>
+            <TouchableOpacity onPress={() => navigation.navigate('Clients')}>
               <Text style={styles.seeAll}>View all</Text>
             </TouchableOpacity>
           </View>

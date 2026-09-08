@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ClothingItem, Outfit, OutfitHistory } from '../types';
-import { getClothingItems, updateClothingItem } from './storage';
+import { getClothingItems, updateClothingItem, mapDbToClothingItem } from './storage';
 import { supabase } from '../config/supabase';
 
 const OUTFIT_HISTORY_KEY = '@smartcloset_outfit_history';
@@ -58,11 +58,25 @@ export class WearTrackingService {
       if (userId) {
         // Supabase: increment wear_count and set last_worn directly
         const { error } = await supabase.rpc('increment_wear_count', { item_id: itemId });
-        // If the RPC doesn't exist, fall back to a read-update cycle
+        // Only fall back to a read-update cycle if the RPC itself is missing/
+        // misconfigured. Any other error (e.g. a network outage) should surface
+        // as a connection error rather than being masked as "Item not found".
         if (error) {
-          const items = await getClothingItems({ all: true });
-          const item = items.find(i => i.id === itemId);
-          if (!item) throw new Error('Item not found');
+          const rpcMissing = error.code === 'PGRST202'
+            || /function .* does not exist/i.test(error.message || '');
+          if (!rpcMissing) {
+            throw new Error("Couldn't reach the server — check your connection and try again.");
+          }
+          const { data, error: fetchError } = await supabase
+            .from('clothing_items')
+            .select('*')
+            .eq('id', itemId)
+            .maybeSingle();
+          if (fetchError) {
+            throw new Error("Couldn't reach the server — check your connection and try again.");
+          }
+          if (!data) throw new Error('Item not found');
+          const item = mapDbToClothingItem(data);
           await updateClothingItem({
             ...item,
             wearCount: (item.wearCount || 0) + 1,

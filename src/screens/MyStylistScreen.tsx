@@ -69,19 +69,19 @@ const MyStylistScreen = ({ navigation }: any) => {
   };
 
   const handleMessage = () => {
-    navigation.navigate('MessagesList');
+    navigation.navigate('Messages', { screen: 'ClientMessagesMain' });
   };
 
   const handleBookSession = () => {
-    navigation.navigate('ClientAppointments');
+    navigation.navigate('Appointments', { screen: 'ClientAppointmentsMain' });
   };
 
   const handleViewRecommendations = () => {
-    navigation.navigate('ClientRecommendations');
+    navigation.navigate('Recs', { screen: 'ClientRecommendationsMain' });
   };
 
   const handleViewAppointments = () => {
-    navigation.navigate('ClientAppointments');
+    navigation.navigate('Appointments', { screen: 'ClientAppointmentsMain' });
   };
 
   const handleEndRelationship = () => {

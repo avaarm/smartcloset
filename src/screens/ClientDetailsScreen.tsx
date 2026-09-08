@@ -128,17 +128,28 @@ const ClientDetailsScreen = ({ navigation, route }: ClientDetailsScreenProps) =>
       {/* Header */}
       <LinearGradient colors={theme.colors.gradient.luxury} style={styles.header}>
         <View style={styles.headerTop}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            onPress={() => navigation.goBack()}
+          >
             <Icon name="arrow-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <View style={styles.headerActions}>
             <TouchableOpacity
               style={styles.headerButton}
-              onPress={() => Alert.alert('Edit Client', 'Client editing coming in next update.')}
+              accessibilityRole="button"
+              accessibilityLabel="Edit client"
+              onPress={() => navigation.navigate('AddClient', { editClient: client })}
             >
               <Icon name="create-outline" size={24} color="#FFFFFF" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.headerButton} onPress={handleDeleteClient}>
+            <TouchableOpacity
+              style={styles.headerButton}
+              accessibilityRole="button"
+              accessibilityLabel="Delete client"
+              onPress={handleDeleteClient}
+            >
               <Icon name="trash-outline" size={24} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
@@ -212,7 +223,7 @@ const ClientDetailsScreen = ({ navigation, route }: ClientDetailsScreenProps) =>
 
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => Alert.alert('Add Note', 'Notes coming in next update.')}
+              onPress={() => Alert.alert('Add Note', 'Note-taking is not yet available.')}
             >
               <Icon name="document-text-outline" size={24} color={theme.colors.primary} />
               <Text style={styles.actionButtonText}>Add Note</Text>

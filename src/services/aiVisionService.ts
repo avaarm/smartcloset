@@ -227,8 +227,11 @@ class AIVisionService {
   }
 
   private parseGoogleVisionResponse(data: any): AIAnalysisResult {
-    const annotations = data.responses[0];
-    
+    const annotations = data.responses?.[0];
+    if (!annotations) {
+      throw new Error('Vision: empty response');
+    }
+
     // Extract labels for category detection
     const labels = annotations.labelAnnotations || [];
     const objects = annotations.localizedObjectAnnotations || [];
@@ -264,7 +267,10 @@ class AIVisionService {
 
   private parseOpenAIResponse(data: any): AIAnalysisResult {
     try {
-      const content = data.choices[0].message.content;
+      const content = data.choices?.[0]?.message?.content;
+      if (!content) {
+        throw new Error('OpenAI: empty response');
+      }
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0]);

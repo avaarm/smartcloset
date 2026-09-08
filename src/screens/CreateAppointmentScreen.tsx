@@ -93,6 +93,12 @@ const CreateAppointmentScreen = ({ navigation, route }: CreateAppointmentScreenP
       return;
     }
 
+    const parsedDate = new Date(date);
+    if (isNaN(parsedDate.getTime())) {
+      Alert.alert('Invalid Date', 'Please enter the date as YYYY-MM-DD.');
+      return;
+    }
+
     if (!isVirtual && !location) {
       Alert.alert('Error', 'Please enter a location or mark as virtual');
       return;
@@ -100,6 +106,12 @@ const CreateAppointmentScreen = ({ navigation, route }: CreateAppointmentScreenP
 
     if (isVirtual && !meetingLink) {
       Alert.alert('Error', 'Please enter a meeting link for virtual appointments');
+      return;
+    }
+
+    const parsedFee = fee.trim() ? parseFloat(fee) : undefined;
+    if (parsedFee !== undefined && !Number.isFinite(parsedFee)) {
+      Alert.alert('Error', 'Please enter a valid fee amount.');
       return;
     }
 
@@ -112,7 +124,7 @@ const CreateAppointmentScreen = ({ navigation, route }: CreateAppointmentScreenP
         clientId: selectedClient.id,
         clientName: selectedClient.name,
         type: appointmentType as any,
-        date: new Date(date).toISOString(),
+        date: parsedDate.toISOString(),
         startTime,
         endTime,
         duration,
@@ -122,7 +134,7 @@ const CreateAppointmentScreen = ({ navigation, route }: CreateAppointmentScreenP
         status: 'scheduled',
         notes,
         prepNotes,
-        fee: fee ? parseFloat(fee) : undefined,
+        fee: parsedFee,
         paid,
       });
 

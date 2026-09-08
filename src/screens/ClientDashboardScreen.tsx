@@ -61,7 +61,7 @@ const ClientDashboardScreen = ({ navigation }: any) => {
 
   const handleMessageStylist = () => {
     if (clientAccount?.currentStylistId) {
-      navigation.navigate('MessagesList');
+      navigation.navigate('Messages', { screen: 'ClientMessagesMain' });
     } else {
       Alert.alert('No Stylist', 'You need to book a stylist first');
     }
@@ -69,7 +69,7 @@ const ClientDashboardScreen = ({ navigation }: any) => {
 
   const handleBookAppointment = () => {
     if (clientAccount?.currentStylistId) {
-      navigation.navigate('ClientAppointments');
+      navigation.navigate('Appointments', { screen: 'ClientAppointmentsMain' });
     } else {
       Alert.alert('No Stylist', 'Please find a stylist in the Discover tab');
     }
@@ -109,7 +109,7 @@ const ClientDashboardScreen = ({ navigation }: any) => {
         {unreadMessages > 0 && (
           <TouchableOpacity
             style={styles.notificationBadge}
-            onPress={() => navigation.navigate('MessagesList')}
+            onPress={() => navigation.navigate('Messages', { screen: 'ClientMessagesMain' })}
           >
             <Icon name="chatbubbles" size={24} color={theme.colors.primary} />
             <View style={styles.badge}>
