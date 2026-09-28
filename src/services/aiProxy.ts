@@ -41,6 +41,26 @@ const callGoogleVisionDirect = async (payload: unknown): Promise<unknown> => {
   return resp.json();
 };
 
+// Direct Google Custom Search call used as dev fallback when proxy secrets
+// aren't set. Mirrors callGoogleVisionDirect above.
+const callGoogleCseDirect = async (payload: any): Promise<unknown> => {
+  const params = new URLSearchParams({
+    key: env.GOOGLE_CSE_API_KEY,
+    cx: env.GOOGLE_CSE_ID,
+    q: payload?.q ?? '',
+  });
+  if (payload?.searchType) params.set('searchType', payload.searchType);
+  if (payload?.num) params.set('num', String(payload.num));
+  if (payload?.safe) params.set('safe', payload.safe);
+
+  const resp = await fetch(`https://www.googleapis.com/customsearch/v1?${params.toString()}`);
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`cse-direct ${resp.status}: ${text.substring(0, 200)}`);
+  }
+  return resp.json();
+};
+
 /**
  * Call the ai-proxy. Returns the parsed JSON response from the upstream
  * provider, or throws on auth/network/4xx/5xx.
@@ -69,6 +89,10 @@ export const callAiProxy = async <T = unknown>(
     if ((resp.status === 503 || resp.status === 404) && provider === 'vision' && env.GOOGLE_VISION_API_KEY) {
       console.log('[ai-proxy] vision proxy', resp.status, '— falling back to direct Vision API call');
       return callGoogleVisionDirect(payload) as Promise<T>;
+    }
+    if ((resp.status === 503 || resp.status === 404) && provider === 'cse' && env.GOOGLE_CSE_API_KEY && env.GOOGLE_CSE_ID) {
+      console.log('[ai-proxy] cse proxy', resp.status, '— falling back to direct Custom Search call');
+      return callGoogleCseDirect(payload) as Promise<T>;
     }
     const text = await resp.text();
     throw new Error(`ai-proxy ${provider} ${resp.status}: ${text.substring(0, 300)}`);
