@@ -52,6 +52,8 @@ import ColorSeasonScreen from './src/screens/ColorSeasonScreen';
 import WardrobeEditScreen from './src/screens/WardrobeEditScreen';
 import LookbookScreen from './src/screens/LookbookScreen';
 import CapsuleWardrobeScreen from './src/screens/CapsuleWardrobeScreen';
+import AccountTypeOnboardingScreen from './src/screens/AccountTypeOnboardingScreen';
+import { hasCompletedModeOnboarding, markModeOnboardingComplete } from './src/services/accountService';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -483,6 +485,9 @@ const App = (): React.JSX.Element => {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const [isGuest, setIsGuest] = useState(false);
+  // null = not yet checked, true = show the "how will you use Smart Closet?"
+  // prompt, false = already onboarded (or guest) — skip straight to the app.
+  const [needsModeOnboarding, setNeedsModeOnboarding] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!showSplash) {
@@ -517,6 +522,28 @@ const App = (): React.JSX.Element => {
     }
   }, [showSplash]);
 
+  // Decide once per signed-in user (per device) whether they still need the
+  // "how will you use Smart Closet?" prompt. Guests skip it entirely — they
+  // aren't creating an account, so there's nothing to route.
+  useEffect(() => {
+    if (isGuest) {
+      setNeedsModeOnboarding(false);
+      return;
+    }
+    const userId = session?.user?.id;
+    if (!userId) {
+      setNeedsModeOnboarding(null);
+      return;
+    }
+    let cancelled = false;
+    hasCompletedModeOnboarding(userId).then(completed => {
+      if (!cancelled) setNeedsModeOnboarding(!completed);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id, isGuest]);
+
   const handleSplashComplete = useCallback(() => {
     setShowSplash(false);
   }, []);
@@ -528,6 +555,12 @@ const App = (): React.JSX.Element => {
   const handleSignInComplete = useCallback((newSession: Session) => {
     setSession(newSession);
   }, []);
+
+  const handleModeOnboardingComplete = useCallback(() => {
+    const userId = session?.user?.id;
+    if (userId) markModeOnboardingComplete(userId);
+    setNeedsModeOnboarding(false);
+  }, [session?.user?.id]);
 
   const isSignedIn = !!session || isGuest;
 
@@ -548,6 +581,24 @@ const App = (): React.JSX.Element => {
       <SignInScreen
         onSignInComplete={handleSignInComplete}
         onGuestContinue={handleGuestContinue}
+      />
+    );
+  }
+
+  if (needsModeOnboarding === null) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#080604' }}>
+        <ActivityIndicator size="large" color="#C4975A" />
+      </View>
+    );
+  }
+
+  if (needsModeOnboarding) {
+    return (
+      <AccountTypeOnboardingScreen
+        userName={session?.user?.user_metadata?.name}
+        userEmail={session?.user?.email || ''}
+        onComplete={handleModeOnboardingComplete}
       />
     );
   }
