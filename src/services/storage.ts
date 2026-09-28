@@ -138,15 +138,34 @@ const deleteLocalItem = async (id: string): Promise<void> => {
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
+/** True when Postgrest rejected the request because `column` doesn't exist
+ * yet on the live table — i.e. a migration (see supabase/migrations/) hasn't
+ * been pushed to this Supabase project. PGRST204 on insert/update, PGRST203
+ * on some update paths; both carry the column name in the message. */
+const isMissingColumnError = (error: any, column: string): boolean =>
+  (error?.code === 'PGRST204' || error?.code === 'PGRST203') &&
+  typeof error?.message === 'string' &&
+  error.message.includes(`'${column}'`);
+
 export const saveClothingItem = async (item: ClothingItem): Promise<void> => {
   try {
     const userId = await getAuthUserId();
     if (!userId) return saveLocalItem(item);
 
-    const { error } = await supabase
-      .from('clothing_items')
-      .insert(mapClothingItemToDb(item, userId));
-    if (error) throw error;
+    const payload = mapClothingItemToDb(item, userId);
+    const { error } = await supabase.from('clothing_items').insert(payload);
+    if (error) {
+      if (isMissingColumnError(error, 'materials')) {
+        // The 003_materials_composition migration hasn't been applied to this
+        // project yet. Save without it rather than blocking the whole item.
+        console.warn('[storage] clothing_items.materials column missing (migration not applied) — saving without it');
+        const { materials, ...fallbackPayload } = payload;
+        const { error: fallbackError } = await supabase.from('clothing_items').insert(fallbackPayload);
+        if (fallbackError) throw fallbackError;
+        return;
+      }
+      throw error;
+    }
   } catch (error) {
     console.error('Error saving clothing item:', error);
     throw error;
@@ -214,30 +233,41 @@ export const updateClothingItem = async (updatedItem: ClothingItem): Promise<voi
     const userId = await getAuthUserId();
     if (!userId) return updateLocalItem(updatedItem);
 
-    const { error } = await supabase
-      .from('clothing_items')
-      .update({
-        name: updatedItem.name,
-        category: updatedItem.category,
-        color: updatedItem.color,
-        season: updatedItem.season,
-        retailer_image: updatedItem.retailerImage,
-        user_image: updatedItem.userImage,
-        brand: updatedItem.brand,
-        is_wishlist: updatedItem.isWishlist,
-        wear_count: updatedItem.wearCount,
-        last_worn: updatedItem.lastWorn,
-        cost: updatedItem.cost,
-        retail_cost: updatedItem.retailCost,
-        notes: updatedItem.notes,
-        tags: updatedItem.tags,
-        favorite: updatedItem.favorite,
-        retailer: updatedItem.retailer,
-        materials: updatedItem.materials,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', updatedItem.id);
-    if (error) throw error;
+    const payload: Record<string, any> = {
+      name: updatedItem.name,
+      category: updatedItem.category,
+      color: updatedItem.color,
+      season: updatedItem.season,
+      retailer_image: updatedItem.retailerImage,
+      user_image: updatedItem.userImage,
+      brand: updatedItem.brand,
+      is_wishlist: updatedItem.isWishlist,
+      wear_count: updatedItem.wearCount,
+      last_worn: updatedItem.lastWorn,
+      cost: updatedItem.cost,
+      retail_cost: updatedItem.retailCost,
+      notes: updatedItem.notes,
+      tags: updatedItem.tags,
+      favorite: updatedItem.favorite,
+      retailer: updatedItem.retailer,
+      materials: updatedItem.materials,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from('clothing_items').update(payload).eq('id', updatedItem.id);
+    if (error) {
+      if (isMissingColumnError(error, 'materials')) {
+        console.warn('[storage] clothing_items.materials column missing (migration not applied) — updating without it');
+        const { materials, ...fallbackPayload } = payload;
+        const { error: fallbackError } = await supabase
+          .from('clothing_items')
+          .update(fallbackPayload)
+          .eq('id', updatedItem.id);
+        if (fallbackError) throw fallbackError;
+        return;
+      }
+      throw error;
+    }
   } catch (error) {
     console.error('Error updating clothing item:', error);
     throw error;
