@@ -54,6 +54,8 @@ import LookbookScreen from './src/screens/LookbookScreen';
 import CapsuleWardrobeScreen from './src/screens/CapsuleWardrobeScreen';
 import AccountTypeOnboardingScreen from './src/screens/AccountTypeOnboardingScreen';
 import { hasCompletedModeOnboarding, markModeOnboardingComplete } from './src/services/accountService';
+import FriendsScreen from './src/screens/FriendsScreen';
+import FriendClosetScreen from './src/screens/FriendClosetScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -148,6 +150,16 @@ const HomeStack = () => {
       <Stack.Screen
         name="LensSearch"
         component={LensSearchScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Friends"
+        component={FriendsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="FriendCloset"
+        component={FriendClosetScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen

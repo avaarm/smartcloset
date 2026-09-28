@@ -160,6 +160,16 @@ const HomeScreen: React.FC = () => {
       icon: 'calendar-outline',
       onPress: () => navigation.navigate('OutfitCalendar'),
     },
+    ...(isAuthenticated
+      ? [
+          {
+            label: 'Friends',
+            sub: 'Share your closet',
+            icon: 'people-outline',
+            onPress: () => navigation.navigate('Friends'),
+          },
+        ]
+      : []),
   ];
 
   const renderRecentItem = ({ item }: { item: ClothingItem }) => {
