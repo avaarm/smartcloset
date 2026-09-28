@@ -27,6 +27,7 @@ begin
   end if;
 
   -- User-owned content. Order matters if you have FKs without ON DELETE CASCADE.
+  delete from public.friend_requests   where requester_id = uid or recipient_id = uid;
   delete from public.outfit_history    where user_id = uid;
   delete from public.recommendations   where user_id = uid or client_id = uid or stylist_id = uid;
   delete from public.appointments      where user_id = uid or stylist_id = uid or client_id = uid;
