@@ -245,6 +245,33 @@ export const switchToUserMode = async (): Promise<void> => {
   return switchToPersonalMode();
 };
 
+// ==================== Mode Onboarding ====================
+
+/**
+ * Tracks (per device, per Supabase user id) whether the new-signup "how will
+ * you use Smart Closet?" prompt has been shown, so it only appears once per
+ * account per device rather than on every app launch.
+ */
+const modeOnboardingKey = (userId: string) => `@smartcloset_mode_onboarded_${userId}`;
+
+export const hasCompletedModeOnboarding = async (userId: string): Promise<boolean> => {
+  try {
+    const value = await AsyncStorage.getItem(modeOnboardingKey(userId));
+    return value === 'true';
+  } catch (error) {
+    console.error('Error checking mode onboarding status:', error);
+    return true; // fail open: never block sign-in on a storage read error
+  }
+};
+
+export const markModeOnboardingComplete = async (userId: string): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(modeOnboardingKey(userId), 'true');
+  } catch (error) {
+    console.error('Error marking mode onboarding complete:', error);
+  }
+};
+
 // ==================== Initialization ====================
 
 export const initializeAccount = async (): Promise<void> => {
