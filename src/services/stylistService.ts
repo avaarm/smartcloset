@@ -39,7 +39,7 @@ const getStylistProfileId = async (): Promise<string | null> => {
     .from('stylist_profiles')
     .select('id')
     .eq('user_id', userId)
-    .single();
+    .maybeSingle();
   if (error) {
     console.error('[stylistService] getStylistProfileId failed:', error.message);
     return null;
