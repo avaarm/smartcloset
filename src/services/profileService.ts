@@ -45,6 +45,33 @@ export type BodyProfile = {
 const STORAGE_KEY = '@smartcloset_body_profile';
 const SUPABASE_TABLE = 'body_profiles';
 
+/** body_profiles has separate typed columns (see 001_initial_schema.sql), not
+ * a single JSON blob — map BodyProfile <-> row explicitly. */
+const mapDbToProfile = (row: any): BodyProfile => ({
+  skinTone: row.skin_tone,
+  undertone: row.undertone,
+  bodyType: row.body_type,
+  recommendedPalette: row.recommended_palette || [],
+  avoidColors: row.avoid_colors || [],
+  recommendedFits: row.recommended_fits || { tops: [], bottoms: [], dresses: [] },
+  sizeHints: row.size_hints || {},
+  facePhotoUri: row.face_photo_uri ?? undefined,
+  updatedAt: row.updated_at,
+});
+
+const mapProfileToDb = (profile: BodyProfile, userId: string) => ({
+  user_id: userId,
+  skin_tone: profile.skinTone,
+  undertone: profile.undertone,
+  body_type: profile.bodyType,
+  recommended_palette: profile.recommendedPalette,
+  avoid_colors: profile.avoidColors,
+  recommended_fits: profile.recommendedFits,
+  size_hints: profile.sizeHints,
+  face_photo_uri: profile.facePhotoUri,
+  updated_at: profile.updatedAt,
+});
+
 /**
  * Get the current user's body profile, or null if none exists.
  * Tries Supabase first (if signed in), falls back to AsyncStorage.
@@ -56,13 +83,12 @@ export const getBodyProfile = async (): Promise<BodyProfile | null> => {
     if (session?.user) {
       const { data, error } = await supabase
         .from(SUPABASE_TABLE)
-        .select('profile')
+        .select('*')
         .eq('user_id', session.user.id)
         .maybeSingle();
-      // If the table doesn't exist we get a 42P01 PostgREST error — fall through
-      // to AsyncStorage silently.
-      if (!error && data?.profile) {
-        return data.profile as BodyProfile;
+      // If the table doesn't exist, or no row yet, fall through to AsyncStorage.
+      if (!error && data) {
+        return mapDbToProfile(data);
       }
     }
   } catch {
@@ -96,10 +122,9 @@ export const saveBodyProfile = async (profile: BodyProfile): Promise<void> => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return;
 
-    const { error } = await supabase.from(SUPABASE_TABLE).upsert(
-      { user_id: session.user.id, profile: payload },
-      { onConflict: 'user_id' },
-    );
+    const { error } = await supabase
+      .from(SUPABASE_TABLE)
+      .upsert(mapProfileToDb(payload, session.user.id), { onConflict: 'user_id' });
     if (error) {
       // Table missing or RLS policy refuses → degrade silently to local-only.
       console.warn('[profileService] supabase save failed, local only:', error.message);
