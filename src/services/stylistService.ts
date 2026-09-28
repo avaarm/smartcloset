@@ -28,6 +28,12 @@ const getAuthUserId = async (): Promise<string | null> => {
   }
 };
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Legacy demo/local accounts use ids like "client_sample_001", not real uuids.
+ * Supabase's uuid columns reject those outright, so treat a non-uuid id as a
+ * signal to fall back to local storage rather than querying Supabase with it. */
+const isUuid = (id: string): boolean => UUID_RE.test(id);
+
 /** Get the stylist_profiles.id for the current user (cached per userId after first lookup). */
 let _cachedStylistId: string | null = null;
 let _cachedForUserId: string | null = null;
@@ -469,7 +475,7 @@ export const getAppointments = async (): Promise<Appointment[]> => {
 export const getAppointmentsByClient = async (clientId: string): Promise<Appointment[]> => {
   try {
     const userId = await getAuthUserId();
-    if (!userId) {
+    if (!userId || !isUuid(clientId)) {
       const appointments = await getAppointments();
       return appointments.filter(a => a.clientId === clientId);
     }
@@ -671,7 +677,7 @@ export const getRecommendationsByClient = async (
 ): Promise<StylingRecommendation[]> => {
   try {
     const userId = await getAuthUserId();
-    if (!userId) {
+    if (!userId || !isUuid(clientId)) {
       const recs = await getRecommendations();
       return recs.filter(r => r.clientId === clientId);
     }
