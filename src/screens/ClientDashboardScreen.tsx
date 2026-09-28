@@ -435,12 +435,14 @@ const styles = StyleSheet.create({
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    padding: 8,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
   statCard: {
     width: '48%',
     backgroundColor: '#fff',
-    margin: 8,
+    marginBottom: 16,
     padding: 20,
     borderRadius: 12,
     alignItems: 'center',
