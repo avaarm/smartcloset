@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy — Smart Closet</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+    color: #100E0B;
+    background: #FDFAF5;
+    line-height: 1.6;
+  }
+  h1 { font-weight: 300; font-size: 2.2rem; margin-bottom: 4px; }
+  .updated { color: #6B5F52; font-size: 0.9rem; margin-bottom: 40px; }
+  h2 { font-size: 1.3rem; margin-top: 40px; border-bottom: 1px solid #EDE5D8; padding-bottom: 8px; }
+  a { color: #C4975A; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #EDE5D8; font-size: 0.95rem; vertical-align: top; }
+  th { color: #6B5F52; font-weight: 600; }
+  .placeholder { background: #FBF4E8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+  <h1>Privacy Policy</h1>
+  <p class="updated">Smart Closet · Last updated September 29, 2026</p>
+
+  <p>This policy explains what information Smart Closet ("the app", "we") collects, how it's used, and who it's shared with. Smart Closet is a wardrobe management app that lets you catalog your clothing, get AI-assisted styling suggestions, and optionally connect with a personal stylist or friends.</p>
+
+  <h2>Information we collect</h2>
+  <table>
+    <tr><th>Category</th><th>What</th><th>Why</th></tr>
+    <tr><td>Account</td><td>Name, email address</td><td>Sign-in via email, Google, or Apple; identifying your account</td></tr>
+    <tr><td>Wardrobe content</td><td>Photos of clothing, brand/color/material/price you enter</td><td>The core feature — cataloging and organizing your wardrobe</td></tr>
+    <tr><td>Style profile</td><td>Skin tone, undertone, body type, style preferences (self-reported or estimated from a photo you provide)</td><td>Personalized outfit and color recommendations</td></tr>
+    <tr><td>Location</td><td>Approximate location, only while the app is in use</td><td>Weather-appropriate outfit suggestions</td></tr>
+    <tr><td>Camera &amp; photo library</td><td>Access only when you choose to photograph or select an item</td><td>Adding clothing items and outfit photos</td></tr>
+    <tr><td>Social &amp; marketplace</td><td>Friend connections, messages, and appointments if you use the stylist marketplace or friend-sharing features</td><td>Connecting you with friends or a stylist you choose to work with</td></tr>
+    <tr><td>Usage &amp; diagnostics</td><td>Crash reports and basic app usage</td><td>Fixing bugs and improving reliability</td></tr>
+  </table>
+
+  <h2>How we use AI features</h2>
+  <p>When you photograph a clothing item, the photo may be sent to third-party AI providers to identify its category, color, brand, and material, and to power reverse-image and text-based product search:</p>
+  <ul>
+    <li><strong>Google Cloud Vision API</strong> — image labeling and web/reverse-image search</li>
+    <li><strong>OpenAI (GPT-4 Vision)</strong> — detailed garment identification from photos</li>
+    <li><strong>Brave Search API</strong> — text-based product search results</li>
+  </ul>
+  <p>These providers process the image or query to return results to the app; we don't control their retention practices beyond what's stated in their own privacy policies. We do not sell your photos or personal data to anyone, for any purpose.</p>
+
+  <h2>Where your data is stored</h2>
+  <p>Your account data, wardrobe items, and photos are stored using Supabase (hosted on AWS infrastructure), with row-level security so only you can access your own data — with one exception: if you add a friend and they accept, your wardrobe becomes visible to that specific friend (read-only), and you can remove that access at any time.</p>
+
+  <h2>Your choices</h2>
+  <ul>
+    <li><strong>Delete your account</strong> — Settings → Delete Account permanently removes your account and all associated data (wardrobe items, outfits, style profile, friend connections) from our systems immediately. This cannot be undone.</li>
+    <li><strong>Location, camera, and photo access</strong> — controlled entirely through iOS Settings; the app functions without location access (weather suggestions are simply omitted).</li>
+    <li><strong>Guest mode</strong> — you can use core wardrobe features without creating an account; that data stays on your device only.</li>
+  </ul>
+
+  <h2>Children's privacy</h2>
+  <p>Smart Closet is not directed at children under 13, and we do not knowingly collect personal information from children under 13.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If this policy changes materially, we'll update the date at the top of this page.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy or your data: <a href="mailto:<span class="placeholder">your-support-email@example.com</span>"><span class="placeholder">your-support-email@example.com</span></a></p>
+</body>
+</html>
