@@ -29,10 +29,13 @@ CREATE INDEX IF NOT EXISTS idx_contrib_semantic_fp
 -- fingerprint. Useful for future server-side similarity queries.
 -- ============================================================================
 
+-- Postgres forbids changing the name/position of existing output columns via
+-- CREATE OR REPLACE VIEW — it only allows appending new columns at the end.
+-- semantic_fp must therefore go last, matching the exact original column
+-- order from 002_product_contributions.sql for everything before it.
 CREATE OR REPLACE VIEW public.product_contributions_aggregated AS
 SELECT
   fingerprint,
-  MIN(semantic_fp)     AS semantic_fp,
   LOWER(TRIM(name))    AS name_key,
   LOWER(TRIM(COALESCE(brand, ''))) AS brand_key,
   MIN(name)            AS name,
@@ -45,6 +48,7 @@ SELECT
   MIN(source_url)      AS source_url,
   COUNT(*)             AS confirmation_count,
   MIN(created_at)      AS first_seen_at,
-  MAX(created_at)      AS last_seen_at
+  MAX(created_at)      AS last_seen_at,
+  MIN(semantic_fp)     AS semantic_fp
 FROM public.product_contributions
 GROUP BY fingerprint, LOWER(TRIM(name)), LOWER(TRIM(COALESCE(brand, '')));
