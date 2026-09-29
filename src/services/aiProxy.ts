@@ -1,8 +1,8 @@
 /**
  * Client for the `ai-proxy` Supabase Edge Function.
  *
- * Replaces direct calls to Google Vision / OpenAI / Google CSE so secret API
- * keys never ship in the JS bundle. The proxy authenticates the user via
+ * Replaces direct calls to Google Vision / OpenAI / Brave Search so secret
+ * API keys never ship in the JS bundle. The proxy authenticates the user via
  * their Supabase JWT and forwards the request server-side using secrets
  * stored in Supabase Secrets.
  *
@@ -17,7 +17,7 @@
 import { supabase } from '../config/supabase';
 import { env } from '../config/env';
 
-export type AIProvider = 'vision' | 'openai' | 'openai-vision' | 'cse';
+export type AIProvider = 'vision' | 'openai' | 'openai-vision' | 'brave';
 
 const buildProxyUrl = (): string => {
   const base = env.SUPABASE_URL.replace(/\/$/, '');
@@ -41,22 +41,25 @@ const callGoogleVisionDirect = async (payload: unknown): Promise<unknown> => {
   return resp.json();
 };
 
-// Direct Google Custom Search call used as dev fallback when proxy secrets
-// aren't set. Mirrors callGoogleVisionDirect above.
-const callGoogleCseDirect = async (payload: any): Promise<unknown> => {
+// Direct Brave Search call used as dev fallback when proxy secrets aren't
+// set. Mirrors callGoogleVisionDirect above. Uses the Image Search endpoint
+// since callers want product photos, not web page results.
+const callBraveDirect = async (payload: any): Promise<unknown> => {
   const params = new URLSearchParams({
-    key: env.GOOGLE_CSE_API_KEY,
-    cx: env.GOOGLE_CSE_ID,
     q: payload?.q ?? '',
+    count: String(Math.min(Number(payload?.num) || 10, 20)),
+    safesearch: payload?.safe === 'off' ? 'off' : 'strict',
   });
-  if (payload?.searchType) params.set('searchType', payload.searchType);
-  if (payload?.num) params.set('num', String(payload.num));
-  if (payload?.safe) params.set('safe', payload.safe);
 
-  const resp = await fetch(`https://www.googleapis.com/customsearch/v1?${params.toString()}`);
+  const resp = await fetch(`https://api.search.brave.com/res/v1/images/search?${params.toString()}`, {
+    headers: {
+      Accept: 'application/json',
+      'X-Subscription-Token': env.BRAVE_API_KEY,
+    },
+  });
   if (!resp.ok) {
     const text = await resp.text();
-    throw new Error(`cse-direct ${resp.status}: ${text.substring(0, 200)}`);
+    throw new Error(`brave-direct ${resp.status}: ${text.substring(0, 200)}`);
   }
   return resp.json();
 };
@@ -90,9 +93,9 @@ export const callAiProxy = async <T = unknown>(
       console.log('[ai-proxy] vision proxy', resp.status, '— falling back to direct Vision API call');
       return callGoogleVisionDirect(payload) as Promise<T>;
     }
-    if ((resp.status === 503 || resp.status === 404) && provider === 'cse' && env.GOOGLE_CSE_API_KEY && env.GOOGLE_CSE_ID) {
-      console.log('[ai-proxy] cse proxy', resp.status, '— falling back to direct Custom Search call');
-      return callGoogleCseDirect(payload) as Promise<T>;
+    if ((resp.status === 503 || resp.status === 404) && provider === 'brave' && env.BRAVE_API_KEY) {
+      console.log('[ai-proxy] brave proxy', resp.status, '— falling back to direct Brave Search call');
+      return callBraveDirect(payload) as Promise<T>;
     }
     const text = await resp.text();
     throw new Error(`ai-proxy ${provider} ${resp.status}: ${text.substring(0, 300)}`);

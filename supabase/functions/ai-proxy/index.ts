@@ -6,12 +6,12 @@
 // users to keep abuse low.
 //
 // Deploy: supabase functions deploy ai-proxy
-// Secrets: supabase secrets set GOOGLE_VISION_API_KEY=... OPENAI_API_KEY=... GOOGLE_CSE_API_KEY=... GOOGLE_CSE_ID=...
+// Secrets: supabase secrets set GOOGLE_VISION_API_KEY=... OPENAI_API_KEY=... BRAVE_API_KEY=...
 //
 // Request shape:
 //   POST /functions/v1/ai-proxy
 //   Headers: Authorization: Bearer <supabase-access-token>
-//   Body: { provider: "vision" | "openai" | "cse", payload: {...} }
+//   Body: { provider: "vision" | "openai" | "openai-vision" | "brave", payload: {...} }
 
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
@@ -159,13 +159,32 @@ const callOpenAIVision = async (payload: any): Promise<Response> => {
   });
 };
 
-const callCSE = async (payload: any): Promise<Response> => {
-  const key = Deno.env.get("GOOGLE_CSE_API_KEY");
-  const cx = Deno.env.get("GOOGLE_CSE_ID");
-  if (!key || !cx) return json({ error: "Google CSE not configured" }, 503);
-  const params = new URLSearchParams({ key, cx, ...payload });
+// Brave Search — replaces Google Custom Search JSON API, which Google closed
+// to any project/key created after 2026-01-20 (hard 403 regardless of
+// billing/enablement status — confirmed against this project's own key).
+// Expects { q, num?, safe? }; uses the Image Search endpoint since callers
+// want product photos, not web page results.
+const callBrave = async (payload: any): Promise<Response> => {
+  const key = Deno.env.get("BRAVE_API_KEY");
+  if (!key) return json({ error: "BRAVE_API_KEY not configured" }, 503);
+
+  const { q, num, safe } = payload ?? {};
+  if (!q) return json({ error: "q required" }, 400);
+
+  const params = new URLSearchParams({
+    q,
+    count: String(Math.min(Number(num) || 10, 20)),
+    safesearch: safe === "off" ? "off" : "strict",
+  });
+
   const resp = await fetch(
-    `https://www.googleapis.com/customsearch/v1?${params.toString()}`,
+    `https://api.search.brave.com/res/v1/images/search?${params.toString()}`,
+    {
+      headers: {
+        Accept: "application/json",
+        "X-Subscription-Token": key,
+      },
+    },
   );
   const text = await resp.text();
   return new Response(text, {
@@ -219,8 +238,8 @@ Deno.serve(async (req: Request) => {
       case "vision":        return await callVision(payload);
       case "openai":        return await callOpenAI(payload);
       case "openai-vision": return await callOpenAIVision(payload);
-      case "cse":           return await callCSE(payload);
-      default:       return json({ error: `unknown provider: ${provider}` }, 400);
+      case "brave":         return await callBrave(payload);
+      default:              return json({ error: `unknown provider: ${provider}` }, 400);
     }
   } catch (e: any) {
     console.error("[ai-proxy] upstream error:", e?.message ?? e);
