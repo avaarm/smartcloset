@@ -873,9 +873,13 @@ export const rankCatalogByAttributes = (
 };
 
 /**
- * Search for products by text query. Uses Google Custom Search (Image mode)
- * if configured, otherwise falls back to an in-memory curated catalog so the
+ * Search for products by text query. Uses Brave Search (Image mode) if
+ * configured, otherwise falls back to an in-memory curated catalog so the
  * feature still works in demos / offline.
+ *
+ * Previously used Google Custom Search JSON API — Google closed that API to
+ * any project/key created after 2026-01-20 (hard 403 regardless of billing
+ * or enablement status), so it's no longer usable for new setups.
  */
 export const searchProductsByText = async (
   query: string,
@@ -885,40 +889,39 @@ export const searchProductsByText = async (
     return { query: '', bestGuessLabels: [], results: [] };
   }
 
-  // ── Google Custom Search path (proxied) ──
-  // CSE config now lives server-side in Supabase Secrets; clients only need
+  // ── Brave Search path (proxied) ──
+  // Brave config lives server-side in Supabase Secrets; clients only need
   // to be signed in to invoke the proxy.
   try {
     let data: any;
     try {
-      data = await callAiProxy<any>('cse', {
+      data = await callAiProxy<any>('brave', {
         q: trimmed,
-        searchType: 'image',
-        num: '10',
+        num: 10,
         safe: 'active',
       });
     } catch (err: any) {
-      // 503 from proxy means CSE not configured server-side — silently skip
-      // and fall through to the curated catalog path below.
-      console.log('[lens] CSE proxy unavailable:', err?.message?.substring(0, 80));
+      // 503 from proxy means Brave isn't configured server-side — silently
+      // skip and fall through to the curated catalog path below.
+      console.log('[lens] Brave proxy unavailable:', err?.message?.substring(0, 80));
       data = null;
     }
     if (data) {
-      const items: any[] = data.items || [];
-        const results: LensResult[] = items
-          .map((it, idx) => {
-            const pageUrl: string = it.image?.contextLink || it.link || '';
-            const host = normalizeHost(pageUrl);
-            return {
-              id: `cse-${idx}`,
-              title: (it.title || host || 'Result').substring(0, 80),
-              source: host,
-              url: pageUrl,
-              imageUrl: it.link || it.image?.thumbnailLink || '',
-              similarity: 1 - idx * 0.05,
-              isShopping: isShoppingHost(host),
-            };
-          })
+      const items: any[] = data.results || [];
+      const results: LensResult[] = items
+        .map((it, idx) => {
+          const pageUrl: string = it.url || '';
+          const host = normalizeHost(pageUrl);
+          return {
+            id: `brave-${idx}`,
+            title: (it.title || host || 'Result').substring(0, 80),
+            source: host,
+            url: pageUrl,
+            imageUrl: it.properties?.url || it.thumbnail?.src || '',
+            similarity: 1 - idx * 0.05,
+            isShopping: isShoppingHost(host),
+          };
+        })
         // Drop YouTube / Pinterest / blogs — we want actual shoppable items.
         .filter(r => !isBlockedHost(r.source));
       // Shopping first
@@ -933,7 +936,7 @@ export const searchProductsByText = async (
       };
     }
   } catch (e: any) {
-    console.warn('[lensSearchService] CSE fetch failed, using catalog:', e?.message);
+    console.warn('[lensSearchService] Brave fetch failed, using catalog:', e?.message);
   }
 
   // ── Fallback: curated catalog with token-match scoring ──

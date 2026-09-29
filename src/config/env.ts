@@ -18,8 +18,7 @@ import {
   GOOGLE_VISION_API_KEY as _GOOGLE_VISION_API_KEY,
   GOOGLE_CLOUD_PROJECT_ID as _GOOGLE_CLOUD_PROJECT_ID,
   GOOGLE_VISION_LOCATION as _GOOGLE_VISION_LOCATION,
-  GOOGLE_CSE_ID as _GOOGLE_CSE_ID,
-  GOOGLE_CSE_API_KEY as _GOOGLE_CSE_API_KEY,
+  BRAVE_API_KEY as _BRAVE_API_KEY,
   OPENAI_API_KEY as _OPENAI_API_KEY,
   GOOGLE_WEB_CLIENT_ID as _GOOGLE_WEB_CLIENT_ID,
   GOOGLE_IOS_CLIENT_ID as _GOOGLE_IOS_CLIENT_ID,
@@ -61,7 +60,7 @@ export const env = {
   SUPABASE_ANON_KEY: str(_SUPABASE_ANON_KEY),
 
   // ─────────────────────────────────────────────────────────────────────────
-  // ⚠️ Secret API keys (Vision / OpenAI / CSE) are NO LONGER read client-side.
+  // ⚠️ Secret API keys (Vision / OpenAI / Brave) are NO LONGER read client-side.
   // They live in Supabase Secrets and are accessed via the ai-proxy Edge
   // Function (supabase/functions/ai-proxy/index.ts). These fields stay here
   // so .env stays backwards-compat for local dev, but app code should NOT
@@ -70,8 +69,7 @@ export const env = {
   GOOGLE_VISION_API_KEY: str(_GOOGLE_VISION_API_KEY),
   GOOGLE_CLOUD_PROJECT_ID: str(_GOOGLE_CLOUD_PROJECT_ID),
   GOOGLE_VISION_LOCATION: str(_GOOGLE_VISION_LOCATION, 'us-west1'),
-  GOOGLE_CSE_ID: str(_GOOGLE_CSE_ID),
-  GOOGLE_CSE_API_KEY: str(_GOOGLE_CSE_API_KEY),
+  BRAVE_API_KEY: str(_BRAVE_API_KEY),
   OPENAI_API_KEY: str(_OPENAI_API_KEY),
 
   // --- Social auth (optional; stubs if missing) ---
@@ -110,10 +108,10 @@ export const hasGoogleVision = (): boolean =>
   env.ENABLE_VISION_API && env.SUPABASE_URL.length > 0;
 
 /**
- * Helper: is Google Custom Search reachable via the proxy?
+ * Helper: is text-based product search (Brave Search, via the proxy) reachable?
  * Same logic — server-side config is what matters; client just needs Supabase.
  */
-export const hasGoogleShopping = (): boolean =>
+export const hasProductSearch = (): boolean =>
   env.SUPABASE_URL.length > 0;
 
 export default env;
