@@ -13,7 +13,7 @@
 -- friendship itself (status = 'accepted'). Declined/cancelled requests are
 -- deleted rather than kept around, so a user can re-request later.
 create table if not exists friend_requests (
-  id             uuid primary key default uuid_generate_v4(),
+  id             uuid primary key default gen_random_uuid(),
   requester_id   uuid not null references auth.users(id) on delete cascade,
   recipient_id   uuid not null references auth.users(id) on delete cascade,
   requester_name text,
