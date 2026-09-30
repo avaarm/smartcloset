@@ -164,7 +164,83 @@ export const generateOutfitSuggestions = (items: ClothingItem[], count: number =
       }
     }
   }
-  
+
+  // Final fallback: strict seasonal matching found nothing (e.g. every top's
+  // season list happens to exclude the current season, or no two items share
+  // a season). Ignore season constraints entirely rather than surfacing zero
+  // suggestions when the wardrobe actually has enough items to combine.
+  if (outfits.length === 0) {
+    for (let i = 0; i < count * 2 && outfits.length < count; i++) {
+      if (tops.length > 0 && bottoms.length > 0) {
+        const top = getRandomItem(tops);
+        const bottom = getRandomItem(bottoms);
+
+        if (top && bottom) {
+          const outfitItems: ClothingItem[] = [top, bottom];
+
+          const shoe = getRandomItem(shoes);
+          if (shoe) {
+            outfitItems.push(shoe);
+          }
+
+          if ((currentSeason === 'fall' || currentSeason === 'winter') && outerwear.length > 0) {
+            const jacket = getRandomItem(outerwear);
+            if (jacket) {
+              outfitItems.push(jacket);
+            }
+          }
+
+          if (accessories.length > 0) {
+            const accessory = getRandomItem(accessories);
+            if (accessory) {
+              outfitItems.push(accessory);
+            }
+          }
+
+          const outfit: Outfit = {
+            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}-fallback-${i}`,
+            name: 'Outfit Idea',
+            items: outfitItems,
+            occasion: 'casual',
+            createdAt: new Date().toISOString()
+          };
+
+          outfits.push(outfit);
+        }
+      } else if (dresses.length > 0) {
+        const dress = getRandomItem(dresses);
+
+        if (dress) {
+          const outfitItems: ClothingItem[] = [dress];
+
+          const shoe = getRandomItem(shoes);
+          if (shoe) {
+            outfitItems.push(shoe);
+          }
+
+          if (accessories.length > 0) {
+            const accessory = getRandomItem(accessories);
+            if (accessory) {
+              outfitItems.push(accessory);
+            }
+          }
+
+          const outfit: Outfit = {
+            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}-fallback-dress-${i}`,
+            name: `${dress.color || ''} Dress Outfit`,
+            items: outfitItems,
+            occasion: 'casual',
+            createdAt: new Date().toISOString()
+          };
+
+          outfits.push(outfit);
+        }
+      } else {
+        break;
+      }
+    }
+  }
+
   return outfits;
 };
 

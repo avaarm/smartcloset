@@ -25,8 +25,14 @@ export class WeatherOutfitService {
       // Filter items suitable for current weather
       const suitableItems = this.filterItemsByWeather(items, weather);
 
-      // Generate outfit suggestions from suitable items
-      const outfits = generateOutfitSuggestions(suitableItems, count);
+      // Generate outfit suggestions from suitable items, falling back to the
+      // full wardrobe if the weather filter was too strict to pair anything
+      // (e.g. every top happens to be out of season) rather than reporting
+      // zero suggestions when the user actually has enough items.
+      let outfits = generateOutfitSuggestions(suitableItems, count);
+      if (outfits.length === 0) {
+        outfits = generateOutfitSuggestions(items, count);
+      }
 
       // Generate weather-specific tips
       const tips = this.generateWeatherTips(weather);

@@ -35,6 +35,7 @@ const Tab = createMaterialTopTabNavigator();
 
 const SuggestionsTab = () => {
   const { theme } = useTheme();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -176,7 +177,7 @@ const SuggestionsTab = () => {
           <Button
             label="Create Outfits"
             variant="primary"
-            onPress={onRefresh}
+            onPress={() => navigation.navigate('ManualOutfitBuilder')}
             style={{ marginTop: 16 }}
           />
         </View>
