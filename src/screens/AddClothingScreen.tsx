@@ -1164,11 +1164,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     backgroundColor: '#FFFFFF',
     overflow: 'hidden',
-    height: Platform.OS === 'ios' ? 50 : 50,
+    // iOS renders <Picker> as a native spinning wheel, which needs real
+    // height to show the selected row — 50 clipped it down to nothing
+    // visible. Android's compact dropdown style is fine at 50.
+    height: Platform.OS === 'ios' ? 120 : 50,
     justifyContent: 'center',
   },
   picker: {
-    height: Platform.OS === 'ios' ? 50 : 50,
+    height: Platform.OS === 'ios' ? 120 : 50,
     width: '100%',
     color: '#1A1A1A',
     fontSize: 16,
