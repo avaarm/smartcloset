@@ -202,6 +202,7 @@ export const getClothingItems = async (
         const { data, error } = await supabase
           .from('clothing_items')
           .select('*')
+          .eq('user_id', userId)
           .order('created_at', { ascending: false })
           .range(from, from + PAGE - 1);
         if (error) throw error;
@@ -218,6 +219,7 @@ export const getClothingItems = async (
     const { data, error } = await supabase
       .from('clothing_items')
       .select('*')
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
     if (error) throw error;

@@ -39,7 +39,13 @@ const OutfitDetailsScreen = () => {
   const [wearNotes, setWearNotes] = useState('');
 
   useEffect(() => {
-    loadWearHistory();
+    // Unsaved suggestions have a client-generated id, not a DB row — there's
+    // no wear history to look up until the outfit is actually saved.
+    if (saved) {
+      loadWearHistory();
+    } else {
+      setLoading(false);
+    }
   }, []);
 
   const loadWearHistory = async () => {
@@ -163,10 +169,16 @@ const OutfitDetailsScreen = () => {
             )}
           </View>
 
-          <TouchableOpacity style={styles.wearButton} onPress={handleMarkAsWorn}>
-            <Icon name="checkmark-circle-outline" size={20} color="#FFFFFF" />
-            <Text style={styles.wearButtonText}>Mark as Worn Today</Text>
-          </TouchableOpacity>
+          {saved ? (
+            <TouchableOpacity style={styles.wearButton} onPress={handleMarkAsWorn}>
+              <Icon name="checkmark-circle-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.wearButtonText}>Mark as Worn Today</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.unsavedHint}>
+              Save this outfit from the suggestions list to track when you wear it.
+            </Text>
+          )}
         </View>
 
         <View style={styles.section}>
@@ -381,6 +393,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     letterSpacing: 0.5,
+  },
+  unsavedHint: {
+    color: theme.colors.mediumGray,
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 8,
   },
   section: {
     backgroundColor: '#FFFFFF',
