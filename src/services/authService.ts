@@ -40,6 +40,31 @@ export const signUpWithEmail = async (
   return data;
 };
 
+// ─── Password reset (emailed 6-digit code, no deep link needed) ───────────────
+
+export const requestPasswordReset = async (email: string) => {
+  // Supabase returns success whether or not the account exists, so this
+  // doesn't reveal which emails are registered.
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+  if (error) throw error;
+};
+
+export const resetPasswordWithCode = async (
+  email: string,
+  code: string,
+  newPassword: string,
+) => {
+  const { data, error } = await supabase.auth.verifyOtp({
+    email: email.trim(),
+    token: code.trim(),
+    type: 'recovery',
+  });
+  if (error) throw error;
+  const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+  if (updateError) throw updateError;
+  return data;
+};
+
 // ─── Google Auth ──────────────────────────────────────────────────────────────
 
 export const signInWithGoogle = async () => {

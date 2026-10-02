@@ -19,6 +19,8 @@ import {
   signInWithApple,
   signInWithEmail,
   signUpWithEmail,
+  requestPasswordReset,
+  resetPasswordWithCode,
 } from '../services/authService';
 import { Session } from '@supabase/supabase-js';
 
@@ -42,6 +44,54 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [resetStep, setResetStep] = useState<null | 'email' | 'code'>(null);
+  const [resetCode, setResetCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+
+  const handleSendResetCode = async () => {
+    if (!email.trim()) {
+      Alert.alert('Missing Email', 'Please enter the email address for your account.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await requestPasswordReset(email);
+      setResetStep('code');
+      Alert.alert('Check Your Email', 'If an account exists for that address, we sent a 6-digit code.');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Could not send the reset code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (resetCode.trim().length < 6) {
+      Alert.alert('Invalid Code', 'Enter the 6-digit code from your email.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      Alert.alert('Password Too Short', 'Your new password must be at least 6 characters.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const result = await resetPasswordWithCode(email, resetCode, newPassword);
+      setResetStep(null);
+      setResetCode('');
+      setNewPassword('');
+      if (result.session) {
+        Alert.alert('Password Updated', 'You are now signed in.');
+        onSignInComplete?.(result.session);
+      } else {
+        Alert.alert('Password Updated', 'You can now sign in with your new password.');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'That code is invalid or has expired.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -103,6 +153,92 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
       setLoading(false);
     }
   };
+
+  if (resetStep) {
+    return (
+      <View style={styles.root}>
+        <StatusBar barStyle="light-content" backgroundColor={BLACK} />
+        <SafeAreaView style={styles.safeArea}>
+          <KeyboardAvoidingView
+            style={styles.emailFormContainer}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
+            <TouchableOpacity
+              onPress={() => (resetStep === 'code' ? setResetStep('email') : setResetStep(null))}
+              style={styles.backButton}
+              hitSlop={16}
+            >
+              <Icon name="arrow-back" size={22} color={CREAM} />
+            </TouchableOpacity>
+
+            <View style={styles.emailFormHeader}>
+              <Text style={styles.goldAccentLine}>— Account</Text>
+              <Text style={styles.emailFormTitle}>{'Reset\nPassword'}</Text>
+            </View>
+
+            <View style={styles.formFields}>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Email address"
+                placeholderTextColor={MUTED}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                editable={resetStep === 'email'}
+              />
+              {resetStep === 'code' && (
+                <>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="6-digit code"
+                    placeholderTextColor={MUTED}
+                    value={resetCode}
+                    onChangeText={setResetCode}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    autoComplete="one-time-code"
+                    textContentType="oneTimeCode"
+                  />
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="New password"
+                    placeholderTextColor={MUTED}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    secureTextEntry
+                  />
+                </>
+              )}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.primaryButton, loading && styles.disabledButton]}
+              onPress={resetStep === 'email' ? handleSendResetCode : handleResetPassword}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color={BLACK} />
+              ) : (
+                <Text style={styles.primaryButtonText}>
+                  {resetStep === 'email' ? 'Send Reset Code' : 'Reset Password'}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            {resetStep === 'code' && (
+              <TouchableOpacity onPress={handleSendResetCode} style={styles.toggleContainer} disabled={loading}>
+                <Text style={styles.toggleText}>
+                  Didn't get a code?{'  '}
+                  <Text style={styles.toggleLink}>Resend</Text>
+                </Text>
+              </TouchableOpacity>
+            )}
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </View>
+    );
+  }
 
   if (showEmailForm) {
     return (
@@ -167,6 +303,15 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
                 </Text>
               )}
             </TouchableOpacity>
+
+            {!isRegistering && (
+              <TouchableOpacity
+                onPress={() => { setResetCode(''); setNewPassword(''); setResetStep('email'); }}
+                style={styles.toggleContainer}
+              >
+                <Text style={styles.toggleLink}>Forgot password?</Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               onPress={() => setIsRegistering(!isRegistering)}
