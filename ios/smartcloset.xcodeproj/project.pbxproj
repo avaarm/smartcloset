@@ -367,7 +367,7 @@
 					"-lc++",
 					"$(inherited)",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.smartcloset.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.emtem.smartcloset;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/smartcloset.app/smartcloset";
 			};
@@ -390,7 +390,7 @@
 					"-lc++",
 					"$(inherited)",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.smartcloset.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.emtem.smartcloset;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/smartcloset.app/smartcloset";
 			};
@@ -416,7 +416,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.smartcloset.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.emtem.smartcloset;
 				PRODUCT_NAME = smartcloset;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -444,7 +444,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.smartcloset.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.emtem.smartcloset;
 				PRODUCT_NAME = smartcloset;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;

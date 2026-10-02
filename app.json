@@ -1,4 +1,9 @@
 {
   "name": "smartcloset",
-  "displayName": "SmartCloset"
+  "displayName": "SmartCloset",
+  "extra": {
+    "eas": {
+      "projectId": "221e8a2e-7879-4511-8c65-08e7f7616714"
+    }
+  }
 }
