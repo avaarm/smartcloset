@@ -99,7 +99,7 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
     setLoading(true);
     try {
       const result = await signInWithGoogle();
-      if (result.session) onSignInComplete?.(result.session);
+      if (result?.session) onSignInComplete?.(result.session);
     } catch (error: any) {
       const msg: string = error?.message || '';
       const friendlyMessage =
@@ -116,7 +116,7 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
     setLoading(true);
     try {
       const result = await signInWithApple();
-      if (result.session) onSignInComplete?.(result.session);
+      if (result?.session) onSignInComplete?.(result.session);
     } catch (error: any) {
       Alert.alert('Sign-In Error', error.message || 'Failed to sign in with Apple');
     } finally {

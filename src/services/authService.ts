@@ -62,17 +62,42 @@ export const resetPasswordWithCode = async (
   });
   if (error) throw error;
   const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
-  if (updateError) throw updateError;
+  if (updateError) {
+    // The code already signed them in. Don't leave a session behind for a reset
+    // that failed (they'd think it worked and the old password still applies).
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Best effort.
+    }
+    throw updateError;
+  }
   return data;
 };
 
 // ─── Google Auth ──────────────────────────────────────────────────────────────
 
+/** True when the user dismissed the Google/Apple sheet themselves. Not an error. */
+const isCancelled = (error: any): boolean => {
+  const code = String(error?.code ?? '');
+  // Google: SIGN_IN_CANCELLED ('-5' on iOS); Apple: ERR_REQUEST_CANCELED / '1001'.
+  return code === 'SIGN_IN_CANCELLED' || code === '-5' || code === '1001' || code === 'ERR_REQUEST_CANCELED'
+    || /canceled|cancelled/i.test(String(error?.message ?? ''));
+};
+
+/** Resolves to the session data, or null if the user backed out of the sheet. */
 export const signInWithGoogle = async () => {
   // Dynamically require to avoid crash when no client IDs are set
   const { GoogleSignin } = require('@react-native-google-signin/google-signin');
-  await GoogleSignin.hasPlayServices();
-  const signInResult = await GoogleSignin.signIn();
+  let signInResult: any;
+  try {
+    await GoogleSignin.hasPlayServices();
+    signInResult = await GoogleSignin.signIn();
+  } catch (error) {
+    if (isCancelled(error)) return null;
+    throw error;
+  }
+  if (signInResult?.type === 'cancelled') return null;
   const idToken = signInResult?.data?.idToken;
   if (!idToken) throw new Error('No Google ID token received');
 
@@ -86,13 +111,20 @@ export const signInWithGoogle = async () => {
 
 // ─── Apple Auth ───────────────────────────────────────────────────────────────
 
+/** Resolves to the session data, or null if the user backed out of the sheet. */
 export const signInWithApple = async () => {
   // Dynamically require to avoid crash if module isn't fully configured
   const { appleAuth } = require('@invertase/react-native-apple-authentication');
-  const appleAuthResponse = await appleAuth.performRequest({
-    requestedOperation: appleAuth.Operation.LOGIN,
-    requestedScopes: [appleAuth.Scope.EMAIL, appleAuth.Scope.FULL_NAME],
-  });
+  let appleAuthResponse: any;
+  try {
+    appleAuthResponse = await appleAuth.performRequest({
+      requestedOperation: appleAuth.Operation.LOGIN,
+      requestedScopes: [appleAuth.Scope.EMAIL, appleAuth.Scope.FULL_NAME],
+    });
+  } catch (error) {
+    if (isCancelled(error)) return null;
+    throw error;
+  }
 
   if (!appleAuthResponse.identityToken) {
     throw new Error('No Apple identity token received');
@@ -103,6 +135,20 @@ export const signInWithApple = async () => {
     token: appleAuthResponse.identityToken,
   });
   if (error) throw error;
+
+  // Apple only shares the user's name the first time they authorise the app, and
+  // not in the token itself - keep it now or the app never learns it.
+  const fullName = [appleAuthResponse.fullName?.givenName, appleAuthResponse.fullName?.familyName]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+  if (fullName && !data?.user?.user_metadata?.name) {
+    try {
+      await supabase.auth.updateUser({ data: { name: fullName, full_name: fullName } });
+    } catch {
+      // Cosmetic: the name just falls back to the email prefix.
+    }
+  }
   return data;
 };
 

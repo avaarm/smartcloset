@@ -3,6 +3,7 @@ const mockVerifyOtp = jest.fn();
 const mockUpdateUser = jest.fn();
 const mockSignOut = jest.fn();
 const mockClearCache = jest.fn();
+const mockSignInWithIdToken = jest.fn();
 
 jest.mock('../../src/config/supabase', () => ({
   supabase: {
@@ -11,15 +12,16 @@ jest.mock('../../src/config/supabase', () => ({
       verifyOtp: (...a: any[]) => mockVerifyOtp(...a),
       updateUser: (...a: any[]) => mockUpdateUser(...a),
       signOut: (...a: any[]) => mockSignOut(...a),
+      signInWithIdToken: (...a: any[]) => mockSignInWithIdToken(...a),
     },
   },
 }));
 jest.mock('../../src/services/imageUrls', () => ({ clearSignedImageCache: () => mockClearCache() }));
 
-import { requestPasswordReset, resetPasswordWithCode, signOut } from '../../src/services/authService';
+import { requestPasswordReset, resetPasswordWithCode, signInWithApple, signInWithGoogle, signOut } from '../../src/services/authService';
 
 beforeEach(() => {
-  [mockResetForEmail, mockVerifyOtp, mockUpdateUser, mockSignOut, mockClearCache].forEach(m => m.mockReset());
+  [mockResetForEmail, mockVerifyOtp, mockUpdateUser, mockSignOut, mockClearCache, mockSignInWithIdToken].forEach(m => m.mockReset());
 });
 
 describe('password reset by emailed code', () => {
@@ -61,5 +63,62 @@ describe('signOut', () => {
     mockSignOut.mockResolvedValue({ error: new Error('network') });
     await expect(signOut()).rejects.toThrow('network');
     expect(mockClearCache).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('reset with a bad new password', () => {
+  it('signs the user back out so a failed reset does not leave them signed in', async () => {
+    mockVerifyOtp.mockResolvedValue({ data: { session: {} }, error: null });
+    mockUpdateUser.mockResolvedValue({ error: new Error('weak password') });
+    mockSignOut.mockResolvedValue({ error: null });
+    await expect(resetPasswordWithCode('a@b.co', '123456', 'x')).rejects.toThrow('weak password');
+    expect(mockSignOut).toHaveBeenCalled();
+  });
+});
+
+describe('Google / Apple sign-in', () => {
+  const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+  const { appleAuth } = require('@invertase/react-native-apple-authentication');
+
+  it('Google: backing out of the sheet is not an error', async () => {
+    GoogleSignin.signIn.mockResolvedValueOnce({ type: 'cancelled', data: null });
+    await expect(signInWithGoogle()).resolves.toBeNull();
+    GoogleSignin.signIn.mockRejectedValueOnce(Object.assign(new Error('cancelled'), { code: 'SIGN_IN_CANCELLED' }));
+    await expect(signInWithGoogle()).resolves.toBeNull();
+    expect(mockSignInWithIdToken).not.toHaveBeenCalled();
+  });
+
+  it('Google: a real failure still surfaces', async () => {
+    GoogleSignin.signIn.mockRejectedValueOnce(new Error('network down'));
+    await expect(signInWithGoogle()).rejects.toThrow('network down');
+  });
+
+  it('Google: exchanges the id token for a session', async () => {
+    GoogleSignin.signIn.mockResolvedValueOnce({ data: { idToken: 'g-token' } });
+    mockSignInWithIdToken.mockResolvedValue({ data: { session: { access_token: 'a' }, user: {} }, error: null });
+    const data = await signInWithGoogle();
+    expect(mockSignInWithIdToken).toHaveBeenCalledWith({ provider: 'google', token: 'g-token' });
+    expect(data?.session).toBeTruthy();
+  });
+
+  it('Apple: backing out of the sheet is not an error', async () => {
+    appleAuth.performRequest.mockRejectedValueOnce(Object.assign(new Error('The user canceled the authorization attempt'), { code: '1001' }));
+    await expect(signInWithApple()).resolves.toBeNull();
+    expect(mockSignInWithIdToken).not.toHaveBeenCalled();
+  });
+
+  it('Apple: keeps the name Apple shares on first sign-in', async () => {
+    appleAuth.performRequest.mockResolvedValueOnce({ identityToken: 'a-token', fullName: { givenName: 'Ada', familyName: 'Lovelace' } });
+    mockSignInWithIdToken.mockResolvedValue({ data: { session: {}, user: { user_metadata: {} } }, error: null });
+    mockUpdateUser.mockResolvedValue({ error: null });
+    await signInWithApple();
+    expect(mockUpdateUser).toHaveBeenCalledWith({ data: { name: 'Ada Lovelace', full_name: 'Ada Lovelace' } });
+  });
+
+  it('Apple: does not overwrite a name the user already has (Apple omits it on later sign-ins)', async () => {
+    appleAuth.performRequest.mockResolvedValueOnce({ identityToken: 'a-token', fullName: { givenName: null, familyName: null } });
+    mockSignInWithIdToken.mockResolvedValue({ data: { session: {}, user: { user_metadata: { name: 'Ada' } } }, error: null });
+    await signInWithApple();
+    expect(mockUpdateUser).not.toHaveBeenCalled();
   });
 });
