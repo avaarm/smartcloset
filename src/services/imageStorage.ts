@@ -1,19 +1,12 @@
 import RNFS from 'react-native-fs';
 import { supabase } from '../config/supabase';
+import { getAuthUserId } from './authUser';
 import { signStoragePaths, storagePathFromUrl } from './imageUrls';
 
 const BUCKET = 'wardrobe-images';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const getAuthUserId = async (): Promise<string | null> => {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.user?.id ?? null;
-  } catch {
-    return null;
-  }
-};
 
 /**
  * Upload an image to Supabase Storage and return its public URL.

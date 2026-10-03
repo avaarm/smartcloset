@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ClothingItem } from '../types';
 import { enhancedClothingItems, enhancedOutfits } from '../data/enhancedSampleData';
 import { supabase } from '../config/supabase';
+import { getAuthUserId } from './authUser';
 import { canonicalizeImageUrl, withSignedImages } from './imageUrls';
 import { seedAllDemoData } from './seedDemoData';
 
@@ -11,14 +12,6 @@ const SAVED_OUTFITS_KEY = '@smartcloset_saved_outfits';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const getAuthUserId = async (): Promise<string | null> => {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.user?.id ?? null;
-  } catch {
-    return null;
-  }
-};
 
 export const mapDbToClothingItem = (row: any): ClothingItem => ({
   id: row.id,

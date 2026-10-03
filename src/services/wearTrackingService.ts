@@ -2,19 +2,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ClothingItem, Outfit, OutfitHistory } from '../types';
 import { getClothingItems, updateClothingItem, mapDbToClothingItem } from './storage';
 import { supabase } from '../config/supabase';
+import { getAuthUserId } from './authUser';
 
 const OUTFIT_HISTORY_KEY = '@smartcloset_outfit_history';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const getAuthUserId = async (): Promise<string | null> => {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.user?.id ?? null;
-  } catch {
-    return null;
-  }
-};
 
 const mapDbToHistory = (row: any): OutfitHistory => ({
   id: row.id,

@@ -1,6 +1,7 @@
 import { ClothingItem, Season } from '../types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../config/supabase';
+import { getAuthUserId } from './authUser';
 
 // Define outfit structure
 export interface Outfit {
@@ -14,14 +15,6 @@ export interface Outfit {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const getAuthUserId = async (): Promise<string | null> => {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.user?.id ?? null;
-  } catch {
-    return null;
-  }
-};
 
 /**
  * Generate outfit suggestions based on available clothing items

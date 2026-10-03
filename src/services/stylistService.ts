@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../config/supabase';
+import { getAuthUserId } from './authUser';
 import {
   StylistProfile,
   Client,
@@ -19,14 +20,6 @@ const ACCOUNT_TYPE_KEY = '@smartcloset_account_type';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const getAuthUserId = async (): Promise<string | null> => {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.user?.id ?? null;
-  } catch {
-    return null;
-  }
-};
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Legacy demo/local accounts use ids like "client_sample_001", not real uuids.
