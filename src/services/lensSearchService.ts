@@ -20,6 +20,7 @@
 import { env, hasGoogleVision } from '../config/env';
 import { readImageAsBase64 } from '../platform/fileSystem';
 import { callAiProxy } from './aiProxy';
+import { isAiConsentError } from './aiConsent';
 
 // Known shopping/retail hostnames. Keep alphabetical.
 // Covers: fast fashion, mid-market, contemporary, luxury, department, and
@@ -440,7 +441,9 @@ export const searchByImage = async (imageUri: string): Promise<LensSearchRespons
         query: '',
         bestGuessLabels: [],
         results: [],
-        error: `Vision proxy: ${err?.message?.substring(0, 120) ?? 'failed'}`,
+        error: isAiConsentError(err)
+          ? 'AI photo search is turned off. You can turn it on in Settings > Privacy.'
+          : `Vision proxy: ${err?.message?.substring(0, 120) ?? 'failed'}`,
       };
     }
     const first = data.responses?.[0] ?? {};

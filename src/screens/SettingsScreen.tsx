@@ -31,6 +31,7 @@ import {
 import { supabase } from '../config/supabase';
 import { deleteAllUserCloudImages } from '../services/imageStorage';
 import { clearSignedImageCache } from '../services/imageUrls';
+import { getAiConsent, setAiConsent } from '../services/aiConsent';
 import { signOut } from '../services/authService';
 import {
   getCurrentMode,
@@ -78,12 +79,14 @@ const SettingsScreen = () => {
   const [availableModes, setAvailableModesState] = useState<AccountType[]>(['user']);
   const [contributions, setContributions] = useState<ProductContribution[]>([]);
   const [shareProductData, setShareProductData] = useState(false);
+  const [aiPhotoAnalysis, setAiPhotoAnalysis] = useState(false);
 
   useEffect(() => {
     loadBackupStats();
     loadAccountInfo();
     getContributionHistory().then(setContributions).catch(() => {});
     isSharingEnabled().then(setShareProductData).catch(() => {});
+    getAiConsent().then(c => setAiPhotoAnalysis(c === 'granted')).catch(() => {});
   }, []);
 
   const loadAccountInfo = async () => {
@@ -157,6 +160,26 @@ const SettingsScreen = () => {
         Alert.alert('Error', 'Failed to clear data.');
       }
     }
+  };
+
+  const handleToggleAiAnalysis = (next: boolean) => {
+    if (!next) {
+      setAiConsent('denied').then(() => setAiPhotoAnalysis(false)).catch(() => {});
+      return;
+    }
+    Alert.alert(
+      'Use AI to identify your items?',
+      'SmartCloset will send the photo you choose to Google Cloud Vision and OpenAI to fill in details such as category, color, brand and material, and to find similar items online. Your photo is used only to analyse that item. You can turn this off any time.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Allow',
+          onPress: () => {
+            setAiConsent('granted').then(() => setAiPhotoAnalysis(true)).catch(() => {});
+          },
+        },
+      ],
+    );
   };
 
   const handleToggleSharing = (next: boolean) => {
@@ -393,6 +416,27 @@ const SettingsScreen = () => {
             </View>
           )}
         </View>
+
+        {/* ── Privacy ─────────────────────────────────────────────────────── */}
+        {isAuthenticated && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Privacy</Text>
+            <View style={styles.toggleRow}>
+              <View style={{ flex: 1, marginRight: 16 }}>
+                <Text style={styles.toggleLabel}>AI photo analysis</Text>
+                <Text style={styles.toggleDesc}>
+                  Sends photos you add or search with to Google Cloud Vision and OpenAI to fill in item details. If off, you enter details yourself.
+                </Text>
+              </View>
+              <Switch
+                value={aiPhotoAnalysis}
+                onValueChange={handleToggleAiAnalysis}
+                trackColor={{ false: BORDER, true: GOLD }}
+                thumbColor={IVORY}
+              />
+            </View>
+          </View>
+        )}
 
         {/* ── Community Knowledge Base ────────────────────────────────────── */}
         <View style={styles.section}>

@@ -16,6 +16,7 @@
 
 import { supabase } from '../config/supabase';
 import { env } from '../config/env';
+import { ensureAiConsent, AI_CONSENT_ERROR } from './aiConsent';
 
 export type AIProvider = 'vision' | 'openai-vision' | 'brave';
 
@@ -75,6 +76,12 @@ export const callAiProxy = async <T = unknown>(
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) {
     throw new Error('not_signed_in: ai-proxy requires an authenticated user');
+  }
+
+  // These two carry the user's photo to third-party AI services, which needs
+  // their explicit permission (asked once, remembered). Brave only gets a text query.
+  if (provider === 'vision' || provider === 'openai-vision') {
+    if (!(await ensureAiConsent())) throw new Error(AI_CONSENT_ERROR);
   }
 
   const resp = await fetch(buildProxyUrl(), {
