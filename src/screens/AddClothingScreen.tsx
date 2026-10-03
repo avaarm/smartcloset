@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Platform, ScrollView, ActivityIndicator, Alert, Switch, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Platform, ScrollView, ActivityIndicator, Alert, Switch, Pressable, Linking } from 'react-native';
 import ChipSelect from '../components/ChipSelect';
 import { useCallback } from 'react';
 import * as ImagePicker from 'react-native-image-picker';
@@ -38,6 +38,7 @@ import {
 import MatchPickerSheet, { type PickedMatch } from './MatchPickerSheet';
 import MaterialsEditor from '../components/MaterialsEditor';
 import { readImageAsBase64 } from '../platform/fileSystem';
+import { parseMoney } from '../utils/money';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 type AddClothingScreenProps = {
@@ -55,11 +56,11 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   const editItem = route.params?.editItem || route.params?.item;
   const isWishlist = route.params?.isWishlist || editItem?.isWishlist || false;
   const isEditing = !!editItem;
-  const [name, setName] = useState(editItem?.name || '');
+  const [name, setName] = useState<string>(editItem?.name || '');
   const [category, setCategory] = useState<ClothingCategory>(editItem?.category || 'tops');
-  const [brand, setBrand] = useState(editItem?.brand || '');
+  const [brand, setBrand] = useState<string>(editItem?.brand || '');
   const [imageUri, setImageUri] = useState(editItem?.userImage || editItem?.imageUrl || editItem?.retailerImage || '');
-  const [color, setColor] = useState(editItem?.color || '');
+  const [color, setColor] = useState<string>(editItem?.color || '');
   // Season state uses 'all' as a sentinel; at save time we expand it to the
   // full [spring, summer, fall, winter] array so existing filters keep working.
   const initialSeasonValue: Season | 'all' | null = (() => {
@@ -72,15 +73,19 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   })();
   const [season, setSeason] = useState<Season | 'all' | null>(initialSeasonValue);
   const [occasion, setOccasion] = useState<Occasion | null>(editItem?.occasion || null);
-  const [cost, setCost] = useState(editItem?.cost?.toString() || '');
-  const [retailCost, setRetailCost] = useState(editItem?.retailCost?.toString() || '');
+  const [cost, setCost] = useState<string>(editItem?.cost?.toString() || '');
+  const [retailCost, setRetailCost] = useState<string>(editItem?.retailCost?.toString() || '');
   const [purchaseDate, setPurchaseDate] = useState<Date>(editItem?.purchaseDate ? new Date(editItem.purchaseDate) : new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [tags, setTags] = useState(editItem?.tags?.join(', ') || '');
+  const [tags, setTags] = useState<string>(editItem?.tags?.join(', ') || '');
   const [notes, setNotes] = useState<string>(editItem?.notes || '');
   const [favorite, setFavorite] = useState(editItem?.favorite || false);
-  const [retailer, setRetailer] = useState(editItem?.retailer || '');
+  const [retailer, setRetailer] = useState<string>(editItem?.retailer || '');
   const [errors, setErrors] = useState<{[key: string]: string}>({});
+  const [saving, setSaving] = useState(false);
+  // True once the user has chosen a category themselves (or is editing an item
+  // that already has one), so photo analysis never overrides it.
+  const categoryTouched = useRef(isEditing);
 
   // Multi-tier material composition — feeds the fabric knowledge base.
   const [materials, setMaterials] = useState<MaterialComponent[]>(
@@ -103,6 +108,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   const [matchSheetDismissed, setMatchSheetDismissed] = useState(false);
 
   const onCategoryChange = useCallback((value: ClothingCategory) => {
+    categoryTouched.current = true;
     setCategory(value);
   }, []);
 
@@ -132,6 +138,26 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
     );
   };
 
+  /** Tell the user why the camera/library didn't give us a photo. */
+  const reportPickerError = (response: ImagePicker.ImagePickerResponse, source: 'camera' | 'library') => {
+    if (!response.errorCode) return;
+    const denied = response.errorCode === 'permission';
+    const unavailable = response.errorCode === 'camera_unavailable';
+    Alert.alert(
+      denied
+        ? source === 'camera' ? 'Camera access is off' : 'Photo access is off'
+        : unavailable ? 'Camera not available' : "Couldn't get that photo",
+      denied
+        ? `Turn on ${source === 'camera' ? 'camera' : 'photo'} access for SmartCloset in Settings to add photos.`
+        : unavailable
+          ? 'This device has no camera. Choose a photo from your library instead.'
+          : 'Something went wrong. Please try again.',
+      denied
+        ? [{ text: 'Not now', style: 'cancel' }, { text: 'Open Settings', onPress: () => Linking.openSettings() }]
+        : [{ text: 'OK' }],
+    );
+  };
+
   const takePhoto = async () => {
     ImagePicker.launchCamera({
       mediaType: 'photo',
@@ -141,6 +167,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
       if (response.didCancel) {
         return;
       }
+      reportPickerError(response, 'camera');
       if (response.assets && response.assets[0].uri) {
         const tempUri = response.assets[0].uri;
         try {
@@ -164,6 +191,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
       if (response.didCancel) {
         return;
       }
+      reportPickerError(response, 'library');
       if (response.assets && response.assets[0].uri) {
         const tempUri = response.assets[0].uri;
         try {
@@ -286,22 +314,28 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
       // isConfidentPrediction — the goal is to always give the user a useful
       // starting point they can override. Only autofill fields the user hasn't
       // touched (so re-analyzing an edited item doesn't clobber their edits).
-      if (result.category && shouldAutofillPrediction(result, 'category')) {
+      //
+      // Analysis takes several seconds, during which the user may keep typing.
+      // Every fill below therefore uses a functional update, so it checks the
+      // field's value NOW rather than the stale value from when the photo was
+      // picked (which would overwrite what they typed in the meantime).
+      if (result.category && shouldAutofillPrediction(result, 'category') && !categoryTouched.current) {
         setCategory(result.category);
       }
 
-      if (result.brand && shouldAutofillPrediction(result, 'brand') && !brand.trim()) {
-        setBrand(result.brand);
+      if (result.brand && shouldAutofillPrediction(result, 'brand')) {
+        setBrand(prev => (prev.trim() ? prev : result.brand!));
       }
 
-      if (result.occasion && shouldAutofillPrediction(result, 'occasion') && !occasion) {
-        setOccasion(result.occasion as Occasion);
+      if (result.occasion && shouldAutofillPrediction(result, 'occasion')) {
+        setOccasion(prev => prev ?? (result.occasion as Occasion));
       }
 
       // Color: ALWAYS auto-fill if detected (no confidence gate) — pixel-level
       // color analysis is reliable and the user can override.
-      if (result.color && !color.trim()) {
-        setColor(result.color.charAt(0).toUpperCase() + result.color.slice(1));
+      if (result.color) {
+        const detected = result.color.charAt(0).toUpperCase() + result.color.slice(1);
+        setColor(prev => (prev.trim() ? prev : detected));
       }
 
       // Cost auto-fill — split by OCR-detected kind:
@@ -314,39 +348,38 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         const origs = result.prices.filter(p => p.kind === 'original');
         const plains = result.prices.filter(p => p.kind === 'plain');
 
+        const fillCost = (amount: number) => setCost(prev => (prev ? prev : String(amount)));
+        const fillRetail = (amount: number) => setRetailCost(prev => (prev ? prev : String(amount)));
+
         // Sale → paid
-        if (!cost && sales.length > 0) {
-          const min = sales.reduce((m, p) => (p.amount < m.amount ? p : m));
-          setCost(String(min.amount));
+        if (sales.length > 0) {
+          fillCost(sales.reduce((m, p) => (p.amount < m.amount ? p : m)).amount);
         }
         // Original → retail
-        if (!retailCost && origs.length > 0) {
-          const max = origs.reduce((m, p) => (p.amount > m.amount ? p : m));
-          setRetailCost(String(max.amount));
+        if (origs.length > 0) {
+          fillRetail(origs.reduce((m, p) => (p.amount > m.amount ? p : m)).amount);
         }
         // Plain-only case: if we have 2+ and no sale/original context, the
         // higher is almost always the MSRP and the lower is the sale price.
         if (sales.length === 0 && origs.length === 0 && plains.length >= 2) {
           const sorted = [...plains].sort((a, b) => a.amount - b.amount);
-          if (!cost) setCost(String(sorted[0].amount));
-          if (!retailCost) setRetailCost(String(sorted[sorted.length - 1].amount));
-        } else if (sales.length === 0 && plains.length === 1 && !cost) {
+          fillCost(sorted[0].amount);
+          fillRetail(sorted[sorted.length - 1].amount);
+        } else if (sales.length === 0 && plains.length === 1) {
           // Single plain price — put it in "paid"
-          setCost(String(plains[0].amount));
+          fillCost(plains[0].amount);
         }
       }
 
       // Auto-generate a name from the recognized attributes if the user
       // hasn't entered one yet. e.g. "Burgundy Handbag", "Gucci Black Jacket".
-      if (!name.trim()) {
-        const generated = generateNameFromRecognition(result);
-        if (generated) setName(generated);
-      }
+      const generatedName = generateNameFromRecognition(result);
+      if (generatedName) setName(prev => (prev.trim() ? prev : generatedName));
 
-      // Accumulate new tags from material and GPT-4 style descriptors in one
-      // setTags call to avoid the React batching race (both reads from same `tags`).
-      {
-        const current = tags.split(',').map((t: string) => t.trim()).filter(Boolean);
+      // Add detected material and style descriptors as tags, merged into whatever
+      // the user has typed by then.
+      setTags((prev: string) => {
+        const current = prev.split(',').map((t: string) => t.trim()).filter(Boolean);
         const toAdd: string[] = [];
 
         if (result.material && shouldAutofillPrediction(result, 'material')) {
@@ -363,22 +396,23 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
           });
         }
 
-        if (toAdd.length > 0) {
-          setTags(current.length > 0 ? `${tags}, ${toAdd.join(', ')}` : toAdd.join(', '));
-        }
-      }
+        return toAdd.length > 0 ? [...current, ...toAdd].join(', ') : prev;
+      });
 
       // Seed the materials[] composition from the detected primary material
       // if the user hasn't added any materials yet.
-      if (result.material && materials.length === 0) {
-        setMaterials([{ name: result.material.toLowerCase(), tier: 'primary' }]);
+      if (result.material) {
+        setMaterials(prev =>
+          prev.length === 0 ? [{ name: result.material!.toLowerCase(), tier: 'primary' }] : prev,
+        );
       }
 
       // Season auto-fill from GPT-4 analysis
-      if (result.season && result.season.length > 0 && !season) {
+      if (result.season && result.season.length > 0) {
         const ALL_SEASONS = ['spring', 'summer', 'fall', 'winter'];
         const coversAll = ALL_SEASONS.every(s => result.season!.includes(s));
-        setSeason(coversAll ? 'all' : result.season[0] as Season);
+        const detected: Season | 'all' = coversAll ? 'all' : (result.season[0] as Season);
+        setSeason(prev => prev ?? detected);
       }
     } catch (error) {
       console.error('Error analyzing image:', error);
@@ -398,7 +432,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
       newErrors.category = 'Category is required';
     }
     
-    if (cost && isNaN(parseFloat(cost))) {
+    if (cost && isNaN(parseMoney(cost))) {
       newErrors.cost = 'Cost must be a valid number';
     }
     
@@ -407,11 +441,13 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   };
 
   const handleSave = async () => {
+    if (saving) return;
     if (!validateForm()) {
       Alert.alert('Validation Error', 'Please fill in all required fields correctly.');
       return;
     }
 
+    setSaving(true);
     try {
       // Normalize materials — strip empty entries and de-dupe at same tier
       const cleanMaterials = materials
@@ -436,8 +472,8 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         occasion: occasion || undefined,
         isWishlist: isWishlist,
         dateAdded: isEditing ? editItem.dateAdded : new Date().toISOString(),
-        cost: cost ? parseFloat(cost) : undefined,
-        retailCost: retailCost ? parseFloat(retailCost) : undefined,
+        cost: cost ? parseMoney(cost) : undefined,
+        retailCost: retailCost ? parseMoney(retailCost) : undefined,
         purchaseDate: purchaseDate.toISOString(),
         tags: tags ? tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag) : [],
         notes: notes.trim(),
@@ -500,6 +536,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
     } catch (error) {
       console.error('Error saving item:', error);
       Alert.alert('Error', 'Failed to save item. Please try again.');
+      setSaving(false);
     }
   };
 
@@ -717,7 +754,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
           const amounts = lensResults
             .map(r => {
               if (!r.price) return NaN;
-              const n = parseFloat(r.price.replace(/[^\d.]/g, ''));
+              const n = parseMoney(r.price);
               return n;
             })
             .filter(n => Number.isFinite(n) && n >= 5 && n <= 25000) as number[];
@@ -945,8 +982,8 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
 
         {/* Savings callout when both are filled */}
         {(() => {
-          const paid = parseFloat(cost);
-          const retail = parseFloat(retailCost);
+          const paid = parseMoney(cost);
+          const retail = parseMoney(retailCost);
           if (!Number.isFinite(paid) || !Number.isFinite(retail)) return null;
           if (paid <= 0 || retail <= 0 || paid >= retail) return null;
           const savings = retail - paid;
@@ -1099,11 +1136,16 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
           </View>
         )}
 
-        <TouchableOpacity 
-          style={styles.saveButton}
+        <TouchableOpacity
+          style={[styles.saveButton, saving && { opacity: 0.6 }]}
           onPress={handleSave}
+          disabled={saving}
         >
-          <Text style={styles.saveButtonText}>{isEditing ? 'Update Item' : 'Save Item'}</Text>
+          {saving ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.saveButtonText}>{isEditing ? 'Update Item' : 'Save Item'}</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
