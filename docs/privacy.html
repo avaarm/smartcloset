@@ -36,7 +36,7 @@
     <tr><td>Account</td><td>Name, email address</td><td>Sign-in via email, Google, or Apple; identifying your account</td></tr>
     <tr><td>Wardrobe content</td><td>Photos of clothing, brand/color/material/price you enter</td><td>The core feature — cataloging and organizing your wardrobe</td></tr>
     <tr><td>Style profile</td><td>Skin tone, undertone, body type, style preferences (self-reported or estimated from a photo you provide)</td><td>Personalized outfit and color recommendations</td></tr>
-    <tr><td>Location</td><td>Approximate location, only while the app is in use</td><td>Weather-appropriate outfit suggestions</td></tr>
+    <tr><td>Location</td><td>Approximate location (rounded to about 1 km), only while the app is in use. It is sent to the weather service Open-Meteo to get your forecast and is not stored by us</td><td>Weather-appropriate outfit suggestions</td></tr>
     <tr><td>Camera &amp; photo library</td><td>Access only when you choose to photograph or select an item</td><td>Adding clothing items and outfit photos</td></tr>
     <tr><td>Social &amp; marketplace</td><td>Friend connections, messages, and appointments if you use the stylist marketplace or friend-sharing features</td><td>Connecting you with friends or a stylist you choose to work with</td></tr>
     <tr><td>Shared product details (optional, off by default)</td><td>Product name, category, brand, store, color, material, the price you paid and the retail price, a product link, and image fingerprints (a coded summary of a photo, not the photo itself)</td><td>A shared product database that helps other members identify the same item faster. Only if you turn this on in Settings</td></tr>
@@ -49,6 +49,7 @@
     <li><strong>Google Cloud Vision API</strong> — image labeling and web/reverse-image search, and, only if you use color analysis, analysing a selfie you choose in order to estimate skin tone</li>
     <li><strong>OpenAI (GPT-4 Vision)</strong> — detailed garment identification from photos</li>
     <li><strong>Brave Search API</strong> — text-based product search results</li>
+    <li><strong>Open-Meteo</strong> — weather forecast for your approximate location (no photos or personal details are sent)</li>
   </ul>
   <p>These providers process the image or query to return results to the app; we don't control their retention practices beyond what's stated in their own privacy policies. We do not sell your photos or personal data to anyone, for any purpose.</p>
 

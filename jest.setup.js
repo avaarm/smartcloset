@@ -104,3 +104,12 @@ jest.mock('@react-native-picker/picker', () => {
   return { Picker };
 });
 jest.mock('@react-native-community/datetimepicker', () => 'DateTimePicker');
+
+jest.mock('@react-native-community/geolocation', () => ({
+  __esModule: true,
+  default: {
+    setRNConfiguration: jest.fn(),
+    requestAuthorization: jest.fn(),
+    getCurrentPosition: jest.fn((_ok, err) => err && err({ message: 'denied' })),
+  },
+}));

@@ -5,6 +5,7 @@
  * Docs: https://open-meteo.com/en/docs
  */
 
+import Geolocation from '@react-native-community/geolocation';
 import { WeatherCondition, WeatherData, WeatherForecast } from '../types/weather';
 import { Season } from '../types';
 
@@ -27,36 +28,28 @@ const wmoToCondition = (code: number): WeatherCondition => {
 
 // ─── Geolocation ────────────────────────────────────────────────────────────
 
-/**
- * Returns the user's current location.
- * Defaults to San Francisco (no location permission required).
- * To use real geolocation in the future, integrate a geolocation library.
- */
-export const getCurrentLocation = async (): Promise<{ latitude: number; longitude: number }> => {
-  // Default to San Francisco — no location permission needed.
-  // A future enhancement could use @react-native-community/geolocation here.
-  return { latitude: 37.7749, longitude: -122.4194 };
-};
+Geolocation.setRNConfiguration({ skipPermissionRequests: false, authorizationLevel: 'whenInUse' });
 
-// ─── Reverse geocode (best-effort city name) ────────────────────────────────
+/** Rounded to ~1 km: weather doesn't need more, and less precise data leaves the phone. */
+const roundCoord = (n: number): number => Math.round(n * 100) / 100;
 
 /**
- * Simple reverse geocoding using Open-Meteo's search API.
- * Looks up the nearest named place for the given coordinates.
+ * The user's approximate current location (asks for permission the first time).
+ * Rejects if permission is denied or no fix is available - callers hide weather
+ * rather than showing made-up data.
  */
-const reverseGeocode = async (lat: number, lon: number): Promise<string> => {
-  try {
-    // Open-Meteo doesn't have a dedicated reverse geocode endpoint.
-    // Use a known mapping for our default location, or return coords.
-    // For SF default, return the well-known name.
-    if (Math.abs(lat - 37.7749) < 0.1 && Math.abs(lon - (-122.4194)) < 0.1) {
-      return 'San Francisco, CA';
-    }
-    return `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
-  } catch {
-    return `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
-  }
-};
+export const getCurrentLocation = (): Promise<{ latitude: number; longitude: number }> =>
+  new Promise((resolve, reject) => {
+    Geolocation.getCurrentPosition(
+      pos =>
+        resolve({
+          latitude: roundCoord(pos.coords.latitude),
+          longitude: roundCoord(pos.coords.longitude),
+        }),
+      err => reject(new Error(`location_unavailable: ${err?.message ?? 'unknown'}`)),
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 30 * 60 * 1000 },
+    );
+  });
 
 // ─── Current weather ────────────────────────────────────────────────────────
 
@@ -74,20 +67,19 @@ export const getCurrentWeather = async (
     const data = await response.json();
     const c = data.current;
 
-    const location = await reverseGeocode(latitude, longitude);
-
     return {
       condition: wmoToCondition(c.weather_code),
       temperature: Math.round(c.temperature_2m),
       feelsLike: Math.round(c.apparent_temperature),
       humidity: Math.round(c.relative_humidity_2m),
       windSpeed: Math.round(c.wind_speed_10m),
-      location,
+      location: 'Near you',
       timestamp: c.time || new Date().toISOString(),
     };
   } catch (error) {
-    console.warn('Weather API error, returning fallback:', error);
-    return getFallbackWeather();
+    // No invented data: callers hide the weather card / fall back to season-only tips.
+    console.warn('Weather API error:', error);
+    throw error;
   }
 };
 
@@ -119,8 +111,8 @@ export const getWeatherForecast = async (
     }
     return forecasts;
   } catch (error) {
-    console.warn('Forecast API error, returning fallback:', error);
-    return getFallbackForecast(days);
+    console.warn('Forecast API error:', error);
+    throw error;
   }
 };
 
@@ -147,32 +139,4 @@ export const getWeatherConditionCategory = (
   if (c.includes('fog') || c.includes('mist')) return 'foggy';
   if (c.includes('storm') || c.includes('thunder')) return 'stormy';
   return 'sunny';
-};
-
-// ─── Fallbacks (offline / error) ────────────────────────────────────────────
-
-const getFallbackWeather = (): WeatherData => ({
-  condition: 'sunny',
-  temperature: 68,
-  feelsLike: 66,
-  humidity: 55,
-  windSpeed: 8,
-  location: 'Unknown',
-  timestamp: new Date().toISOString(),
-});
-
-const getFallbackForecast = (days: number): WeatherForecast[] => {
-  const forecasts: WeatherForecast[] = [];
-  const conditions: WeatherCondition[] = ['sunny', 'cloudy', 'sunny', 'rainy', 'cloudy', 'sunny', 'sunny'];
-  for (let i = 0; i < days; i++) {
-    const date = new Date();
-    date.setDate(date.getDate() + i);
-    forecasts.push({
-      date: date.toISOString().split('T')[0],
-      condition: conditions[i % conditions.length],
-      highTemp: 65 + Math.round(Math.sin(i) * 10),
-      lowTemp: 50 + Math.round(Math.sin(i) * 8),
-    });
-  }
-  return forecasts;
 };
