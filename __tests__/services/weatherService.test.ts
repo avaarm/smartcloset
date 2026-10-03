@@ -25,7 +25,7 @@ describe('getCurrentWeather', () => {
   const ok = (current: any) => ({ ok: true, status: 200, json: async () => ({ current }) });
 
   it('maps the forecast API response for the given coordinates', async () => {
-    const fetchMock = jest.fn(async () => ok({ time: '2026-10-03T10:00', temperature_2m: 61.4, apparent_temperature: 59.6, relative_humidity_2m: 70, weather_code: 3, wind_speed_10m: 8.2 }));
+    const fetchMock = jest.fn(async (_url: string) => ok({ time: '2026-10-03T10:00', temperature_2m: 61.4, apparent_temperature: 59.6, relative_humidity_2m: 70, weather_code: 3, wind_speed_10m: 8.2 }));
     (global as any).fetch = fetchMock;
     const w = await getCurrentWeather(40.71, -74.01);
     expect(fetchMock.mock.calls[0][0]).toContain('latitude=40.71&longitude=-74.01');

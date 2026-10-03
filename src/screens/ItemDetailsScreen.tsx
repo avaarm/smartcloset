@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -12,13 +12,13 @@ import {
   Share,
   Alert,
 } from 'react-native';
-import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import { useRoute, useNavigation, useFocusEffect, RouteProp } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import LinearGradient from 'react-native-linear-gradient';
 import theme from '../styles/theme';
 import { ClothingItem } from '../types';
 import { WearTrackingService } from '../services/wearTrackingService';
-import { deleteClothingItem } from '../services/storage';
+import { deleteClothingItem, getClothingItem, updateClothingItem } from '../services/storage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -27,12 +27,46 @@ type ItemDetailsRouteProp = RouteProp<{ ItemDetails: { item: ClothingItem } }, '
 const ItemDetailsScreen: React.FC = () => {
   const route = useRoute<ItemDetailsRouteProp>();
   const navigation = useNavigation();
-  const { item } = route.params;
-  
+  // The route param is only a snapshot from when this screen was opened. Keep our
+  // own copy and re-read it whenever the screen regains focus, so edits made on
+  // the Edit screen (and wear logged elsewhere) show up immediately.
+  const [item, setItem] = useState<ClothingItem>(route.params.item);
+
   const [scrollY] = useState(new Animated.Value(0));
   const [isFavorite, setIsFavorite] = useState(item.favorite || false);
   const [wearCount, setWearCount] = useState(item.wearCount || 0);
   const [lastWorn, setLastWorn] = useState<string | undefined>(item.lastWorn);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      getClothingItem(route.params.item.id)
+        .then(fresh => {
+          if (cancelled || !fresh) return;
+          setItem(fresh);
+          setIsFavorite(fresh.favorite || false);
+          setWearCount(fresh.wearCount || 0);
+          setLastWorn(fresh.lastWorn);
+        })
+        // Offline or a transient error: keep showing what we have.
+        .catch(() => {});
+      return () => {
+        cancelled = true;
+      };
+    }, [route.params.item.id]),
+  );
+
+  const handleToggleFavorite = async () => {
+    const next = !isFavorite;
+    setIsFavorite(next);
+    try {
+      await updateClothingItem({ ...item, favorite: next });
+      setItem(prev => ({ ...prev, favorite: next }));
+    } catch {
+      setIsFavorite(!next);
+      Alert.alert('Error', 'Could not update your favorites. Please try again.');
+    }
+  };
 
   const headerOpacity = scrollY.interpolate({
     inputRange: [0, 200],
@@ -57,7 +91,7 @@ const ItemDetailsScreen: React.FC = () => {
   };
 
   const handleEdit = () => {
-    (navigation as any).navigate('AddClothing', { editItem: item });
+    (navigation as any).navigate('AddClothing', { editItem: { ...item, wearCount, lastWorn } });
   };
 
   const handleMarkAsWorn = async () => {
@@ -183,7 +217,7 @@ const ItemDetailsScreen: React.FC = () => {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.floatingButton}
-          onPress={() => setIsFavorite(!isFavorite)}
+          onPress={handleToggleFavorite}
         >
           <Icon
             name={isFavorite ? 'heart' : 'heart-outline'}
@@ -285,7 +319,7 @@ const ItemDetailsScreen: React.FC = () => {
           </View>
 
           {/* Pricing Section — Used vs New + Savings */}
-          {(item.cost || item.retailCost) && (
+          {!!(item.cost || item.retailCost) && (
             <View style={styles.detailsSection}>
               <Text style={styles.sectionTitle}>Pricing</Text>
               <View style={styles.priceRow}>

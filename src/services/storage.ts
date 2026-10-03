@@ -29,6 +29,7 @@ export const mapDbToClothingItem = (row: any): ClothingItem => ({
   cost: row.cost ? Number(row.cost) : undefined,
   retailCost: row.retail_cost ? Number(row.retail_cost) : undefined,
   purchaseDate: row.purchase_date,
+  occasion: row.occasion || undefined,
   notes: row.notes,
   tags: row.tags || [],
   favorite: row.favorite ?? false,
@@ -51,6 +52,7 @@ const mapClothingItemToDb = (item: Partial<ClothingItem>, userId: string) => ({
   cost: item.cost,
   retail_cost: item.retailCost,
   purchase_date: item.purchaseDate,
+  occasion: item.occasion,
   notes: item.notes,
   tags: item.tags || [],
   favorite: item.favorite || false,
@@ -116,11 +118,18 @@ const saveLocalItem = async (item: ClothingItem): Promise<void> => {
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedItems));
 };
 
-const updateLocalItem = async (updatedItem: ClothingItem): Promise<void> => {
+const updateLocalItem = async (
+  updatedItem: ClothingItem,
+  opts: { includeWear?: boolean } = {},
+): Promise<void> => {
   const existingItems = await getLocalItems();
-  const updatedItems = existingItems.map(item =>
-    item.id === updatedItem.id ? updatedItem : item
-  );
+  const updatedItems = existingItems.map(item => {
+    if (item.id !== updatedItem.id) return item;
+    // Keep the stored wear data unless the caller is the wear tracker itself.
+    return opts.includeWear
+      ? updatedItem
+      : { ...updatedItem, wearCount: item.wearCount, lastWorn: item.lastWorn };
+  });
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedItems));
 };
 
@@ -224,14 +233,48 @@ export const getClothingItems = async (
   }
 };
 
+/** One item by id, freshly read. Null if it no longer exists (deleted elsewhere). */
+export const getClothingItem = async (id: string): Promise<ClothingItem | null> => {
+  const userId = await getAuthUserId();
+  if (!userId) {
+    const items = await getLocalItems();
+    return items.find(i => i.id === id) ?? null;
+  }
+  const { data, error } = await supabase
+    .from('clothing_items')
+    .select('*')
+    .eq('id', id)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const [item] = await withSignedImages([mapDbToClothingItem(data)]);
+  return item;
+};
+
 /** Everything the user owns: all pages, wishlist items excluded. */
 export const getOwnedClothingItems = async (): Promise<ClothingItem[]> =>
   (await getClothingItems({ all: true })).filter(item => !item.isWishlist);
 
-export const updateClothingItem = async (updatedItem: ClothingItem): Promise<void> => {
+/**
+ * Save edits to an existing item.
+ *
+ * Wear data (wear_count / last_worn) is only written when `includeWear` is set,
+ * which only the wear-tracking service does. Edit screens hold a snapshot of the
+ * item from when they were opened, so writing its wear fields back would silently
+ * undo any wear logged since (e.g. "Mark as worn", then Edit, then Save).
+ *
+ * Optional fields are sent as null when empty so clearing one in the form
+ * actually clears it (undefined would be dropped from the request and leave the
+ * old value in place).
+ */
+export const updateClothingItem = async (
+  updatedItem: ClothingItem,
+  opts: { includeWear?: boolean } = {},
+): Promise<void> => {
   try {
     const userId = await getAuthUserId();
-    if (!userId) return updateLocalItem(updatedItem);
+    if (!userId) return updateLocalItem(updatedItem, opts);
 
     const payload: Record<string, any> = {
       name: updatedItem.name,
@@ -240,19 +283,23 @@ export const updateClothingItem = async (updatedItem: ClothingItem): Promise<voi
       season: updatedItem.season,
       retailer_image: canonicalizeImageUrl(updatedItem.retailerImage),
       user_image: canonicalizeImageUrl(updatedItem.userImage),
-      brand: updatedItem.brand,
+      brand: updatedItem.brand ?? null,
       is_wishlist: updatedItem.isWishlist,
-      wear_count: updatedItem.wearCount,
-      last_worn: updatedItem.lastWorn,
-      cost: updatedItem.cost,
-      retail_cost: updatedItem.retailCost,
-      notes: updatedItem.notes,
+      cost: updatedItem.cost ?? null,
+      retail_cost: updatedItem.retailCost ?? null,
+      purchase_date: updatedItem.purchaseDate ?? null,
+      occasion: updatedItem.occasion ?? null,
+      notes: updatedItem.notes ?? null,
       tags: updatedItem.tags,
       favorite: updatedItem.favorite,
-      retailer: updatedItem.retailer,
-      materials: updatedItem.materials,
+      retailer: updatedItem.retailer ?? null,
+      materials: updatedItem.materials ?? null,
       updated_at: new Date().toISOString(),
     };
+    if (opts.includeWear) {
+      payload.wear_count = updatedItem.wearCount;
+      payload.last_worn = updatedItem.lastWorn ?? null;
+    }
 
     const { error } = await supabase.from('clothing_items').update(payload).eq('id', updatedItem.id);
     if (error) {

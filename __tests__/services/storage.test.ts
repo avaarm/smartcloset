@@ -7,6 +7,7 @@ chain.select = () => chain;
 chain.eq = (...a: any[]) => { calls.eq.push(a); return chain; };
 chain.order = () => chain;
 chain.range = async () => ({ data: rows, error: null });
+chain.maybeSingle = async () => ({ data: rows[0] ?? null, error: null });
 chain.insert = async (p: any) => { calls.insert.push(p); return { error: null }; };
 chain.update = (p: any) => { calls.update.push(p); return { eq: async (...a: any[]) => { calls.updateEq.push(a); return { error: null }; } }; };
 
@@ -21,7 +22,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
 
-import { getClothingItems, getOwnedClothingItems, saveClothingItem, updateClothingItem } from '../../src/services/storage';
+import { getClothingItem, getClothingItems, getOwnedClothingItems, saveClothingItem, updateClothingItem } from '../../src/services/storage';
 import { clearSignedImageCache } from '../../src/services/imageUrls';
 
 const HOST = 'https://abc.supabase.co';
@@ -101,5 +102,51 @@ describe('getOwnedClothingItems', () => {
   it('asks for every page, not just the first 200 rows', async () => {
     await getOwnedClothingItems();
     expect(calls.eq).toContainEqual(['user_id', 'me']);
+  });
+});
+
+describe('updateClothingItem keeps every field the form edits', () => {
+  it('writes purchase date and occasion (they used to be silently dropped on edit)', async () => {
+    await updateClothingItem({ ...baseItem, occasion: 'work', purchaseDate: '2026-02-03T00:00:00.000Z' });
+    expect(calls.update[0]).toMatchObject({ occasion: 'work', purchase_date: '2026-02-03T00:00:00.000Z' });
+  });
+
+  it('sends null for cleared optional fields so they really clear', async () => {
+    await updateClothingItem({ ...baseItem });
+    expect(calls.update[0]).toMatchObject({
+      brand: null, cost: null, retail_cost: null, notes: null, retailer: null, occasion: null, purchase_date: null, materials: null,
+    });
+  });
+
+  it('does not touch wear data from an edit (the form holds a stale snapshot of it)', async () => {
+    await updateClothingItem({ ...baseItem, wearCount: 3, lastWorn: '2026-01-01' });
+    expect(calls.update[0]).not.toHaveProperty('wear_count');
+    expect(calls.update[0]).not.toHaveProperty('last_worn');
+  });
+
+  it('writes wear data when the wear tracker asks for it, and can clear last_worn on undo', async () => {
+    await updateClothingItem({ ...baseItem, wearCount: 0, lastWorn: undefined }, { includeWear: true });
+    expect(calls.update[0]).toMatchObject({ wear_count: 0, last_worn: null });
+  });
+
+  it('reads occasion back from the database', async () => {
+    rows = [{ id: 'a', name: 'Tee', category: 'tops', color: 'red', occasion: 'party', created_at: '2026-01-01' }];
+    const [it] = await getClothingItems();
+    expect(it.occasion).toBe('party');
+  });
+});
+
+describe('getClothingItem', () => {
+  it('re-reads one item for the signed-in user', async () => {
+    rows = [{ id: 'a', name: 'Tee', category: 'tops', color: 'red', favorite: true, wear_count: 4, created_at: '2026-01-01' }];
+    const it = await getClothingItem('a');
+    expect(it).toMatchObject({ id: 'a', favorite: true, wearCount: 4 });
+    expect(calls.eq).toContainEqual(['user_id', 'me']);
+    expect(calls.eq).toContainEqual(['id', 'a']);
+  });
+
+  it('returns null when the item no longer exists', async () => {
+    rows = [];
+    expect(await getClothingItem('gone')).toBeNull();
   });
 });

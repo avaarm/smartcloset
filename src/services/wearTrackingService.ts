@@ -74,7 +74,7 @@ export class WearTrackingService {
             ...item,
             wearCount: (item.wearCount || 0) + 1,
             lastWorn: new Date().toISOString(),
-          });
+          }, { includeWear: true });
         }
       } else {
         const items = await getClothingItems({ all: true });
@@ -84,7 +84,7 @@ export class WearTrackingService {
           ...item,
           wearCount: (item.wearCount || 0) + 1,
           lastWorn: new Date().toISOString(),
-        });
+        }, { includeWear: true });
       }
     } catch (error) {
       console.error('Error marking item as worn:', error);
@@ -109,7 +109,7 @@ export class WearTrackingService {
         ...item,
         wearCount: Math.max(0, (item.wearCount || 1) - 1),
         lastWorn: previousLastWorn,
-      });
+      }, { includeWear: true });
     } catch (error) {
       console.error('Error undoing last wear:', error);
       throw error;
