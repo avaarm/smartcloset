@@ -5,6 +5,8 @@ import { supabase } from '../config/supabase';
 import { getAuthUserId } from './authUser';
 import { canonicalizeImageUrl, withSignedImages } from './imageUrls';
 import { seedAllDemoData } from './seedDemoData';
+import { rehomeItemImages } from './localImagePaths';
+import { removeCloudImages } from './imageStorage';
 
 const STORAGE_KEY = '@smartcloset_items';
 const INITIALIZED_KEY = '@smartcloset_initialized_v6';
@@ -109,7 +111,7 @@ const initializeLocalStorage = async (): Promise<void> => {
 const getLocalItems = async (): Promise<ClothingItem[]> => {
   await initializeLocalStorage();
   const items = await AsyncStorage.getItem(STORAGE_KEY);
-  return items ? JSON.parse(items) : [];
+  return items ? (JSON.parse(items) as ClothingItem[]).map(rehomeItemImages) : [];
 };
 
 const saveLocalItem = async (item: ClothingItem): Promise<void> => {
@@ -301,7 +303,21 @@ export const updateClothingItem = async (
       payload.last_worn = updatedItem.lastWorn ?? null;
     }
 
+    // Remember the photos this row used so ones that were replaced can be removed.
+    const { data: before } = await supabase
+      .from('clothing_items')
+      .select('user_image, retailer_image')
+      .eq('id', updatedItem.id)
+      .eq('user_id', userId)
+      .maybeSingle();
+
     const { error } = await supabase.from('clothing_items').update(payload).eq('id', updatedItem.id);
+    if (!error && before) {
+      const keep = [payload.user_image, payload.retailer_image];
+      await removeCloudImages(
+        [before.user_image, before.retailer_image].filter(u => u && !keep.includes(u)),
+      );
+    }
     if (error) {
       if (isMissingColumnError(error, 'materials')) {
         console.warn('[storage] clothing_items.materials column missing (migration not applied) — updating without it');
@@ -326,11 +342,21 @@ export const deleteClothingItem = async (id: string): Promise<void> => {
     const userId = await getAuthUserId();
     if (!userId) return deleteLocalItem(id);
 
+    const { data: row } = await supabase
+      .from('clothing_items')
+      .select('user_image, retailer_image')
+      .eq('id', id)
+      .eq('user_id', userId)
+      .maybeSingle();
+
     const { error } = await supabase
       .from('clothing_items')
       .delete()
       .eq('id', id);
     if (error) throw error;
+
+    // The row is gone, so its photos are unreferenced: remove them too.
+    if (row) await removeCloudImages([row.user_image, row.retailer_image]);
   } catch (error) {
     console.error('Error deleting clothing item:', error);
     throw error;

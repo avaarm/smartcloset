@@ -1,12 +1,14 @@
 const calls: { eq: any[][]; insert: any[]; update: any[]; updateEq: any[][] } = { eq: [], insert: [], update: [], updateEq: [] };
 let rows: any[] = [];
 const mockCreateSignedUrls = jest.fn();
+const mockRemove = jest.fn(async (_paths: string[]) => ({ data: [], error: null }));
 
 const chain: any = {};
 chain.select = () => chain;
 chain.eq = (...a: any[]) => { calls.eq.push(a); return chain; };
 chain.order = () => chain;
 chain.range = async () => ({ data: rows, error: null });
+chain.delete = () => ({ eq: async () => ({ error: null }) });
 chain.maybeSingle = async () => ({ data: rows[0] ?? null, error: null });
 chain.insert = async (p: any) => { calls.insert.push(p); return { error: null }; };
 chain.update = (p: any) => { calls.update.push(p); return { eq: async (...a: any[]) => { calls.updateEq.push(a); return { error: null }; } }; };
@@ -15,14 +17,14 @@ jest.mock('../../src/config/supabase', () => ({
   supabase: {
     auth: { getSession: async () => ({ data: { session: { user: { id: 'me' } } } }) },
     from: () => chain,
-    storage: { from: () => ({ createSignedUrls: (...a: any[]) => mockCreateSignedUrls(...a) }) },
+    storage: { from: () => ({ createSignedUrls: (...a: any[]) => mockCreateSignedUrls(...a), remove: (p: string[]) => mockRemove(p) }) },
   },
 }));
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
 
-import { getClothingItem, getClothingItems, getOwnedClothingItems, saveClothingItem, updateClothingItem } from '../../src/services/storage';
+import { deleteClothingItem, getClothingItem, getClothingItems, getOwnedClothingItems, saveClothingItem, updateClothingItem } from '../../src/services/storage';
 import { clearSignedImageCache } from '../../src/services/imageUrls';
 
 const HOST = 'https://abc.supabase.co';
@@ -34,6 +36,7 @@ const baseItem: any = { id: 'x', name: 'Tee', category: 'tops', color: 'red', se
 beforeEach(async () => {
   calls.eq = []; calls.insert = []; calls.update = []; calls.updateEq = [];
   rows = [];
+  mockRemove.mockClear();
   mockCreateSignedUrls.mockReset().mockImplementation(async (paths: string[]) => ({
     data: paths.map(p => ({ path: p, signedUrl: `${HOST}/storage/v1/object/sign/wardrobe-images/${p}?token=fresh`, error: null })),
     error: null,
@@ -148,5 +151,33 @@ describe('getClothingItem', () => {
   it('returns null when the item no longer exists', async () => {
     rows = [];
     expect(await getClothingItem('gone')).toBeNull();
+  });
+});
+
+describe('photos are removed from storage when nothing references them', () => {
+  const OTHER = `${HOST}/storage/v1/object/public/wardrobe-images/me/2.jpg`;
+
+  it('deleting an item removes its photo', async () => {
+    rows = [{ id: 'a', user_image: CANON, retailer_image: CANON }];
+    await deleteClothingItem('a');
+    expect(mockRemove).toHaveBeenCalledWith(['me/1.jpg']);
+  });
+
+  it('replacing the photo on an item removes the old one but not the new one', async () => {
+    rows = [{ id: 'x', user_image: CANON, retailer_image: CANON }];
+    await updateClothingItem({ ...baseItem, userImage: OTHER, retailerImage: OTHER });
+    expect(mockRemove).toHaveBeenCalledWith(['me/1.jpg']);
+  });
+
+  it('editing something else leaves the photo alone', async () => {
+    rows = [{ id: 'x', user_image: CANON, retailer_image: CANON }];
+    await updateClothingItem({ ...baseItem, userImage: SIGNED, retailerImage: SIGNED });
+    expect(mockRemove).not.toHaveBeenCalled();
+  });
+
+  it('never touches storage for photos hosted elsewhere', async () => {
+    rows = [{ id: 'a', user_image: 'https://shop.example/a.jpg', retailer_image: 'file:///x.jpg' }];
+    await deleteClothingItem('a');
+    expect(mockRemove).not.toHaveBeenCalled();
   });
 });

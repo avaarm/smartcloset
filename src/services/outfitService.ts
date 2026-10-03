@@ -1,5 +1,6 @@
 import { ClothingItem, Season } from '../types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { rehomeItemImages } from './localImagePaths';
 import { supabase } from '../config/supabase';
 import { getAuthUserId } from './authUser';
 
@@ -244,7 +245,8 @@ const SAVED_OUTFITS_KEY = '@smartcloset_saved_outfits';
 
 const getLocalOutfits = async (): Promise<Outfit[]> => {
   const outfits = await AsyncStorage.getItem(SAVED_OUTFITS_KEY);
-  return outfits ? JSON.parse(outfits) : [];
+  if (!outfits) return [];
+  return (JSON.parse(outfits) as Outfit[]).map(o => ({ ...o, items: (o.items || []).map(rehomeItemImages) }));
 };
 
 const saveLocalOutfit = async (outfit: Outfit): Promise<void> => {

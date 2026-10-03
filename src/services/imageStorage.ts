@@ -116,6 +116,9 @@ export const copyImageToPermanentStorage = async (tempUri: string): Promise<stri
   // Already in document directory — just try cloud upload
   if (tempUri.includes(RNFS.DocumentDirectoryPath)) {
     const cloudUrl = await uploadToCloud(tempUri);
+    if (!cloudUrl && (await getAuthUserId())) {
+      throw new Error("Couldn't upload the photo. Check your connection and try again.");
+    }
     return cloudUrl || tempUri;
   }
 
@@ -152,9 +155,30 @@ export const copyImageToPermanentStorage = async (tempUri: string): Promise<stri
     }
   }
 
-  // Try cloud upload for authenticated users (falls back to local URI)
+  // Signed-in users keep their photos in the cloud. If the upload fails we must
+  // say so: quietly keeping a path to this phone's storage would save an item
+  // whose photo never reaches their other devices or their friends, and which
+  // breaks if the app is ever reinstalled.
   const cloudUrl = await uploadToCloud(localUri);
+  if (!cloudUrl && (await getAuthUserId())) {
+    throw new Error("Couldn't upload the photo. Check your connection and try again.");
+  }
   return cloudUrl || localUri;
+};
+
+/**
+ * Remove the cloud copies of photos nothing references any more (after an item is
+ * deleted or its photo replaced). Best effort: a failure only leaves an orphan.
+ */
+export const removeCloudImages = async (urls: (string | null | undefined)[]): Promise<void> => {
+  try {
+    const paths = [
+      ...new Set(urls.map(u => (u ? storagePathFromUrl(u) : null)).filter((p): p is string => !!p)),
+    ];
+    if (paths.length > 0) await supabase.storage.from(BUCKET).remove(paths);
+  } catch (error) {
+    console.warn('[imageStorage] could not remove old photos:', error);
+  }
 };
 
 /**

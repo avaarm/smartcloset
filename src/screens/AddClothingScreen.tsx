@@ -176,8 +176,10 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
           analyzeImage(permanentUri);
         } catch (error) {
           console.error('Error saving image:', error);
-          setImageUri(tempUri);
-          analyzeImage(tempUri);
+          Alert.alert(
+            "Couldn't add that photo",
+            error instanceof Error ? error.message : 'Please try again.',
+          );
         }
       }
     });
@@ -200,8 +202,10 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
           analyzeImage(permanentUri);
         } catch (error) {
           console.error('Error saving image:', error);
-          setImageUri(tempUri);
-          analyzeImage(tempUri);
+          Alert.alert(
+            "Couldn't add that photo",
+            error instanceof Error ? error.message : 'Please try again.',
+          );
         }
       }
     });
