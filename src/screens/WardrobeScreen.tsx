@@ -20,7 +20,7 @@ import { useTheme } from '../styles/ThemeProvider';
 import ClothingItem from '../components/ClothingItem';
 import { ClothingItem as ClothingItemType } from '../types';
 import {
-  getClothingItems,
+  getOwnedClothingItems,
   deleteClothingItem,
   resetStorage,
 } from '../services/storage';
@@ -48,7 +48,7 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
     const loadClothes = async () => {
       setLoading(true);
       try {
-        const items = await getClothingItems();
+        const items = await getOwnedClothingItems();
         setClothes(items);
       } catch (error) {
         console.error('Error loading clothes:', error);
@@ -63,7 +63,7 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
     const unsubscribe = navigation.addListener('focus', async () => {
       setLoading(true);
       try {
-        const items = await getClothingItems();
+        const items = await getOwnedClothingItems();
         setClothes(items);
       } catch (error) {
         console.error('Error loading clothes:', error);
@@ -81,7 +81,7 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
   const handleDelete = async (id: string) => {
     try {
       await deleteClothingItem(id);
-      const updatedItems = await getClothingItems();
+      const updatedItems = await getOwnedClothingItems();
       setClothes(updatedItems);
     } catch (error) {
       console.error('Error deleting item:', error);
@@ -95,7 +95,7 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
   const handleResetStorage = async () => {
     try {
       await resetStorage();
-      const items = await getClothingItems();
+      const items = await getOwnedClothingItems();
       setClothes(items);
     } catch (error) {
       console.error('Error resetting storage:', error);

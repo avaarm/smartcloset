@@ -51,7 +51,7 @@ const ManualOutfitBuilderScreen = () => {
   const loadItems = async () => {
     try {
       setLoading(true);
-      const items = await getClothingItems();
+      const items = await getClothingItems({ all: true });
       const wardrobeItems = items.filter((item) => !item.isWishlist);
       setAllItems(wardrobeItems);
     } catch (error) {

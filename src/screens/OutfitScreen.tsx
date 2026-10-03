@@ -18,7 +18,7 @@ import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Badge, Button, Card, EmptyState, Screen, Text } from '../ui';
 import { useTheme } from '../styles/ThemeProvider';
-import { getClothingItems } from '../services/storage';
+import { getOwnedClothingItems } from '../services/storage';
 import OutfitCard from '../components/OutfitCard';
 import {
   generateOutfitSuggestions,
@@ -46,7 +46,7 @@ const SuggestionsTab = () => {
   const generateOutfits = useCallback(async () => {
     try {
       setLoading(true);
-      const clothingItems = await getClothingItems();
+      const clothingItems = await getOwnedClothingItems();
 
       if (clothingItems.length < 2) {
         setOutfits([]);

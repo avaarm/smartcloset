@@ -69,7 +69,7 @@ const HomeScreen: React.FC = () => {
       }
 
       const [wardrobe, outfits, profile, rawStylePrefs] = await Promise.all([
-        getClothingItems(),
+        getClothingItems({ all: true }),
         getSavedOutfits(),
         getBodyProfile().catch(() => null),
         AsyncStorage.getItem(STYLE_PREFS_KEY),

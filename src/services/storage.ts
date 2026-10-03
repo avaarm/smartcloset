@@ -231,6 +231,10 @@ export const getClothingItems = async (
   }
 };
 
+/** Everything the user owns: all pages, wishlist items excluded. */
+export const getOwnedClothingItems = async (): Promise<ClothingItem[]> =>
+  (await getClothingItems({ all: true })).filter(item => !item.isWishlist);
+
 export const updateClothingItem = async (updatedItem: ClothingItem): Promise<void> => {
   try {
     const userId = await getAuthUserId();

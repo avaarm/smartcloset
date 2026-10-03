@@ -32,7 +32,7 @@ const WishlistScreen = () => {
 
   const loadWishlistItems = async () => {
     try {
-      const allItems = await getClothingItems();
+      const allItems = await getClothingItems({ all: true });
       const wishlistItems = allItems.filter(item => item.isWishlist === true);
       setItems(wishlistItems);
     } catch (error) {

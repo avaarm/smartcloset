@@ -63,7 +63,7 @@ const OutfitCalendarScreen: React.FC = () => {
         setLoading(true);
         try {
           const [allItems, allOutfits] = await Promise.all([
-            getClothingItems(),
+            getClothingItems({ all: true }),
             getSavedOutfits(),
           ]);
           if (active) {

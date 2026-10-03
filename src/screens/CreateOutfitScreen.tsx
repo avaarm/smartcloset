@@ -17,7 +17,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import LinearGradient from 'react-native-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ClothingItem } from '../types';
-import { getClothingItems } from '../services/storage';
+import { getOwnedClothingItems } from '../services/storage';
 import { saveOutfit, Outfit } from '../services/outfitService';
 import theme from '../styles/theme';
 
@@ -58,7 +58,7 @@ const CreateOutfitScreen: React.FC = () => {
 
   const loadItems = async () => {
     try {
-      const items = await getClothingItems();
+      const items = await getOwnedClothingItems();
       setAvailableItems(items);
     } catch (error) {
       console.error('Error loading items:', error);

@@ -21,7 +21,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
 
-import { getClothingItems, saveClothingItem, updateClothingItem } from '../../src/services/storage';
+import { getClothingItems, getOwnedClothingItems, saveClothingItem, updateClothingItem } from '../../src/services/storage';
 import { clearSignedImageCache } from '../../src/services/imageUrls';
 
 const HOST = 'https://abc.supabase.co';
@@ -84,5 +84,22 @@ describe('writing items never stores an expiring signed link', () => {
     expect(loaded.userImage).not.toBe(CANON); // displayed signed
     await updateClothingItem({ ...loaded, name: 'Renamed' });
     expect(calls.update[0].user_image).toBe(CANON); // stored canonical
+  });
+});
+
+describe('getOwnedClothingItems', () => {
+  it('returns what the user owns and leaves wishlist items out', async () => {
+    rows = [
+      { id: 'a', name: 'Owned tee', category: 'tops', color: 'red', is_wishlist: false, created_at: '2026-01-01' },
+      { id: 'b', name: 'Wish bag', category: 'accessories', color: 'black', is_wishlist: true, created_at: '2026-01-01' },
+      { id: 'c', name: 'Owned jeans', category: 'bottoms', color: 'blue', created_at: '2026-01-01' },
+    ];
+    const owned = await getOwnedClothingItems();
+    expect(owned.map(i => i.name)).toEqual(['Owned tee', 'Owned jeans']);
+  });
+
+  it('asks for every page, not just the first 200 rows', async () => {
+    await getOwnedClothingItems();
+    expect(calls.eq).toContainEqual(['user_id', 'me']);
   });
 });
