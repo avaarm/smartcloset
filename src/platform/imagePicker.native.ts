@@ -12,7 +12,7 @@
  * inside the picker UI is allowed by iOS without NSCameraUsageDescription.
  */
 
-import { launchImageLibrary } from 'react-native-image-picker';
+import { launchImageLibrary, PhotoQuality } from 'react-native-image-picker';
 
 export type PickedImage = {
   uri: string;
@@ -26,7 +26,7 @@ export type PickedImage = {
 export const pickImageFromLibrary = async (): Promise<PickedImage | null> => {
   const result = await launchImageLibrary({
     mediaType: 'photo',
-    quality: 0.85,
+    quality: 0.85 as unknown as PhotoQuality, // 0.85 is valid at runtime; the lib's type lists only tenths
     selectionLimit: 1,
     includeBase64: false,
     includeExtra: false,

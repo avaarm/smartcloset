@@ -6,6 +6,7 @@
     "android": "react-native run-android",
     "ios": "react-native run-ios",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.native.json",
     "start": "react-native start",
     "test": "jest",
     "web": "vite --config web/vite.config.ts",

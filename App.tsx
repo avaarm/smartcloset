@@ -267,7 +267,7 @@ const StylistDashboardStack = () => {
       />
       <Stack.Screen
         name="CreateAppointment"
-        component={CreateAppointmentScreen}
+        component={CreateAppointmentScreen as React.ComponentType<any>}
         options={{ headerShown: false }}
       />
       <Stack.Screen
@@ -277,7 +277,7 @@ const StylistDashboardStack = () => {
       />
       <Stack.Screen
         name="AppointmentDetails"
-        component={AppointmentDetailsScreen}
+        component={AppointmentDetailsScreen as React.ComponentType<any>}
         options={{ headerShown: false }}
       />
       <Stack.Screen
@@ -309,7 +309,7 @@ const ClientsStack = () => {
       />
       <Stack.Screen
         name="ClientDetails"
-        component={ClientDetailsScreen}
+        component={ClientDetailsScreen as React.ComponentType<any>}
         options={{ headerShown: false }}
       />
       <Stack.Screen
@@ -319,7 +319,7 @@ const ClientsStack = () => {
       />
       <Stack.Screen
         name="CreateAppointment"
-        component={CreateAppointmentScreen}
+        component={CreateAppointmentScreen as React.ComponentType<any>}
         options={{ headerShown: false }}
       />
       <Stack.Screen
@@ -329,7 +329,7 @@ const ClientsStack = () => {
       />
       <Stack.Screen
         name="AppointmentDetails"
-        component={AppointmentDetailsScreen}
+        component={AppointmentDetailsScreen as React.ComponentType<any>}
         options={{ headerShown: false }}
       />
       <Stack.Screen
@@ -378,7 +378,7 @@ const StylistRecommendationsStack = () => {
       />
       <Stack.Screen
         name="RecommendationDetails"
-        component={RecommendationDetailsScreen}
+        component={RecommendationDetailsScreen as React.ComponentType<any>}
         options={{ headerShown: false }}
       />
       <Stack.Screen
@@ -388,7 +388,7 @@ const StylistRecommendationsStack = () => {
       />
       <Stack.Screen
         name="ClientDetails"
-        component={ClientDetailsScreen}
+        component={ClientDetailsScreen as React.ComponentType<any>}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

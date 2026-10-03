@@ -10,6 +10,7 @@ import {
   TextInputProps,
   View,
   ViewStyle,
+  TextStyle,
 } from 'react-native';
 import { Text } from './Text';
 import { useTheme } from '../styles/ThemeProvider';
@@ -21,7 +22,7 @@ export type InputProps = Omit<TextInputProps, 'style'> & {
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
   containerStyle?: StyleProp<ViewStyle>;
-  inputStyle?: StyleProp<TextInputProps['style']>;
+  inputStyle?: StyleProp<TextStyle>;
 };
 
 export const Input: React.FC<InputProps> = ({

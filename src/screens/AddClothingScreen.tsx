@@ -77,7 +77,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   const [purchaseDate, setPurchaseDate] = useState<Date>(editItem?.purchaseDate ? new Date(editItem.purchaseDate) : new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [tags, setTags] = useState(editItem?.tags?.join(', ') || '');
-  const [notes, setNotes] = useState(editItem?.notes || '');
+  const [notes, setNotes] = useState<string>(editItem?.notes || '');
   const [favorite, setFavorite] = useState(editItem?.favorite || false);
   const [retailer, setRetailer] = useState(editItem?.retailer || '');
   const [errors, setErrors] = useState<{[key: string]: string}>({});
