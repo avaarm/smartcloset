@@ -55,3 +55,52 @@ jest.mock('react-native-screens', () => {
   const actual = jest.requireActual('react-native-screens');
   return { ...actual, enableScreens: jest.fn() };
 });
+
+// ── Native modules that have no JS fallback in the test environment ──────────
+jest.mock('react-native-fs', () => ({
+  __esModule: true,
+  default: {
+    DocumentDirectoryPath: '/mock/documents',
+    TemporaryDirectoryPath: '/mock/tmp',
+    exists: jest.fn(async () => false),
+    readFile: jest.fn(async () => ''),
+    writeFile: jest.fn(async () => undefined),
+    copyFile: jest.fn(async () => undefined),
+    unlink: jest.fn(async () => undefined),
+    downloadFile: jest.fn(() => ({ promise: Promise.resolve({ statusCode: 200 }) })),
+  },
+}));
+jest.mock('@react-native-google-signin/google-signin', () => ({
+  GoogleSignin: {
+    configure: jest.fn(),
+    hasPlayServices: jest.fn(async () => true),
+    signIn: jest.fn(async () => ({ data: { idToken: 'mock-token' } })),
+    signOut: jest.fn(async () => undefined),
+  },
+}));
+jest.mock('@invertase/react-native-apple-authentication', () => ({
+  appleAuth: {
+    isSupported: true,
+    performRequest: jest.fn(),
+    Operation: { LOGIN: 0 },
+    Scope: { EMAIL: 0, FULL_NAME: 1 },
+  },
+  AppleButton: 'AppleButton',
+}));
+jest.mock('react-native-image-picker', () => ({
+  launchImageLibrary: jest.fn(async () => ({ didCancel: true })),
+  launchCamera: jest.fn(async () => ({ didCancel: true })),
+}));
+jest.mock('react-native-permissions', () => ({
+  PERMISSIONS: { IOS: {} },
+  RESULTS: { GRANTED: 'granted', DENIED: 'denied' },
+  check: jest.fn(async () => 'granted'),
+  request: jest.fn(async () => 'granted'),
+}));
+jest.mock('react-native-linear-gradient', () => 'LinearGradient');
+jest.mock('@react-native-picker/picker', () => {
+  const Picker = 'Picker';
+  Picker.Item = 'PickerItem';
+  return { Picker };
+});
+jest.mock('@react-native-community/datetimepicker', () => 'DateTimePicker');
