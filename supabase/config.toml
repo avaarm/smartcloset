@@ -4,3 +4,6 @@ project_id = "smartcloset"
 
 [functions.ai-proxy]
 verify_jwt = true
+
+[functions.delete-account]
+verify_jwt = true

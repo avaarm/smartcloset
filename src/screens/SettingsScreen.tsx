@@ -31,8 +31,7 @@ import {
   deleteMySharedContributions,
 } from '../services/productContributions';
 import { supabase } from '../config/supabase';
-import { deleteAllUserCloudImages } from '../services/imageStorage';
-import { clearSignedImageCache } from '../services/imageUrls';
+import { deleteAccount } from '../services/accountDeletion';
 import { getAiConsent, setAiConsent } from '../services/aiConsent';
 import { signOut } from '../services/authService';
 import {
@@ -262,20 +261,13 @@ const SettingsScreen = () => {
                     }
                     try {
                       setLoading(true);
-                      // Photos first: they can only be removed through the Storage API
-                      // while the session is still valid. Aborts on failure.
-                      await deleteAllUserCloudImages();
-                      const { error } = await supabase.rpc('delete_user_account');
-                      if (error) throw error;
-                      await clearAllData();
-                      await supabase.auth.signOut();
-                      await clearSignedImageCache();
+                      await deleteAccount();
                       Alert.alert('Account deleted', 'Your account and data have been removed.');
                     } catch (e: any) {
                       console.error('[SettingsScreen] account delete failed:', e);
                       Alert.alert(
                         'Could not delete account',
-                        e?.message || 'Please try again, or contact support.',
+                        'Your account was not deleted. Please check your connection and try again, or contact support.',
                       );
                     } finally {
                       setLoading(false);

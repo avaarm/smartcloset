@@ -188,35 +188,3 @@ export const deleteImageFromStorage = async (imageUri: string): Promise<void> =>
     // Don't throw — deletion failures shouldn't break the app
   }
 };
-
-/**
- * Removes every photo the signed-in user has uploaded to cloud storage.
- * Used when deleting an account: the database function can remove rows but
- * Supabase Storage files can only be deleted through the Storage API, and
- * only while the user's session is still valid, so this runs first.
- * Throws if any file could not be removed, so account deletion is aborted
- * rather than leaving photos behind.
- */
-export const deleteAllUserCloudImages = async (): Promise<number> => {
-  const userId = await getAuthUserId();
-  if (!userId) return 0;
-
-  let total = 0;
-  for (let page = 0; page < 500; page++) {
-    const { data: files, error: listError } = await supabase.storage
-      .from(BUCKET)
-      .list(userId, { limit: 100 });
-    if (listError) throw listError;
-    const names = (files ?? []).filter(f => f.name && f.id).map(f => `${userId}/${f.name}`);
-    if (names.length === 0) return total;
-
-    const { data: removed, error: removeError } = await supabase.storage.from(BUCKET).remove(names);
-    if (removeError) throw removeError;
-    // Storage reports success with an empty result when a policy blocks the delete.
-    if (!removed || removed.length === 0) {
-      throw new Error('Could not delete your uploaded photos. Please try again.');
-    }
-    total += removed.length;
-  }
-  throw new Error('Too many photos to delete in one pass. Please try again.');
-};
