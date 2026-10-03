@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, FlatList, TouchableOpacity, Text, ActivityIndicator, SafeAreaView, StatusBar, Image, Alert, TextInput, Modal } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { ClothingItem as ClothingItemType } from '../types';
-import { getClothingItems, saveClothingItem, deleteClothingItem } from '../services/storage';
+import { getClothingItems, saveClothingItem, deleteClothingItem, updateClothingItem } from '../services/storage';
 import ClothingItem from '../components/ClothingItem';
 import Icon from 'react-native-vector-icons/Ionicons';
 import LinearGradient from 'react-native-linear-gradient';
@@ -85,9 +85,9 @@ const WishlistScreen = () => {
           text: 'Move',
           onPress: async () => {
             try {
-              await deleteClothingItem(item.id);
-              const updatedItem = { ...item, isWishlist: false };
-              await saveClothingItem(updatedItem);
+              // Update in place: deleting first and re-inserting could lose the item
+              // (and its id/history) if the second step failed.
+              await updateClothingItem({ ...item, isWishlist: false });
               await loadWishlistItems();
               Alert.alert('Success', 'Item moved to wardrobe!');
             } catch (error) {
@@ -150,12 +150,14 @@ const WishlistScreen = () => {
             <Text style={styles.headerTitle}>My Wishlist</Text>
             <Text style={styles.headerSubtitle}>{items.length} items</Text>
           </View>
-          <TouchableOpacity
-            style={styles.sampleButton}
-            onPress={handleAddSampleData}
-          >
-            <Icon name="download-outline" size={20} color={theme.colors.accent} />
-          </TouchableOpacity>
+          {__DEV__ && (
+            <TouchableOpacity
+              style={styles.sampleButton}
+              onPress={handleAddSampleData}
+            >
+              <Icon name="download-outline" size={20} color={theme.colors.accent} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
       <View style={styles.container}>
@@ -210,14 +212,16 @@ const WishlistScreen = () => {
                   <Icon name="search" size={16} color="#FFFFFF" />
                   <Text style={styles.sampleDataButtonText}>Search Online</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.sampleDataButton, styles.sampleDataButtonSecondary]}
-                  onPress={handleAddSampleData}
-                >
-                  <Text style={[styles.sampleDataButtonText, { color: theme.colors.accent }]}>
-                    Load Sample Items
-                  </Text>
-                </TouchableOpacity>
+                {__DEV__ && (
+                  <TouchableOpacity
+                    style={[styles.sampleDataButton, styles.sampleDataButtonSecondary]}
+                    onPress={handleAddSampleData}
+                  >
+                    <Text style={[styles.sampleDataButtonText, { color: theme.colors.accent }]}>
+                      Load Sample Items
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             }
           />
