@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Platform, ScrollView, ActivityIndicator, Alert, Switch, Pressable } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
+import ChipSelect from '../components/ChipSelect';
 import { useCallback } from 'react';
 import * as ImagePicker from 'react-native-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -884,21 +884,19 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         />
 
         <Text style={[styles.sectionHeader, { marginTop: 8 }]}>Category</Text>
-        <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={category}
-            onValueChange={onCategoryChange}
-            style={styles.picker}
-            itemStyle={{ color: '#1A1A1A', fontSize: 16 }}
-          >
-            <Picker.Item label="Tops" value="tops" color="#1A1A1A" />
-            <Picker.Item label="Bottoms" value="bottoms" color="#1A1A1A" />
-            <Picker.Item label="Dresses" value="dresses" color="#1A1A1A" />
-            <Picker.Item label="Outerwear" value="outerwear" color="#1A1A1A" />
-            <Picker.Item label="Shoes" value="shoes" color="#1A1A1A" />
-            <Picker.Item label="Accessories" value="accessories" color="#1A1A1A" />
-          </Picker>
-        </View>
+        <ChipSelect<ClothingCategory>
+          accessibilityLabel="Category"
+          value={category}
+          onChange={v => v && onCategoryChange(v)}
+          options={[
+            { label: 'Tops', value: 'tops' },
+            { label: 'Bottoms', value: 'bottoms' },
+            { label: 'Dresses', value: 'dresses' },
+            { label: 'Outerwear', value: 'outerwear' },
+            { label: 'Shoes', value: 'shoes' },
+            { label: 'Accessories', value: 'accessories' },
+          ]}
+        />
 
         <TextInput
           style={styles.input}
@@ -996,39 +994,35 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         )}
 
         <Text style={[styles.sectionHeader, { marginTop: 8 }]}>Season</Text>
-        <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={season || undefined}
-            onValueChange={onSeasonChange}
-            style={styles.picker}
-            itemStyle={{ color: '#1A1A1A', fontSize: 16 }}
-          >
-            <Picker.Item label="Select Season" value={null} color="#8B8B8B" />
-            <Picker.Item label="All Seasons" value="all" color="#1A1A1A" />
-            <Picker.Item label="Spring" value="spring" color="#1A1A1A" />
-            <Picker.Item label="Summer" value="summer" color="#1A1A1A" />
-            <Picker.Item label="Fall" value="fall" color="#1A1A1A" />
-            <Picker.Item label="Winter" value="winter" color="#1A1A1A" />
-          </Picker>
-        </View>
+        <ChipSelect<Season | 'all'>
+          accessibilityLabel="Season"
+          allowClear
+          value={season}
+          onChange={onSeasonChange}
+          options={[
+            { label: 'All seasons', value: 'all' },
+            { label: 'Spring', value: 'spring' },
+            { label: 'Summer', value: 'summer' },
+            { label: 'Fall', value: 'fall' },
+            { label: 'Winter', value: 'winter' },
+          ]}
+        />
         
         <Text style={[styles.sectionHeader, { marginTop: 8 }]}>Occasion</Text>
-        <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={occasion || undefined}
-            onValueChange={(value) => setOccasion(value)}
-            style={styles.picker}
-            itemStyle={{ color: '#1A1A1A', fontSize: 16 }}
-          >
-            <Picker.Item label="Select Occasion" value={null} color="#8B8B8B" />
-            <Picker.Item label="Casual" value="casual" color="#1A1A1A" />
-            <Picker.Item label="Formal" value="formal" color="#1A1A1A" />
-            <Picker.Item label="Business" value="business" color="#1A1A1A" />
-            <Picker.Item label="Sports" value="sports" color="#1A1A1A" />
-            <Picker.Item label="Party" value="party" color="#1A1A1A" />
-            <Picker.Item label="Everyday" value="everyday" color="#1A1A1A" />
-          </Picker>
-        </View>
+        <ChipSelect<Occasion>
+          accessibilityLabel="Occasion"
+          allowClear
+          value={occasion}
+          onChange={v => setOccasion(v as Occasion)}
+          options={[
+            { label: 'Casual', value: 'casual' },
+            { label: 'Formal', value: 'formal' },
+            { label: 'Business', value: 'business' },
+            { label: 'Sports', value: 'sports' },
+            { label: 'Party', value: 'party' },
+            { label: 'Everyday', value: 'everyday' },
+          ]}
+        />
 
         <TextInput
           style={styles.input}
@@ -1156,26 +1150,6 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     width: '100%',
-  },
-  pickerContainer: {
-    borderWidth: 1,
-    borderColor: '#E8E6E3',
-    borderRadius: 12,
-    marginBottom: 16,
-    backgroundColor: '#FFFFFF',
-    overflow: 'hidden',
-    // iOS renders <Picker> as a native spinning wheel, which needs real
-    // height to show the selected row — 50 clipped it down to nothing
-    // visible. Android's compact dropdown style is fine at 50.
-    height: Platform.OS === 'ios' ? 120 : 50,
-    justifyContent: 'center',
-  },
-  picker: {
-    height: Platform.OS === 'ios' ? 120 : 50,
-    width: '100%',
-    color: '#1A1A1A',
-    fontSize: 16,
-    fontWeight: '500',
   },
   container: {
     flex: 1,
