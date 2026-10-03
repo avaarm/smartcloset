@@ -6,6 +6,7 @@
  */
 
 import RNFS from 'react-native-fs';
+import { resolveImageUrl } from '../services/imageUrls';
 
 /**
  * Read any image URI and return its base64 content (NO data-URL prefix).
@@ -20,7 +21,9 @@ export const readImageAsBase64 = async (uri: string): Promise<string> => {
   if (uri.startsWith('http://') || uri.startsWith('https://')) {
     // Remote image — download into a temp file then read
     const tempPath = `${RNFS.TemporaryDirectoryPath}/remote_${Date.now()}.bin`;
-    const result = await RNFS.downloadFile({ fromUrl: uri, toFile: tempPath }).promise;
+    // Private-bucket photos need a signed link to be downloadable.
+    const fromUrl = await resolveImageUrl(uri);
+    const result = await RNFS.downloadFile({ fromUrl, toFile: tempPath }).promise;
     if (result.statusCode !== 200) {
       throw new Error(`Failed to fetch image (${result.statusCode})`);
     }

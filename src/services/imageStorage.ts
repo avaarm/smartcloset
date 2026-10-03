@@ -1,5 +1,6 @@
 import RNFS from 'react-native-fs';
 import { supabase } from '../config/supabase';
+import { signStoragePaths, storagePathFromUrl } from './imageUrls';
 
 const BUCKET = 'wardrobe-images';
 
@@ -39,6 +40,11 @@ const uploadToCloud = async (localPath: string): Promise<string | null> => {
       return null;
     }
 
+    // The bucket is private: hand back a signed link so the photo shows (and can be
+    // analysed) right away. It is converted back to the stable stored form on save.
+    const signed = await signStoragePaths([fileName]);
+    const signedUrl = signed.get(fileName);
+    if (signedUrl) return signedUrl;
     const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(fileName);
     return urlData?.publicUrl ?? null;
   } catch (err) {
@@ -164,11 +170,9 @@ export const copyImageToPermanentStorage = async (tempUri: string): Promise<stri
 export const deleteImageFromStorage = async (imageUri: string): Promise<void> => {
   try {
     // Delete from cloud if it's a Supabase URL
-    if (imageUri.includes(BUCKET)) {
-      const path = imageUri.split(`${BUCKET}/`)[1];
-      if (path) {
-        await supabase.storage.from(BUCKET).remove([path]);
-      }
+    const path = storagePathFromUrl(imageUri);
+    if (path) {
+      await supabase.storage.from(BUCKET).remove([path]);
     }
 
     // Delete local file if it exists

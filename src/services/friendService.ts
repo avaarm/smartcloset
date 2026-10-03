@@ -2,6 +2,7 @@ import { supabase } from '../config/supabase';
 import { ClothingItem } from '../types';
 import { Friend, FriendRequest } from '../types/friends';
 import { mapDbToClothingItem } from './storage';
+import { withSignedImages } from './imageUrls';
 
 const getSession = async () => {
   const { data: { session } } = await supabase.auth.getSession();
@@ -138,5 +139,5 @@ export const getFriendCloset = async (friendUserId: string): Promise<ClothingIte
     .eq('is_wishlist', false)
     .order('date_added', { ascending: false });
   if (error) throw error;
-  return (data || []).map(mapDbToClothingItem);
+  return withSignedImages((data || []).map(mapDbToClothingItem));
 };

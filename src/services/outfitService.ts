@@ -324,8 +324,12 @@ export const getSavedOutfits = async (): Promise<Outfit[]> => {
       if (itemsError) throw itemsError;
       if (itemRows) {
         const { mapDbToClothingItem } = require('./storage');
-        for (const row of itemRows) {
-          itemsMap[row.id] = mapDbToClothingItem ? mapDbToClothingItem(row) : row;
+        const { withSignedImages } = require('./imageUrls');
+        const mapped = await withSignedImages(
+          itemRows.map((row: any) => (mapDbToClothingItem ? mapDbToClothingItem(row) : row)),
+        );
+        for (const item of mapped) {
+          itemsMap[item.id] = item;
         }
       }
     }

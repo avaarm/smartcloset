@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ClothingItem } from '../types';
 import { enhancedClothingItems, enhancedOutfits } from '../data/enhancedSampleData';
 import { supabase } from '../config/supabase';
+import { canonicalizeImageUrl, withSignedImages } from './imageUrls';
 import { seedAllDemoData } from './seedDemoData';
 
 const STORAGE_KEY = '@smartcloset_items';
@@ -48,8 +49,8 @@ const mapClothingItemToDb = (item: Partial<ClothingItem>, userId: string) => ({
   category: item.category,
   color: item.color,
   season: item.season || [],
-  retailer_image: item.retailerImage,
-  user_image: item.userImage,
+  retailer_image: canonicalizeImageUrl(item.retailerImage),
+  user_image: canonicalizeImageUrl(item.userImage),
   brand: item.brand,
   is_wishlist: item.isWishlist || false,
   wear_count: item.wearCount || 0,
@@ -211,7 +212,7 @@ export const getClothingItems = async (
         if (data.length < PAGE) break;
         from += PAGE;
       }
-      return acc.map(mapDbToClothingItem);
+      return withSignedImages(acc.map(mapDbToClothingItem));
     }
 
     const offset = opts.offset ?? 0;
@@ -223,7 +224,7 @@ export const getClothingItems = async (
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
     if (error) throw error;
-    return (data || []).map(mapDbToClothingItem);
+    return withSignedImages((data || []).map(mapDbToClothingItem));
   } catch (error) {
     console.error('Error getting clothing items:', error);
     throw error;
@@ -240,8 +241,8 @@ export const updateClothingItem = async (updatedItem: ClothingItem): Promise<voi
       category: updatedItem.category,
       color: updatedItem.color,
       season: updatedItem.season,
-      retailer_image: updatedItem.retailerImage,
-      user_image: updatedItem.userImage,
+      retailer_image: canonicalizeImageUrl(updatedItem.retailerImage),
+      user_image: canonicalizeImageUrl(updatedItem.userImage),
       brand: updatedItem.brand,
       is_wishlist: updatedItem.isWishlist,
       wear_count: updatedItem.wearCount,

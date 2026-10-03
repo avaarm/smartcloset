@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase';
 import { Session, User } from '@supabase/supabase-js';
+import { clearSignedImageCache } from './imageUrls';
 
 // Google and Apple native SDKs are loaded dynamically to avoid
 // crashes when client IDs are not yet configured.
@@ -109,6 +110,7 @@ export const signInWithApple = async () => {
 
 export const signOut = async () => {
   const { error } = await supabase.auth.signOut();
+  await clearSignedImageCache();
   if (error) throw error;
 };
 
