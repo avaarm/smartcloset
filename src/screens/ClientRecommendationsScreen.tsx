@@ -245,7 +245,7 @@ const ClientRecommendationsScreen = ({ navigation }: any) => {
           <View style={styles.feedbackContainer}>
             <Text style={styles.feedbackLabel}>Your Feedback:</Text>
             <Text style={styles.feedbackText}>{item.clientFeedback.comment || 'No comment provided'}</Text>
-            {item.clientFeedback.rating && (
+            {!!item.clientFeedback.rating && (
               <Text style={styles.feedbackRating}>Rating: {item.clientFeedback.rating}/5</Text>
             )}
           </View>

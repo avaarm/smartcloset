@@ -216,7 +216,7 @@ const OutfitDetailsScreen = () => {
                     <Icon name="calendar" size={16} color={theme.colors.accent} />
                     <Text style={styles.historyDateText}>{formatDate(entry.dateWorn)}</Text>
                   </View>
-                  {entry.rating && renderStars(entry.rating)}
+                  {!!entry.rating && renderStars(entry.rating)}
                 </View>
                 {entry.occasion && (
                   <View style={styles.historyRow}>

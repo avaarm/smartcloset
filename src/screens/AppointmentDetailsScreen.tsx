@@ -124,7 +124,7 @@ const AppointmentDetailsScreen = ({ navigation, route }: Props) => {
               </Text>
             </View>
           )}
-          {appt.duration && (
+          {!!appt.duration && (
             <View style={[styles.row, { marginTop: 10 }]}>
               <Icon name="hourglass-outline" size={20} color={theme.colors.textSubtle} />
               <Text variant="body" color="muted" style={{ marginLeft: 10 }}>

@@ -252,7 +252,7 @@ const ItemDetailsScreen: React.FC = () => {
               <Text style={styles.statValue}>{getLastWornText()}</Text>
               <Text style={styles.statLabel}>Last Worn</Text>
             </View>
-            {item.cost && (
+            {!!item.cost && (
               <View style={styles.statCard}>
                 <Icon name="cash-outline" size={24} color={theme.colors.success} />
                 <Text style={styles.statValue}>
@@ -323,7 +323,7 @@ const ItemDetailsScreen: React.FC = () => {
           )}
 
           {/* Resale estimate */}
-          {item.cost && item.cost > 0 && (
+          {!!item.cost && item.cost > 0 && (
             <View style={styles.detailsSection}>
               <Text style={styles.sectionTitle}>Resale Estimate</Text>
               <View style={styles.priceRow}>

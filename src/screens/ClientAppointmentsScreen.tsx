@@ -196,7 +196,7 @@ const ClientAppointmentsScreen = ({ navigation }: any) => {
             <Text style={styles.detailText}>{item.duration} minutes</Text>
           </View>
 
-          {item.fee && (
+          {!!item.fee && (
             <View style={styles.detailRow}>
               <Icon name="cash-outline" size={18} color={theme.colors.textSecondary} />
               <Text style={styles.detailText}>${item.fee}</Text>

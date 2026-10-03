@@ -186,7 +186,7 @@ export const StatsScreen = () => {
               <Text style={styles.mvpWears}>
                 Worn {stats.mostWornItem.wearCount} times
               </Text>
-              {stats.mostWornItem.cost && (
+              {!!stats.mostWornItem.cost && (
                 <Text style={styles.mvpValue}>
                   {formatCurrency(StatsService.getCostPerWear(stats.mostWornItem))} per wear
                 </Text>

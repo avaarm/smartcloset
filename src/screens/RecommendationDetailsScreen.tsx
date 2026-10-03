@@ -157,7 +157,7 @@ const RecommendationDetailsScreen = ({ navigation, route }: Props) => {
               <Card key={idx} style={{ marginBottom: 12 }}>
                 <Text variant="label">{purchase.name}</Text>
                 <Text variant="caption" color="muted">{purchase.description}</Text>
-                {purchase.estimatedPrice && (
+                {!!purchase.estimatedPrice && (
                   <Text variant="body" style={{ marginTop: 4 }}>
                     ~${purchase.estimatedPrice}
                   </Text>
@@ -189,7 +189,7 @@ const RecommendationDetailsScreen = ({ navigation, route }: Props) => {
           <>
             <Text variant="overline" color="muted" style={styles.sectionLabel}>Client Feedback</Text>
             <Card style={{ marginBottom: 16 }}>
-              {rec.clientFeedback.rating && (
+              {!!rec.clientFeedback.rating && (
                 <View style={styles.metaRow}>
                   <Icon name="star" size={18} color="#F59E0B" />
                   <Text variant="body" style={{ marginLeft: 8 }}>

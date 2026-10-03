@@ -166,7 +166,7 @@ const RecommendationsScreen = ({ navigation }: RecommendationsScreenProps) => {
         </View>
       )}
 
-      {item.clientFeedback?.rating && (
+      {!!item.clientFeedback?.rating && (
         <View style={styles.ratingPreview}>
           <Icon name="star" size={14} color="#F59E0B" />
           <Text style={styles.ratingText}>{item.clientFeedback.rating.toFixed(1)}</Text>

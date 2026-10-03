@@ -229,7 +229,7 @@ const OutfitAnalyticsScreen = () => {
                       <Text style={styles.recentOccasionText}>{entry.occasion}</Text>
                     </View>
                   )}
-                  {entry.rating && (
+                  {!!entry.rating && (
                     <View style={styles.recentRating}>
                       <Icon name="star" size={12} color="#FFD700" />
                       <Text style={styles.recentRatingText}>{entry.rating}</Text>
