@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  Linking,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {
@@ -23,6 +24,7 @@ import {
   resetPasswordWithCode,
 } from '../services/authService';
 import { Session } from '@supabase/supabase-js';
+import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../config/legal';
 
 const GOLD = '#C4975A';
 const GOLD_LIGHT = '#D4A86A';
@@ -386,6 +388,18 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
           <TouchableOpacity onPress={onGuestContinue} style={styles.guestButton}>
             <Text style={styles.guestText}>Continue as guest</Text>
           </TouchableOpacity>
+
+          <Text style={styles.legalText}>
+            By continuing you agree to our{' '}
+            <Text style={styles.legalLink} onPress={() => Linking.openURL(TERMS_OF_USE_URL).catch(() => {})}>
+              Terms of Use
+            </Text>
+            {' '}and{' '}
+            <Text style={styles.legalLink} onPress={() => Linking.openURL(PRIVACY_POLICY_URL).catch(() => {})}>
+              Privacy Policy
+            </Text>
+            .
+          </Text>
         </View>
       </SafeAreaView>
     </View>
@@ -485,6 +499,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: GOLD_LIGHT,
     fontWeight: '500',
+  },
+  legalText: {
+    marginTop: 14,
+    textAlign: 'center',
+    fontSize: 11,
+    lineHeight: 16,
+    color: MUTED,
+  },
+  legalLink: {
+    color: GOLD,
+    textDecorationLine: 'underline',
   },
   guestButton: {
     alignItems: 'center',

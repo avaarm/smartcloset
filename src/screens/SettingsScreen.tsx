@@ -10,8 +10,10 @@ import {
   Alert,
   Switch,
   Platform,
+  Linking,
 } from 'react-native';
 import { env } from '../config/env';
+import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL, SUPPORT_MAILTO } from '../config/legal';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {
   saveAndShareBackup,
@@ -160,6 +162,12 @@ const SettingsScreen = () => {
         Alert.alert('Error', 'Failed to clear data.');
       }
     }
+  };
+
+  const openLink = (url: string) => {
+    Linking.openURL(url).catch(() =>
+      Alert.alert('Could not open link', 'Please try again, or visit avaarm.github.io/smartcloset.'),
+    );
   };
 
   const handleToggleAiAnalysis = (next: boolean) => {
@@ -542,12 +550,39 @@ const SettingsScreen = () => {
               <Text style={styles.tableLabel}>Version</Text>
               <Text style={styles.tableValue}>{env.APP_VERSION}</Text>
             </View>
-            <View style={[styles.tableRow, { borderBottomWidth: 0 }]}>
+            <View style={styles.tableRow}>
               <Text style={styles.tableLabel}>Platform</Text>
               <Text style={styles.tableValue}>
                 {Platform.OS === 'ios' ? 'iOS' : Platform.OS === 'android' ? 'Android' : 'Web'}
               </Text>
             </View>
+            <TouchableOpacity
+              style={styles.tableRow}
+              onPress={() => openLink(PRIVACY_POLICY_URL)}
+              accessibilityRole="link"
+              accessibilityLabel="Privacy Policy"
+            >
+              <Text style={styles.tableLabel}>Privacy Policy</Text>
+              <Icon name="open-outline" size={16} color={GOLD} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.tableRow}
+              onPress={() => openLink(TERMS_OF_USE_URL)}
+              accessibilityRole="link"
+              accessibilityLabel="Terms of Use"
+            >
+              <Text style={styles.tableLabel}>Terms of Use</Text>
+              <Icon name="open-outline" size={16} color={GOLD} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tableRow, { borderBottomWidth: 0 }]}
+              onPress={() => openLink(SUPPORT_MAILTO)}
+              accessibilityRole="link"
+              accessibilityLabel="Contact support by email"
+            >
+              <Text style={styles.tableLabel}>Contact Support</Text>
+              <Icon name="mail-outline" size={16} color={GOLD} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -584,18 +619,22 @@ const SettingsScreen = () => {
             Wipes everything stored locally on this device. Your account stays.
           </Text>
 
-          <TouchableOpacity
-            style={[styles.dangerButton, { marginTop: 8, borderColor: '#922B21' }]}
-            onPress={handleDeleteAccount}
-            disabled={loading}
-            activeOpacity={0.7}
-          >
-            <Icon name="alert-circle-outline" size={18} color="#922B21" />
-            <Text style={[styles.dangerButtonText, { color: '#922B21' }]}>Delete Account</Text>
-          </TouchableOpacity>
-          <Text style={styles.dangerNote}>
-            Permanently deletes your account, wardrobe, body profile, and all uploaded images. Cannot be undone.
-          </Text>
+          {isAuthenticated && (
+            <>
+              <TouchableOpacity
+                style={[styles.dangerButton, { marginTop: 8, borderColor: '#922B21' }]}
+                onPress={handleDeleteAccount}
+                disabled={loading}
+                activeOpacity={0.7}
+              >
+                <Icon name="alert-circle-outline" size={18} color="#922B21" />
+                <Text style={[styles.dangerButtonText, { color: '#922B21' }]}>Delete Account</Text>
+              </TouchableOpacity>
+              <Text style={styles.dangerNote}>
+                Permanently deletes your account, wardrobe, body profile, and all uploaded images. Cannot be undone.
+              </Text>
+            </>
+          )}
         </View>
 
         {/* ── Footer ─────────────────────────────────────────────────────── */}
