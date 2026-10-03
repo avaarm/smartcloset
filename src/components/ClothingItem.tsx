@@ -18,6 +18,9 @@ interface Props {
 const ClothingItem: React.FC<Props> = ({ item, onEdit, onDelete, onPress, showActions = false }) => {
   const [scaleAnim] = useState(new Animated.Value(1));
   const [imageError, setImageError] = useState(false);
+  useEffect(() => {
+    setImageError(false);
+  }, [item.userImage, item.retailerImage]);
   const [colorMatch, setColorMatch] = useState<'match' | 'avoid' | null>(null);
 
   useEffect(() => {
@@ -81,11 +84,17 @@ const ClothingItem: React.FC<Props> = ({ item, onEdit, onDelete, onPress, showAc
       disabled={!onPress}
     >
       <Animated.View style={[styles.container, { transform: [{ scale: scaleAnim }] }]}>
-        <Image 
-          source={imageError ? undefined : { uri: item.userImage || item.retailerImage || undefined }}
-          style={styles.image}
-          onError={() => setImageError(true)}
-        />
+        {imageError || !(item.userImage || item.retailerImage) ? (
+          <View style={[styles.image, styles.imagePlaceholder]}>
+            <Icon name="shirt-outline" size={44} color="#C8BBA6" />
+          </View>
+        ) : (
+          <Image
+            source={{ uri: item.userImage || item.retailerImage }}
+            style={styles.image}
+            onError={() => setImageError(true)}
+          />
+        )}
         {item.season && item.season.length > 0 && (
           <View style={styles.seasonBadge}>
             <Icon name="sunny-outline" size={12} color="#FFFFFF" />
@@ -141,6 +150,10 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: theme.borderRadius.medium,
     borderTopRightRadius: theme.borderRadius.medium,
     backgroundColor: theme.colors.mutedBackground,
+  },
+  imagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   details: {
     padding: theme.spacing.small,
