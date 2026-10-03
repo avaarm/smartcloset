@@ -24,9 +24,13 @@ import { resetStorage } from '../services/storage';
 import {
   getContributionHistory,
   type ProductContribution,
+  isSharingEnabled,
+  setSharingEnabled,
+  deleteMySharedContributions,
 } from '../services/productContributions';
 import { supabase } from '../config/supabase';
 import { deleteAllUserCloudImages } from '../services/imageStorage';
+import { clearSignedImageCache } from '../services/imageUrls';
 import { signOut } from '../services/authService';
 import {
   getCurrentMode,
@@ -73,11 +77,13 @@ const SettingsScreen = () => {
   const { currentMode, switchMode } = useAccountMode();
   const [availableModes, setAvailableModesState] = useState<AccountType[]>(['user']);
   const [contributions, setContributions] = useState<ProductContribution[]>([]);
+  const [shareProductData, setShareProductData] = useState(false);
 
   useEffect(() => {
     loadBackupStats();
     loadAccountInfo();
     getContributionHistory().then(setContributions).catch(() => {});
+    isSharingEnabled().then(setShareProductData).catch(() => {});
   }, []);
 
   const loadAccountInfo = async () => {
@@ -153,6 +159,53 @@ const SettingsScreen = () => {
     }
   };
 
+  const handleToggleSharing = (next: boolean) => {
+    if (next) {
+      Alert.alert(
+        'Share product details?',
+        'When you add an item, we\'ll share its product details with other SmartCloset members so they can identify the same item faster: name, category, brand, store, color, material, the price you paid and the retail price, and a product link if you picked one.\n\nWe never share your photos, name, email, or your closet. You can turn this off and remove what you shared at any time.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Share',
+            onPress: async () => {
+              await setSharingEnabled(true);
+              setShareProductData(true);
+            },
+          },
+        ],
+      );
+      return;
+    }
+    Alert.alert(
+      'Stop sharing?',
+      'New items will no longer be shared. Do you also want to remove the product details you already shared?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Stop sharing',
+          onPress: async () => {
+            await setSharingEnabled(false);
+            setShareProductData(false);
+          },
+        },
+        {
+          text: 'Stop and remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteMySharedContributions();
+              await setSharingEnabled(false);
+              setShareProductData(false);
+            } catch {
+              Alert.alert('Could not remove shared data', 'Sharing is still on. Please check your connection and try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const handleDeleteAccount = async () => {
     Alert.alert(
       'Delete Account',
@@ -185,6 +238,7 @@ const SettingsScreen = () => {
                       if (error) throw error;
                       await clearAllData();
                       await supabase.auth.signOut();
+                      await clearSignedImageCache();
                       Alert.alert('Account deleted', 'Your account and data have been removed.');
                     } catch (e: any) {
                       console.error('[SettingsScreen] account delete failed:', e);
@@ -356,7 +410,7 @@ const SettingsScreen = () => {
               </View>
             </View>
             <Text style={styles.kbBody}>
-              Every clothing item you add trains the recognition model. Your contributions help other members auto-fill their wardrobes.
+              Items you add teach this device to recognise similar items. If you choose to share, the product details (never your photos or identity) also help other members auto-fill their wardrobes.
             </Text>
             {contributions.length > 0 && (
               <View style={styles.kbBadgeRow}>
@@ -372,6 +426,23 @@ const SettingsScreen = () => {
               </View>
             )}
           </View>
+
+          {isAuthenticated && (
+            <View style={styles.toggleRow}>
+              <View style={{ flex: 1, marginRight: 16 }}>
+                <Text style={styles.toggleLabel}>Share product details</Text>
+                <Text style={styles.toggleDesc}>
+                  Off by default. Shares product info only — never photos, name, email or your closet.
+                </Text>
+              </View>
+              <Switch
+                value={shareProductData}
+                onValueChange={handleToggleSharing}
+                trackColor={{ false: BORDER, true: GOLD }}
+                thumbColor={IVORY}
+              />
+            </View>
+          )}
         </View>
 
         {/* ── Data & Backup ───────────────────────────────────────────────── */}

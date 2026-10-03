@@ -8,7 +8,8 @@
  *
  * Storage strategy:
  *   - Always write locally (AsyncStorage) — offline/guest support
- *   - If authenticated, also upsert to Supabase for cross-device + crowd sharing
+ *   - Upload to Supabase for crowd sharing ONLY if the signed-in user has opted
+ *     in (isSharingEnabled — off by default; see Settings → Community)
  *   - Graceful fallback: Supabase errors (table missing, RLS deny) just warn
  *     and keep the local contribution. The data is never lost.
  */
@@ -110,6 +111,34 @@ const getCurrentUserId = async (): Promise<string> => {
   }
 };
 
+// ─── Sharing consent (opt-in, per account, off by default) ───────────────────
+
+const sharingKey = (userId: string) => `@smartcloset_share_product_data:${userId}`;
+
+export const isSharingEnabled = async (userId?: string): Promise<boolean> => {
+  try {
+    const id = userId ?? (await getCurrentUserId());
+    if (id === 'guest') return false;
+    return (await AsyncStorage.getItem(sharingKey(id))) === 'true';
+  } catch {
+    return false;
+  }
+};
+
+export const setSharingEnabled = async (enabled: boolean): Promise<void> => {
+  const id = await getCurrentUserId();
+  if (id === 'guest') return;
+  await AsyncStorage.setItem(sharingKey(id), enabled ? 'true' : 'false');
+};
+
+/** Removes everything this account has shared to the community database. */
+export const deleteMySharedContributions = async (): Promise<void> => {
+  const userId = await getCurrentUserId();
+  if (userId === 'guest') return;
+  const { error } = await supabase.from(SUPABASE_TABLE).delete().eq('user_id', userId);
+  if (error) throw error;
+};
+
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 /**
@@ -129,8 +158,9 @@ export const recordContribution = async (
 
   await addLocalContribution(contribution);
 
-  // Skip remote sync for guests
+  // Skip remote sync for guests, and for anyone who hasn't opted in to sharing
   if (userId === 'guest') return;
+  if (!(await isSharingEnabled(userId))) return;
 
   try {
     const { error } = await supabase.from(SUPABASE_TABLE).insert({

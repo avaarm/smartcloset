@@ -26,7 +26,7 @@
 </head>
 <body>
   <h1>Privacy Policy</h1>
-  <p class="updated">Smart Closet · Last updated September 29, 2026</p>
+  <p class="updated">Smart Closet · Last updated October 2, 2026</p>
 
   <p>This policy explains what information Smart Closet ("the app", "we") collects, how it's used, and who it's shared with. Smart Closet is a wardrobe management app that lets you catalog your clothing, get AI-assisted styling suggestions, and optionally connect with a personal stylist or friends.</p>
 
@@ -39,6 +39,7 @@
     <tr><td>Location</td><td>Approximate location, only while the app is in use</td><td>Weather-appropriate outfit suggestions</td></tr>
     <tr><td>Camera &amp; photo library</td><td>Access only when you choose to photograph or select an item</td><td>Adding clothing items and outfit photos</td></tr>
     <tr><td>Social &amp; marketplace</td><td>Friend connections, messages, and appointments if you use the stylist marketplace or friend-sharing features</td><td>Connecting you with friends or a stylist you choose to work with</td></tr>
+    <tr><td>Shared product details (optional, off by default)</td><td>Product name, category, brand, store, color, material, the price you paid and the retail price, a product link, and image fingerprints (a coded summary of a photo, not the photo itself)</td><td>A shared product database that helps other members identify the same item faster. Only if you turn this on in Settings</td></tr>
     <tr><td>Usage &amp; diagnostics</td><td>Crash reports and basic app usage</td><td>Fixing bugs and improving reliability</td></tr>
   </table>
 
@@ -51,8 +52,13 @@
   </ul>
   <p>These providers process the image or query to return results to the app; we don't control their retention practices beyond what's stated in their own privacy policies. We do not sell your photos or personal data to anyone, for any purpose.</p>
 
+  <h2>Shared product database (optional)</h2>
+  <p>This is off unless you turn it on in <strong>Settings → Community → Share product details</strong>. When it is on, each time you add an item, its product details (name, category, brand, store, color, material, the price you paid and the retail price, and a product link if you picked one) are added to a database that other SmartCloset members can search when they add a similar item. Other members see these product details without your name or email.</p>
+  <p><strong>What is never shared this way:</strong> your photos, your name, your email address, your wardrobe as a whole, your outfits, or your style and body profile.</p>
+  <p>Internally the entries are stored with your account ID so that you stay in control: you can turn sharing off at any time, choose to remove everything you have already shared, and deleting your account removes it too. The shared database is not sold and is not used for advertising. Items you add while sharing is off are used only on your own account.</p>
+
   <h2>Where your data is stored</h2>
-  <p>Your account data, wardrobe items, and photos are stored using Supabase (hosted on AWS infrastructure), with row-level security so only you can access your own data — with one exception: if you add a friend and they accept, your wardrobe becomes visible to that specific friend (read-only), and you can remove that access at any time.</p>
+  <p>Your account data, wardrobe items, and photos are stored using Supabase (hosted on AWS infrastructure), with row-level security so only you can access your own data — with one exception: if you add a friend and they accept, your wardrobe becomes visible to that specific friend (read-only), and you can remove that access at any time. Your photos are kept in private storage and are shown through temporary, expiring links; they are only available to you and to friends you have accepted.</p>
 
   <h2>Your choices</h2>
   <ul>
