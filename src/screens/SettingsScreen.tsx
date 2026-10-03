@@ -18,7 +18,6 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import {
   saveAndShareBackup,
   getBackupStats,
-  createAutoBackup,
   clearAllData,
 } from '../services/backupService';
 import { reseedAllDemoData } from '../services/seedDemoData';
@@ -71,7 +70,6 @@ const SettingsScreen = () => {
     outfitsCount: 0,
     storageSize: 0,
   });
-  const [autoBackupEnabled, setAutoBackupEnabled] = useState(true);
   const [loading, setLoading] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -141,7 +139,6 @@ const SettingsScreen = () => {
     try {
       setLoading(true);
       await saveAndShareBackup();
-      await createAutoBackup();
       await loadBackupStats();
       Alert.alert('Success', 'Your data has been exported successfully!');
     } catch (error) {
@@ -312,13 +309,6 @@ const SettingsScreen = () => {
         },
       ],
     );
-  };
-
-  const toggleAutoBackup = async (value: boolean) => {
-    setAutoBackupEnabled(value);
-    if (value) {
-      await createAutoBackup();
-    }
   };
 
   const formatDate = (dateString?: string) => {
@@ -497,10 +487,13 @@ const SettingsScreen = () => {
             {[
               { icon: 'shirt-outline', label: 'Clothing Items', value: String(backupStats.itemsCount) },
               { icon: 'albums-outline', label: 'Saved Outfits', value: String(backupStats.outfitsCount) },
-              { icon: 'server-outline', label: 'Storage Used', value: formatStorageSize(backupStats.storageSize) },
-              { icon: 'time-outline', label: 'Last Backup', value: formatDate(backupStats.lastBackup) },
-            ].map((row, i) => (
-              <View key={row.label} style={[styles.tableRow, i === 3 && { borderBottomWidth: 0 }]}>
+              // Signed-in data lives in the cloud, so on-device storage isn't meaningful.
+              ...(isAuthenticated
+                ? []
+                : [{ icon: 'server-outline', label: 'Storage Used', value: formatStorageSize(backupStats.storageSize) }]),
+              { icon: 'time-outline', label: 'Last Export', value: formatDate(backupStats.lastBackup) },
+            ].map(row => (
+              <View key={row.label} style={[styles.tableRow, row.label === 'Last Export' && { borderBottomWidth: 0 }]}>
                 <View style={styles.tableIconWrap}>
                   <Icon name={row.icon} size={16} color={GOLD} />
                 </View>
@@ -519,19 +512,6 @@ const SettingsScreen = () => {
             <Icon name="download-outline" size={18} color={INK} />
             <Text style={styles.goldButtonText}>{loading ? 'Exporting…' : 'Export Data'}</Text>
           </TouchableOpacity>
-
-          <View style={styles.toggleRow}>
-            <View style={{ flex: 1, marginRight: 16 }}>
-              <Text style={styles.toggleLabel}>Auto Backup</Text>
-              <Text style={styles.toggleDesc}>Backup automatically when changes are made</Text>
-            </View>
-            <Switch
-              value={autoBackupEnabled}
-              onValueChange={toggleAutoBackup}
-              trackColor={{ false: BORDER, true: GOLD }}
-              thumbColor={IVORY}
-            />
-          </View>
         </View>
 
         {/* ── About ───────────────────────────────────────────────────────── */}
@@ -599,17 +579,23 @@ const SettingsScreen = () => {
             </>
           )}
 
-          <TouchableOpacity
-            style={styles.dangerButton}
-            onPress={handleClearData}
-            activeOpacity={0.7}
-          >
-            <Icon name="trash-outline" size={18} color="#C0392B" />
-            <Text style={styles.dangerButtonText}>Clear All Data</Text>
-          </TouchableOpacity>
-          <Text style={styles.dangerNote}>
-            Wipes everything stored locally on this device. Your account stays.
-          </Text>
+          {/* Signed-in data lives in the cloud, which this button never touched, so
+              it only makes sense for guests. Signed-in users have Delete Account. */}
+          {!isAuthenticated && (
+            <>
+              <TouchableOpacity
+                style={styles.dangerButton}
+                onPress={handleClearData}
+                activeOpacity={0.7}
+              >
+                <Icon name="trash-outline" size={18} color="#C0392B" />
+                <Text style={styles.dangerButtonText}>Clear All Data</Text>
+              </TouchableOpacity>
+              <Text style={styles.dangerNote}>
+                Wipes everything stored on this device.
+              </Text>
+            </>
+          )}
 
           {isAuthenticated && (
             <>

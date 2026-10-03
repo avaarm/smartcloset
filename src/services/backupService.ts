@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, Share, Alert } from 'react-native';
 import RNFS from 'react-native-fs';
-import { ClothingItem, Outfit } from '../types';
+import { ClothingItem } from '../types';
 import { supabase } from '../config/supabase';
 import { getClothingItems } from './storage';
+import { getSavedOutfits, type Outfit } from './outfitService';
 
 const STORAGE_KEY = '@smartcloset_items';
 const OUTFITS_KEY = '@smartcloset_saved_outfits';
@@ -26,11 +27,9 @@ export interface BackupData {
  */
 export const exportData = async (): Promise<BackupData> => {
   try {
-    const itemsData = await AsyncStorage.getItem(STORAGE_KEY);
-    const outfitsData = await AsyncStorage.getItem(OUTFITS_KEY);
-
-    const items: ClothingItem[] = itemsData ? JSON.parse(itemsData) : [];
-    const outfits: Outfit[] = outfitsData ? JSON.parse(outfitsData) : [];
+    // These read the signed-in user's cloud data, or the on-device data for a guest.
+    const items: ClothingItem[] = await getClothingItems({ all: true });
+    const outfits: Outfit[] = await getSavedOutfits();
 
     const backupData: BackupData = {
       version: BACKUP_VERSION,
@@ -95,7 +94,10 @@ export const saveAndShareBackup = async (): Promise<void> => {
     };
 
     try {
-      await Share.share(shareOptions);
+      const result = await Share.share(shareOptions);
+      if (result.action !== Share.dismissedAction) {
+        await AsyncStorage.setItem('@smartcloset_last_backup', new Date().toISOString());
+      }
     } finally {
       // Clean up the temporary backup file regardless of share outcome
       await RNFS.unlink(path).catch(() => {});
@@ -135,79 +137,32 @@ export const getBackupStats = async (): Promise<{
   lastBackup?: string;
   storageSize: number;
 }> => {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const outfitsData = await AsyncStorage.getItem(OUTFITS_KEY);
-    const lastBackupDate = await AsyncStorage.getItem('@smartcloset_last_backup');
-    const outfits: Outfit[] = outfitsData ? JSON.parse(outfitsData) : [];
+  const lastBackupDate = await AsyncStorage.getItem('@smartcloset_last_backup').catch(() => null);
+  const lastBackup = lastBackupDate || undefined;
+  const { data: { session } } = await supabase.auth.getSession();
+  const signedIn = !!session?.user?.id;
 
-    let itemsCount: number;
-    let storageSize: number;
+  const [items, outfits] = await Promise.all([
+    getClothingItems({ all: true }).catch(() => null),
+    getSavedOutfits().catch(() => null),
+  ]);
 
-    if (session?.user?.id) {
-      const items = await getClothingItems({ all: true });
-      itemsCount = items.length;
-      storageSize = 0;
-    } else {
-      const itemsData = await AsyncStorage.getItem(STORAGE_KEY);
-      const items: ClothingItem[] = itemsData ? JSON.parse(itemsData) : [];
-      itemsCount = items.length;
-      storageSize = (itemsData?.length || 0) + (outfitsData?.length || 0);
-    }
-
-    return {
-      itemsCount,
-      outfitsCount: outfits.length,
-      lastBackup: lastBackupDate || undefined,
-      storageSize,
-    };
-  } catch (error) {
-    console.error('Error getting backup stats:', error);
-    return {
-      itemsCount: 0,
-      outfitsCount: 0,
-      storageSize: 0,
-    };
+  // Storage is only meaningful for guests, whose data lives on this device.
+  let storageSize = 0;
+  if (!signedIn) {
+    const [itemsData, outfitsData] = await Promise.all([
+      AsyncStorage.getItem(STORAGE_KEY).catch(() => null),
+      AsyncStorage.getItem(OUTFITS_KEY).catch(() => null),
+    ]);
+    storageSize = (itemsData?.length || 0) + (outfitsData?.length || 0);
   }
-};
 
-/**
- * Create automatic backup
- */
-export const createAutoBackup = async (): Promise<void> => {
-  try {
-    const backupData = await exportData();
-    const jsonString = JSON.stringify(backupData);
-    
-    // Store backup in AsyncStorage
-    await AsyncStorage.setItem('@smartcloset_auto_backup', jsonString);
-    await AsyncStorage.setItem('@smartcloset_last_backup', new Date().toISOString());
-    
-    console.log('Auto backup created successfully');
-  } catch (error) {
-    console.error('Error creating auto backup:', error);
-  }
-};
-
-/**
- * Restore from automatic backup
- */
-export const restoreAutoBackup = async (): Promise<boolean> => {
-  try {
-    const backupString = await AsyncStorage.getItem('@smartcloset_auto_backup');
-    
-    if (!backupString) {
-      return false;
-    }
-    
-    const backupData: BackupData = JSON.parse(backupString);
-    await importData(backupData);
-    
-    return true;
-  } catch (error) {
-    console.error('Error restoring auto backup:', error);
-    return false;
-  }
+  return {
+    itemsCount: items?.length ?? 0,
+    outfitsCount: outfits?.length ?? 0,
+    lastBackup,
+    storageSize,
+  };
 };
 
 /**

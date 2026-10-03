@@ -336,8 +336,10 @@ export const getSavedOutfits = async (): Promise<Outfit[]> => {
       return mapDbToOutfit(row, items);
     });
   } catch (error) {
+    // Rethrow: returning [] here made a failed load look like "no saved outfits"
+    // (and wiped an already-loaded list on a failed pull-to-refresh).
     console.error('Error getting saved outfits:', error);
-    return [];
+    throw error;
   }
 };
 
