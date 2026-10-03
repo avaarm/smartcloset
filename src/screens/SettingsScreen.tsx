@@ -176,7 +176,7 @@ const SettingsScreen = () => {
     }
     Alert.alert(
       'Use AI to identify your items?',
-      'SmartCloset will send the photo you choose to Google Cloud Vision and OpenAI to fill in details such as category, color, brand and material, and to find similar items online. Your photo is used only to analyse that item. You can turn this off any time.',
+      'SmartCloset will send the photo you choose to Google Cloud Vision and OpenAI to fill in details such as category, color, brand and material, and to find similar items online. If you use color analysis, your selfie is sent to Google Cloud Vision to estimate skin tone. Your photos are used only to analyse them. You can turn this off any time.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -425,7 +425,7 @@ const SettingsScreen = () => {
               <View style={{ flex: 1, marginRight: 16 }}>
                 <Text style={styles.toggleLabel}>AI photo analysis</Text>
                 <Text style={styles.toggleDesc}>
-                  Sends photos you add or search with to Google Cloud Vision and OpenAI to fill in item details. If off, you enter details yourself.
+                  Sends photos you add or search with (and a selfie, if you use color analysis) to Google Cloud Vision and OpenAI. If off, you enter details yourself.
                 </Text>
               </View>
               <Switch

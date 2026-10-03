@@ -65,7 +65,7 @@ export const ensureAiConsent = (): Promise<boolean> => {
     const allowed = await new Promise<boolean>(resolve => {
       Alert.alert(
         'Use AI to identify your items?',
-        'To fill in details automatically and find similar items, SmartCloset sends the photo you choose to Google Cloud Vision and OpenAI. They analyse it and send back what they find (such as category, color, brand and material).\n\nYour photo is used only to analyse that item. You can change this any time in Settings. If you choose Not now, you can still add items by entering the details yourself.',
+        'To fill in details automatically and find similar items, SmartCloset sends the photo you choose to Google Cloud Vision and OpenAI. They analyse it and send back what they find (such as category, color, brand and material). If you use color analysis, the selfie you pick is sent to Google Cloud Vision to estimate skin tone.\n\nYour photo is used only to analyse it. You can change this any time in Settings. If you choose Not now, you can still add items by entering the details yourself.',
         [
           { text: 'Not now', style: 'cancel', onPress: () => resolve(false) },
           { text: 'Allow', onPress: () => resolve(true) },
