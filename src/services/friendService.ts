@@ -132,12 +132,9 @@ export const removeFriendRequest = async (requestId: string): Promise<void> => {
  * returns rows when an accepted friendship actually exists — an
  * unauthorized id simply comes back empty rather than erroring. */
 export const getFriendCloset = async (friendUserId: string): Promise<ClothingItem[]> => {
-  const { data, error } = await supabase
-    .from('clothing_items')
-    .select('*')
-    .eq('user_id', friendUserId)
-    .eq('is_wishlist', false)
-    .order('date_added', { ascending: false });
+  // Returns only the fields a friend should see (no prices paid, notes, or wear
+  // history) and only for an accepted friend; anything else comes back empty.
+  const { data, error } = await supabase.rpc('get_friend_closet', { p_friend_id: friendUserId });
   if (error) throw error;
   return withSignedImages((data || []).map(mapDbToClothingItem));
 };
