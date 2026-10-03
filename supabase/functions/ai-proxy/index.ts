@@ -82,49 +82,65 @@ const MAX_IMAGE_B64_CHARS = 8 * 1024 * 1024;
 // imageRecognition, bodyAnalysisService). Anything else is refused.
 const ALLOWED_VISION_FEATURES = new Set([
   "LABEL_DETECTION", "OBJECT_LOCALIZATION", "IMAGE_PROPERTIES", "WEB_DETECTION",
-  "LOGO_DETECTION", "TEXT_DETECTION", "FACE_DETECTION", "CROP_HINTS", "PRODUCT_SEARCH",
+  "LOGO_DETECTION", "TEXT_DETECTION", "FACE_DETECTION", "CROP_HINTS",
 ]);
+// What the app really sends is one image with up to 7 distinct features, so
+// that is all we accept: each call maps to at most 7 billable units.
+const MAX_VISION_FEATURES = 7;
+const MAX_VISION_RESULTS = 30;
 
-const validateVision = (payload: any): string | null => {
+// Validates the payload and returns a clean upstream body rebuilt from only the
+// checked fields (nothing else the caller sent is forwarded to Google).
+const buildVisionBody = (payload: any): { body?: any; error?: string } => {
   const reqs = payload?.requests;
-  if (!Array.isArray(reqs) || reqs.length < 1 || reqs.length > 4) return "requests must be an array of 1-4 items";
-  for (const r of reqs) {
-    if (!r || typeof r !== "object") return "invalid request item";
-    for (const k of Object.keys(r)) {
-      if (!["image", "features", "imageContext"].includes(k)) return `unsupported field: ${k}`;
-    }
-    const img = r.image;
-    const content = img?.content;
-    const uri = img?.source?.imageUri;
-    if (typeof content === "string") {
-      if (content.length > MAX_IMAGE_B64_CHARS) return "image too large";
-    } else if (typeof uri === "string") {
-      if (!/^https:\/\//i.test(uri) || uri.length > 2048) return "imageUri must be an https URL";
-    } else {
-      return "image.content or image.source.imageUri required";
-    }
-    if (!Array.isArray(r.features) || r.features.length < 1 || r.features.length > 9) return "features required (1-9)";
-    for (const f of r.features) {
-      if (!f || !ALLOWED_VISION_FEATURES.has(f.type)) return `feature not allowed: ${f?.type}`;
-      if (f.maxResults !== undefined && !(Number.isInteger(f.maxResults) && f.maxResults >= 1 && f.maxResults <= 50)) {
-        return "maxResults must be 1-50";
-      }
-    }
+  if (!Array.isArray(reqs) || reqs.length !== 1) return { error: "exactly 1 request required" };
+  const r = reqs[0];
+  if (!r || typeof r !== "object") return { error: "invalid request item" };
+  for (const k of Object.keys(r)) {
+    if (k !== "image" && k !== "features") return { error: `unsupported field: ${k}` };
   }
-  return null;
+  const content = r.image?.content;
+  if (typeof content !== "string" || content.length === 0) return { error: "image.content required" };
+  if (Object.keys(r.image).some((k) => k !== "content")) return { error: "only image.content is supported" };
+  if (content.length > MAX_IMAGE_B64_CHARS) return { error: "image too large" };
+
+  if (!Array.isArray(r.features) || r.features.length < 1 || r.features.length > MAX_VISION_FEATURES) {
+    return { error: `features required (1-${MAX_VISION_FEATURES})` };
+  }
+  const seen = new Set<string>();
+  const features: { type: string; maxResults?: number }[] = [];
+  for (const f of r.features) {
+    if (!f || typeof f.type !== "string" || !ALLOWED_VISION_FEATURES.has(f.type)) {
+      return { error: `feature not allowed: ${String(f?.type).slice(0, 40)}` };
+    }
+    if (seen.has(f.type)) return { error: `duplicate feature: ${f.type}` };
+    seen.add(f.type);
+    for (const k of Object.keys(f)) {
+      if (k !== "type" && k !== "maxResults") return { error: `unsupported feature field: ${k}` };
+    }
+    const out: { type: string; maxResults?: number } = { type: f.type };
+    if (f.maxResults !== undefined) {
+      if (!(Number.isInteger(f.maxResults) && f.maxResults >= 1 && f.maxResults <= MAX_VISION_RESULTS)) {
+        return { error: `maxResults must be 1-${MAX_VISION_RESULTS}` };
+      }
+      out.maxResults = f.maxResults;
+    }
+    features.push(out);
+  }
+  return { body: { requests: [{ image: { content }, features }] } };
 };
 
 const callVision = async (payload: any): Promise<Response> => {
   const key = Deno.env.get("GOOGLE_VISION_API_KEY");
   if (!key) return json({ error: "GOOGLE_VISION_API_KEY not configured" }, 503);
-  const invalid = validateVision(payload);
-  if (invalid) return json({ error: `invalid vision payload: ${invalid}` }, 400);
+  const built = buildVisionBody(payload);
+  if (built.error) return json({ error: `invalid vision payload: ${built.error}` }, 400);
   const resp = await fetch(
     `https://vision.googleapis.com/v1/images:annotate?key=${key}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(built.body),
     },
   );
   const text = await resp.text();
@@ -291,7 +307,7 @@ Deno.serve(async (req: Request) => {
   const { provider, payload } = body || {};
   if (!provider || !payload) return json({ error: "provider and payload required" }, 400);
   if (typeof provider !== "string" || !Object.prototype.hasOwnProperty.call(PROVIDER_LIMITS, provider)) {
-    return json({ error: `unknown provider: ${String(provider).slice(0, 40)}` }, 400);
+    return json({ error: "unknown provider" }, 400);
   }
 
   const burst = checkProviderBurst(user.id, provider);
