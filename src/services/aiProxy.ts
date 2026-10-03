@@ -17,7 +17,7 @@
 import { supabase } from '../config/supabase';
 import { env } from '../config/env';
 
-export type AIProvider = 'vision' | 'openai' | 'openai-vision' | 'brave';
+export type AIProvider = 'vision' | 'openai-vision' | 'brave';
 
 const buildProxyUrl = (): string => {
   const base = env.SUPABASE_URL.replace(/\/$/, '');

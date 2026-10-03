@@ -185,12 +185,12 @@ export const lookupKnowledgeBase = async (
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
-      // 1. Exact fingerprint match
-      const { data: exact } = await supabase
-        .from(SUPABASE_TABLE)
-        .select('*')
-        .eq('fingerprint', fingerprint)
-        .limit(20);
+      // 1. Exact fingerprint match. Cross-user reads go through an RPC that
+      // returns product details without who contributed them.
+      const { data: exact } = await supabase.rpc('lookup_product_contributions', {
+        p_fingerprint: fingerprint,
+        p_limit: 20,
+      });
       if (exact) collected.push(...exact);
 
       // 2. Semantic fingerprint — pull candidates that share the color
@@ -199,11 +199,10 @@ export const lookupKnowledgeBase = async (
       // function — deferred until we have enough data to justify it.
       if (semanticFp) {
         const colorPrefix = semanticFp.substring(0, 10); // "c:XXXXX_"
-        const { data: fuzzy } = await supabase
-          .from(SUPABASE_TABLE)
-          .select('*')
-          .like('semantic_fp', `${colorPrefix}%`)
-          .limit(50);
+        const { data: fuzzy } = await supabase.rpc('lookup_product_contributions', {
+          p_semantic_prefix: colorPrefix,
+          p_limit: 50,
+        });
         if (fuzzy) {
           for (const row of fuzzy) {
             if (row.semantic_fp && isFingerprintNearMatch(semanticFp, row.semantic_fp)) {

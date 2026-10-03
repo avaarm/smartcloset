@@ -26,6 +26,7 @@ import {
   type ProductContribution,
 } from '../services/productContributions';
 import { supabase } from '../config/supabase';
+import { deleteAllUserCloudImages } from '../services/imageStorage';
 import { signOut } from '../services/authService';
 import {
   getCurrentMode,
@@ -177,6 +178,9 @@ const SettingsScreen = () => {
                     }
                     try {
                       setLoading(true);
+                      // Photos first: they can only be removed through the Storage API
+                      // while the session is still valid. Aborts on failure.
+                      await deleteAllUserCloudImages();
                       const { error } = await supabase.rpc('delete_user_account');
                       if (error) throw error;
                       await clearAllData();
