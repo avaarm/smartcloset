@@ -76,7 +76,7 @@ const ClientDashboardScreen = ({ navigation }: any) => {
   };
 
   const handleViewRecommendations = () => {
-    navigation.navigate('ClientRecommendations');
+    navigation.navigate('Recs', { screen: 'ClientRecommendationsMain' });
   };
 
   const handleFindStylist = () => {

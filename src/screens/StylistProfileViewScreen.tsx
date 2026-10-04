@@ -53,7 +53,7 @@ const StylistProfileViewScreen = ({ route, navigation }: any) => {
   };
 
   const handleMessage = () => {
-    navigation.navigate('MessagesMain');
+    navigation.navigate('Messages', { screen: 'ClientMessagesMain' });
   };
 
   const renderStars = (rating: number) => {

@@ -103,7 +103,7 @@ const ClientAppointmentsScreen = ({ navigation }: any) => {
         { text: 'OK' },
         {
           text: 'Message Stylist',
-          onPress: () => navigation.navigate('MessagesList'),
+          onPress: () => navigation.navigate('Messages', { screen: 'ClientMessagesMain' }),
         },
       ]
     );

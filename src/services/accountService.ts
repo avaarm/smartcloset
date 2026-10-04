@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AccountType, UserRole } from '../types/stylist';
+import { PRO_MODES_ENABLED } from '../config/features';
 
 const STORAGE_KEYS = {
   ACCOUNT_TYPE: '@smartcloset_account_type',
@@ -25,6 +26,12 @@ export interface UserProfile {
 export const getCurrentMode = async (): Promise<AccountType> => {
   try {
     const mode = await AsyncStorage.getItem(STORAGE_KEYS.CURRENT_MODE);
+    if (!PRO_MODES_ENABLED && mode && mode !== 'user') {
+      // Saved by an earlier build that offered stylist/client modes. Settings no
+      // longer has a switcher, so put the device back or it could never leave.
+      await setCurrentMode('user');
+      return 'user';
+    }
     return (mode as AccountType) || 'user';
   } catch (error) {
     console.error('Error getting current mode:', error);
@@ -255,6 +262,8 @@ export const switchToUserMode = async (): Promise<void> => {
 const modeOnboardingKey = (userId: string) => `@smartcloset_mode_onboarded_${userId}`;
 
 export const hasCompletedModeOnboarding = async (userId: string): Promise<boolean> => {
+  // With the pro modes off there is nothing to choose between, so never prompt.
+  if (!PRO_MODES_ENABLED) return true;
   try {
     const value = await AsyncStorage.getItem(modeOnboardingKey(userId));
     return value === 'true';

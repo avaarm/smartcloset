@@ -274,7 +274,8 @@ const ItemDetailsScreen: React.FC = () => {
             )}
           </View>
 
-          {/* Stats Section */}
+          {/* Stats Section - wear history only means something for items you own */}
+          {!item.isWishlist && (
           <View style={styles.statsSection}>
             <View style={styles.statCard}>
               <Icon name="calendar-outline" size={24} color={theme.colors.accent} />
@@ -296,6 +297,7 @@ const ItemDetailsScreen: React.FC = () => {
               </View>
             )}
           </View>
+          )}
 
           {/* Details Section */}
           <View style={styles.detailsSection}>
@@ -357,7 +359,7 @@ const ItemDetailsScreen: React.FC = () => {
           )}
 
           {/* Resale estimate */}
-          {!!item.cost && item.cost > 0 && (
+          {!item.isWishlist && !!item.cost && item.cost > 0 && (
             <View style={styles.detailsSection}>
               <Text style={styles.sectionTitle}>Resale Estimate</Text>
               <View style={styles.priceRow}>
@@ -446,29 +448,34 @@ const ItemDetailsScreen: React.FC = () => {
           {/* Actions Section */}
           <View style={styles.actionsSection}>
             <Text style={styles.sectionTitle}>Actions</Text>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={handleMarkAsWorn}
-            >
-              <LinearGradient
-                colors={theme.colors.gradient.primary}
-                style={styles.actionButtonGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Icon name="checkmark-circle-outline" size={20} color="#FFFFFF" />
-                <Text style={styles.actionButtonText}>Mark as Worn Today</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.actionButtonOutline}
-              onPress={() => (navigation as any).navigate('CreateOutfit')}
-            >
-              <Icon name="sparkles-outline" size={20} color={theme.colors.accent} />
-              <Text style={styles.actionButtonOutlineText}>Create Outfit</Text>
-            </TouchableOpacity>
-            
+            {/* Wishlist items aren't owned yet: they can't be worn or put in an outfit. */}
+            {!item.isWishlist && (
+              <>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={handleMarkAsWorn}
+                >
+                  <LinearGradient
+                    colors={theme.colors.gradient.primary}
+                    style={styles.actionButtonGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                  >
+                    <Icon name="checkmark-circle-outline" size={20} color="#FFFFFF" />
+                    <Text style={styles.actionButtonText}>Mark as Worn Today</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.actionButtonOutline}
+                  onPress={() => (navigation as any).navigate('CreateOutfit')}
+                >
+                  <Icon name="sparkles-outline" size={20} color={theme.colors.accent} />
+                  <Text style={styles.actionButtonOutlineText}>Create Outfit</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
             <TouchableOpacity style={[styles.actionButtonOutline, { marginTop: 12 }]} onPress={handleShare}>
               <Icon name="share-social-outline" size={20} color={theme.colors.accent} />
               <Text style={styles.actionButtonOutlineText}>Share Item</Text>
@@ -486,6 +493,7 @@ const ItemDetailsScreen: React.FC = () => {
           </View>
 
           {/* Wear Analytics — replaces the hardcoded "Style Tips" with real signal */}
+          {!item.isWishlist && (
           <View style={styles.tipsSection}>
             <Text style={styles.sectionTitle}>Wear Analytics</Text>
             {(() => {
@@ -561,6 +569,7 @@ const ItemDetailsScreen: React.FC = () => {
               );
             })()}
           </View>
+          )}
         </View>
       </Animated.ScrollView>
     </View>

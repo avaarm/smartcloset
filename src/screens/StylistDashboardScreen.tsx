@@ -97,7 +97,7 @@ const StylistDashboardScreen = ({ navigation }: StylistDashboardScreenProps) => 
     { icon: 'person-add-outline', label: 'New Client', screen: 'AddClient' },
     { icon: 'calendar-outline', label: 'Schedule', screen: 'CreateAppointment' },
     { icon: 'bulb-outline', label: 'Recommend', screen: 'CreateRecommendation' },
-    { icon: 'people-outline', label: 'Clients', screen: 'ClientsList' },
+    { icon: 'people-outline', label: 'Clients', screen: 'Clients' },
   ];
 
   return (
@@ -114,7 +114,7 @@ const StylistDashboardScreen = ({ navigation }: StylistDashboardScreenProps) => 
             </View>
             <TouchableOpacity
               style={styles.profileAvatar}
-              onPress={() => navigation.navigate('StylistProfileView')}
+              onPress={() => navigation.navigate('Settings')}
             >
               <Icon name="person-outline" size={20} color={GOLD} />
             </TouchableOpacity>
@@ -123,8 +123,8 @@ const StylistDashboardScreen = ({ navigation }: StylistDashboardScreenProps) => 
           {/* Stat strip */}
           <View style={styles.statStrip}>
             {[
-              { value: stats?.activeClients ?? 0, label: 'Clients', nav: 'ClientsList' },
-              { value: stats?.upcomingAppointments ?? 0, label: 'Upcoming', nav: 'ClientsList' },
+              { value: stats?.activeClients ?? 0, label: 'Clients', nav: 'Clients' },
+              { value: stats?.upcomingAppointments ?? 0, label: 'Upcoming', nav: 'Clients' },
               { value: stats?.completedSessions ?? 0, label: 'Sessions' },
               { value: profile?.rating?.toFixed(1) ?? '—', label: 'Rating' },
             ].map((s, i) => (

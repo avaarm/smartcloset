@@ -95,7 +95,7 @@ const BookStylistScreen = ({ route, navigation }: any) => {
 
       Alert.alert(
         'Request Sent!',
-        `Your booking request has been sent to ${stylistName}. They will respond within 24-48 hours.`,
+        `Your booking request has been sent to ${stylistName}.`,
         [
           {
             text: 'OK',
@@ -236,7 +236,7 @@ const BookStylistScreen = ({ route, navigation }: any) => {
           <Text style={styles.pricingValue}>${consultationFee}</Text>
         </View>
         <Text style={styles.pricingNote}>
-          Payment will be processed after the stylist confirms your booking
+          SmartCloset doesn't take payments. Any fee is arranged directly with your stylist.
         </Text>
       </View>
 
@@ -251,10 +251,9 @@ const BookStylistScreen = ({ route, navigation }: any) => {
         </Text>
       </TouchableOpacity>
 
-      {/* Terms */}
+      {/* What the request contains */}
       <Text style={styles.terms}>
-        By submitting this request, you agree to our Terms of Service and Privacy Policy.
-        Your information will be shared with the stylist.
+        Your name, email, phone (if you add one) and message are included with this request.
       </Text>
 
       <View style={{ height: 40 }} />

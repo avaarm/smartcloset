@@ -43,6 +43,7 @@ import {
 } from '../services/accountService';
 import { AccountType } from '../types/stylist';
 import { useAccountMode } from '../context/AccountModeContext';
+import { PRO_MODES_ENABLED } from '../config/features';
 
 // ─── Luxury palette (matches StylistDashboard / SignIn) ───────────────────────
 const GOLD = '#C4975A';
@@ -100,12 +101,14 @@ const SettingsScreen = () => {
       setUserName(null);
       setUserEmail(null);
     }
-    await getCurrentMode();
-    if (session?.user) {
-      setAvailableModesState(['user', 'stylist', 'client']);
-    } else {
-      const modes = await getAvailableModes();
-      setAvailableModesState(modes);
+    if (PRO_MODES_ENABLED) {
+      await getCurrentMode();
+      if (session?.user) {
+        setAvailableModesState(['user', 'stylist', 'client']);
+      } else {
+        const modes = await getAvailableModes();
+        setAvailableModesState(modes);
+      }
     }
   };
 
@@ -355,40 +358,46 @@ const SettingsScreen = () => {
                 <View style={styles.profileInfo}>
                   <Text style={styles.profileName}>{userName}</Text>
                   <Text style={styles.profileEmail}>{userEmail}</Text>
-                  <View style={styles.modePill}>
-                    <Icon name={getModeIcon(currentMode)} size={11} color={GOLD} />
-                    <Text style={styles.modePillText}>{getModeName(currentMode)}</Text>
-                  </View>
+                  {PRO_MODES_ENABLED && (
+                    <View style={styles.modePill}>
+                      <Icon name={getModeIcon(currentMode)} size={11} color={GOLD} />
+                      <Text style={styles.modePillText}>{getModeName(currentMode)}</Text>
+                    </View>
+                  )}
                 </View>
               </View>
 
               {/* Mode switcher */}
-              <Text style={styles.subsectionLabel}>Account Mode</Text>
-              {availableModes.map((mode) => (
-                <TouchableOpacity
-                  key={mode}
-                  style={[styles.modeCard, currentMode === mode && styles.modeCardActive]}
-                  onPress={() => handleModeSwitch(mode)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.modeIconWrap, currentMode === mode && { backgroundColor: GOLD_SUBTLE }]}>
-                    <Icon
-                      name={getModeIcon(mode)}
-                      size={18}
-                      color={currentMode === mode ? GOLD : TEXT_SUBTLE}
-                    />
-                  </View>
-                  <View style={styles.modeTextWrap}>
-                    <Text style={[styles.modeName, currentMode === mode && { color: GOLD }]}>
-                      {getModeName(mode)}
-                    </Text>
-                    <Text style={styles.modeDesc}>{getModeDescription(mode)}</Text>
-                  </View>
-                  {currentMode === mode && (
-                    <Icon name="checkmark-circle" size={20} color={GOLD} />
-                  )}
-                </TouchableOpacity>
-              ))}
+              {PRO_MODES_ENABLED && (
+                <>
+                  <Text style={styles.subsectionLabel}>Account Mode</Text>
+                  {availableModes.map((mode) => (
+                    <TouchableOpacity
+                      key={mode}
+                      style={[styles.modeCard, currentMode === mode && styles.modeCardActive]}
+                      onPress={() => handleModeSwitch(mode)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.modeIconWrap, currentMode === mode && { backgroundColor: GOLD_SUBTLE }]}>
+                        <Icon
+                          name={getModeIcon(mode)}
+                          size={18}
+                          color={currentMode === mode ? GOLD : TEXT_SUBTLE}
+                        />
+                      </View>
+                      <View style={styles.modeTextWrap}>
+                        <Text style={[styles.modeName, currentMode === mode && { color: GOLD }]}>
+                          {getModeName(mode)}
+                        </Text>
+                        <Text style={styles.modeDesc}>{getModeDescription(mode)}</Text>
+                      </View>
+                      {currentMode === mode && (
+                        <Icon name="checkmark-circle" size={20} color={GOLD} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
 
               <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.7}>
                 <Icon name="log-out-outline" size={18} color="#C0392B" />

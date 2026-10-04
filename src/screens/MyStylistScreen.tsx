@@ -95,7 +95,7 @@ const MyStylistScreen = ({ navigation }: any) => {
           style: 'destructive',
           onPress: () => {
             Alert.alert('Success', 'Your relationship has been ended. You can find a new stylist in the Discover tab.');
-            navigation.navigate('ClientDashboard');
+            navigation.navigate('Dashboard');
           },
         },
       ]

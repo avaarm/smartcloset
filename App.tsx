@@ -21,6 +21,7 @@ import { supabase } from './src/config/supabase';
 import { configureGoogleSignIn } from './src/services/authService';
 import { Session } from '@supabase/supabase-js';
 import { AccountModeProvider, useAccountMode } from './src/context/AccountModeContext';
+import { PRO_MODES_ENABLED } from './src/config/features';
 import { ThemeProvider } from './src/styles/ThemeProvider';
 import StylistDashboardScreen from './src/screens/StylistDashboardScreen';
 import ClientsListScreen from './src/screens/ClientsListScreen';
@@ -130,6 +131,11 @@ const HomeStack = () => {
       <Stack.Screen
         name="ItemDetails"
         component={ItemDetailsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="AddClothing"
+        component={AddClothingScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen
@@ -276,6 +282,11 @@ const StylistDashboardStack = () => {
         options={{ headerShown: false }}
       />
       <Stack.Screen
+        name="CreateRecommendation"
+        component={CreateRecommendationScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
         name="AppointmentDetails"
         component={AppointmentDetailsScreen as React.ComponentType<any>}
         options={{ headerShown: false }}
@@ -325,6 +336,11 @@ const ClientsStack = () => {
       <Stack.Screen
         name="CreateRecommendation"
         component={CreateRecommendationScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="RecommendationDetails"
+        component={RecommendationDetailsScreen as React.ComponentType<any>}
         options={{ headerShown: false }}
       />
       <Stack.Screen
@@ -665,7 +681,10 @@ const tabScreenOptions = {
 };
 
 const ModeAwareTabs = () => {
-  const { currentMode } = useAccountMode();
+  const { currentMode: savedMode } = useAccountMode();
+  // Whatever a device last saved, the stylist/client tab sets are unreachable
+  // while the pro modes are off.
+  const currentMode = PRO_MODES_ENABLED ? savedMode : 'user';
 
   if (currentMode === 'stylist') {
     return (
