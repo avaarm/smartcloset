@@ -22,9 +22,10 @@ import { copyImageToPermanentStorage } from '../services/imageStorage';
 import {
   searchByImage,
   refineLensResults,
-  rankCatalogByAttributes,
   type LensResult,
 } from '../services/lensSearchService';
+import { classifyAiError, friendlyAiMessage } from '../services/aiProxy';
+import { getAuthUserId } from '../services/authUser';
 import {
   buildFingerprint,
   hashImageBase64,
@@ -106,6 +107,20 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   const [visionLabels, setVisionLabels] = useState<string[]>([]);
   const [pickedMatch, setPickedMatch] = useState<PickedMatch | null>(null);
   const [matchSheetDismissed, setMatchSheetDismissed] = useState(false);
+  // Friendly reason the automatic match search failed (vs. simply finding nothing).
+  const [matchError, setMatchError] = useState<string | null>(null);
+  // Guests can't use AI features, so say so before they pick a photo.
+  const [isGuestUser, setIsGuestUser] = useState(false);
+  // Identifies the latest photo analysis; results of an older one are dropped.
+  const analysisId = useRef(0);
+
+  useEffect(() => {
+    getAuthUserId().then(id => setIsGuestUser(!id));
+    // Leaving the screen invalidates any analysis still running.
+    return () => {
+      analysisId.current += 1;
+    };
+  }, []);
 
   const onCategoryChange = useCallback((value: ClothingCategory) => {
     categoryTouched.current = true;
@@ -162,7 +177,8 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
     ImagePicker.launchCamera({
       mediaType: 'photo',
       quality: 0.8,
-      saveToPhotos: true,
+      // The photo is kept privately inside the app; don't also copy it into the Camera Roll.
+      saveToPhotos: false,
     }, async (response) => {
       if (response.didCancel) {
         return;
@@ -252,16 +268,30 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   }, []);
 
   const analyzeImage = async (uri: string) => {
+    // Analysis and the match search take seconds, and another photo can be
+    // picked meanwhile. Everything this run sets goes through isCurrent() so a
+    // late answer for the old photo never lands on the new one.
+    const myId = ++analysisId.current;
+    const isCurrent = () => analysisId.current === myId;
+
     setAnalyzing(true);
     setMatchSheetDismissed(false);
     setPickedMatch(null);
     setKbMatches([]);
     setLensResults([]);
+    setMatchError(null);
+    setMatchLoading(false);
+    setRecognitionResult(null);
+    setFingerprint(null);
+    setSemanticFp(null);
+    setImageHash(null);
+    setVisionLabels([]);
     try {
       // ── 1. Compute image fingerprint (cheap, local) ──
       let base64: string | null = null;
       try {
         base64 = await readImageAsBase64(uri);
+        if (!isCurrent()) return;
         const imgHash = hashImageBase64(base64);
         setImageHash(imgHash);
       } catch (hashErr) {
@@ -270,6 +300,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
 
       // ── 2. Run Vision AI ──
       const result = await analyzeClothingImage(uri);
+      if (!isCurrent()) return;
       setRecognitionResult(result);
       setVisionLabels(result.rawLabels || []);
 
@@ -283,35 +314,42 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         setSemanticFp(semFp);
 
         // ── 4. Kick off KB lookup + lens shopping search in parallel ──
-        setMatchLoading(true);
-        Promise.allSettled([
-          lookupKnowledgeBase(fp, semFp),
-          searchByImage(uri),
-        ])
-          .then(([kbRes, lensRes]) => {
-            if (kbRes.status === 'fulfilled') setKbMatches(kbRes.value);
-            if (lensRes.status === 'fulfilled' && !lensRes.value.notConfigured) {
-              // Refine against detected attributes — drops shelf pages, dedupes
-              // by (title+source), ranks by color/subtype/material/brand match.
-              const attrs = {
-                color: result.color,
-                subtype: result.subtype,
-                category: result.category,
-                material: result.material,
-                brand: result.brand,
-              };
-              const refined = refineLensResults(lensRes.value.results, attrs, 12);
-
-              // If web results were all junk, fall back to the curated
-              // catalog ranked by the same attributes — better to show a
-              // visually plausible option than three Macy's shelf pages.
-              const finalResults =
-                refined.length > 0 ? refined : rankCatalogByAttributes(attrs, 8);
-
-              setLensResults(finalResults);
-            }
-          })
-          .finally(() => setMatchLoading(false));
+        // Skipped when the analysis itself didn't work (guest, AI off, offline):
+        // there are no detected attributes to match on, and the banner below
+        // already explains why.
+        if (result.isReal) {
+          setMatchLoading(true);
+          Promise.allSettled([
+            lookupKnowledgeBase(fp, semFp),
+            searchByImage(uri),
+          ])
+            .then(([kbRes, lensRes]) => {
+              if (!isCurrent()) return;
+              if (kbRes.status === 'fulfilled') setKbMatches(kbRes.value);
+              if (lensRes.status === 'rejected') {
+                console.warn('[Analyze] lens search failed:', lensRes.reason);
+                setMatchError(friendlyAiMessage('other', 'search'));
+              } else if (lensRes.value.error) {
+                setMatchError(lensRes.value.error);
+              } else if (!lensRes.value.notConfigured) {
+                // Refine against detected attributes — drops shelf pages, dedupes
+                // by (title+source), ranks by color/subtype/material/brand match.
+                // Nothing left means "no matches": the sheet says so rather than
+                // padding with anything that wasn't actually found.
+                const attrs = {
+                  color: result.color,
+                  subtype: result.subtype,
+                  category: result.category,
+                  material: result.material,
+                  brand: result.brand,
+                };
+                setLensResults(refineLensResults(lensRes.value.results, attrs, 12));
+              }
+            })
+            .finally(() => {
+              if (isCurrent()) setMatchLoading(false);
+            });
+        }
       }
 
       // Auto-apply predictions using a looser threshold than
@@ -420,8 +458,11 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
       }
     } catch (error) {
       console.error('Error analyzing image:', error);
+      if (isCurrent()) {
+        setRecognitionResult({ confidence: {}, isReal: false, unavailableReason: classifyAiError(error) });
+      }
     } finally {
-      setAnalyzing(false);
+      if (isCurrent()) setAnalyzing(false);
     }
   };
 
@@ -551,6 +592,8 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
     }
   };
 
+  const unavailableReason = recognitionResult?.unavailableReason ?? 'other';
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -577,7 +620,9 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
             <View style={styles.placeholder}>
               <Icon name="camera-outline" size={40} color="#C4975A" />
               <Text style={styles.placeholderText}>Add Photo</Text>
-              <Text style={styles.aiHintText}>AI will analyze your photo</Text>
+              <Text style={styles.aiHintText}>
+                {isGuestUser ? 'Sign in to let AI analyze your photo' : 'AI will analyze your photo'}
+              </Text>
             </View>
           )}
         </TouchableOpacity>
@@ -594,7 +639,11 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
             }}
           >
             <Text style={{ fontSize: 12, fontWeight: '600', color: '#4338CA' }}>
-              {recognitionResult.isReal ? '🔍 AI Detected' : '⚠️ No AI result'}
+              {recognitionResult.isReal
+                ? '🔍 AI Detected'
+                : unavailableReason === 'other'
+                  ? '⚠️ No AI result'
+                  : 'ℹ️ AI identification is off'}
             </Text>
             <Text style={{ fontSize: 12, color: '#4338CA', marginTop: 2 }}>
               {recognitionResult.isReal
@@ -607,7 +656,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
                   ]
                     .filter(Boolean)
                     .join(' · ') || 'no attributes matched'
-                : 'AI analysis unavailable. Enter details manually below.'}
+                : friendlyAiMessage(unavailableReason, 'analyze')}
             </Text>
 
             {/* Color swatches — tap to set as the item's color */}
@@ -739,12 +788,12 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         )}
 
         {/* Match picker — shows after Vision completes, until user picks or dismisses */}
-        {recognitionResult && !analyzing && !matchSheetDismissed && (
+        {recognitionResult?.isReal && !analyzing && !matchSheetDismissed && (
           <MatchPickerSheet
             loading={matchLoading}
             kbMatches={kbMatches}
             lensResults={lensResults}
-            detection={recognitionResult}
+            searchError={matchError}
             onPick={applyMatch}
             onSkip={dismissMatchSheet}
           />
@@ -1098,7 +1147,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
           />
         </View>
         
-        {recognitionResult && (
+        {recognitionResult?.isReal && (
           <View style={styles.aiSuggestionContainer}>
             <Text style={styles.aiSuggestionTitle}>AI Suggestions</Text>
             {recognitionResult.category && (

@@ -17,8 +17,53 @@
 import { supabase } from '../config/supabase';
 import { env } from '../config/env';
 import { ensureAiConsent, AI_CONSENT_ERROR } from './aiConsent';
+import { getAuthUserId } from './authUser';
 
 export type AIProvider = 'vision' | 'openai-vision' | 'brave';
+
+// Error text is for developer logs only. Anything the user reads goes through
+// classifyAiError + friendlyAiMessage so status codes, "ai-proxy" and provider
+// names never reach the screen.
+const NOT_SIGNED_IN = 'not_signed_in';
+const SESSION_UNAVAILABLE = 'session_unavailable';
+
+export type AiFailure = 'signed_out' | 'consent' | 'other';
+
+export const classifyAiError = (err: unknown): AiFailure => {
+  const msg = typeof (err as any)?.message === 'string' ? (err as any).message : '';
+  if (msg === AI_CONSENT_ERROR) return 'consent';
+  // A 401 from the proxy means it did not accept the login, which the user
+  // fixes the same way as being signed out.
+  if (msg.startsWith(NOT_SIGNED_IN) || /^ai-proxy \S+ 401\b/.test(msg)) return 'signed_out';
+  return 'other';
+};
+
+/** One failure for several calls made together (e.g. Vision + OpenAI): the most actionable cause wins. */
+export const classifyAiErrors = (errs: unknown[]): AiFailure => {
+  const kinds = errs.map(classifyAiError);
+  if (kinds.includes('signed_out')) return 'signed_out';
+  if (kinds.includes('consent')) return 'consent';
+  return 'other';
+};
+
+export const AI_SEARCH_OFF_MESSAGE =
+  'AI photo search is turned off. You can turn it on in Settings > Privacy.';
+
+/** What to tell the user when a photo analysis ('analyze') or a match search ('search') fails. */
+export const friendlyAiMessage = (failure: AiFailure, task: 'analyze' | 'search'): string => {
+  if (task === 'analyze') {
+    if (failure === 'signed_out') {
+      return 'Sign in to let SmartCloset identify items from photos. You can still fill in the details yourself.';
+    }
+    if (failure === 'consent') {
+      return 'AI photo analysis is turned off. You can turn it on in Settings > Privacy.';
+    }
+    return "Couldn't analyze that photo right now. Check your connection, or fill in the details yourself.";
+  }
+  if (failure === 'signed_out') return 'Sign in to search for matches.';
+  if (failure === 'consent') return AI_SEARCH_OFF_MESSAGE;
+  return "Couldn't search right now. Check your connection and try again.";
+};
 
 const buildProxyUrl = (): string => {
   const base = env.SUPABASE_URL.replace(/\/$/, '');
@@ -75,7 +120,12 @@ export const callAiProxy = async <T = unknown>(
 ): Promise<T> => {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) {
-    throw new Error('not_signed_in: ai-proxy requires an authenticated user');
+    // A signed-in user whose saved login can't be refreshed (offline) also has
+    // no session here. That is a connection problem, not a signed-out guest.
+    if (await getAuthUserId()) {
+      throw new Error(`${SESSION_UNAVAILABLE}: saved login could not be refreshed`);
+    }
+    throw new Error(`${NOT_SIGNED_IN}: ai-proxy requires an authenticated user`);
   }
 
   // These two carry the user's photo to third-party AI services, which needs

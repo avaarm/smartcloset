@@ -2,7 +2,7 @@
  * WishlistSearchModal — "Google Lens for wishlist".
  *
  * Full-screen modal with two search modes:
- *   1. Text search — query Google Custom Search (or curated fallback catalog)
+ *   1. Text search — product search results from the web
  *   2. Photo search — reuse the existing Vision-based reverse-image pipeline
  *
  * Tap a result → saves it as a wishlist item (isWishlist=true) with the
@@ -27,9 +27,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   searchByImage,
   searchProductsByText,
+  toSecureImageUrl,
   type LensResult,
   type LensSearchResponse,
 } from '../services/lensSearchService';
+
+const SEARCH_FAILED_MESSAGE = "Couldn't search right now. Check your connection and try again.";
 import { pickImageFromLibrary } from '../platform/imagePicker';
 import { saveClothingItem } from '../services/storage';
 import type { ClothingCategory } from '../types/clothing';
@@ -111,7 +114,7 @@ const WishlistSearchModal: React.FC<Props> = ({ visible, onClose, onAdded }) => 
         query,
         bestGuessLabels: [],
         results: [],
-        error: err?.message || 'Search failed',
+        error: SEARCH_FAILED_MESSAGE,
       });
     } finally {
       setLoading(false);
@@ -132,7 +135,7 @@ const WishlistSearchModal: React.FC<Props> = ({ visible, onClose, onAdded }) => 
         query: '',
         bestGuessLabels: [],
         results: [],
-        error: err?.message || 'Search failed',
+        error: SEARCH_FAILED_MESSAGE,
       });
     } finally {
       setLoading(false);
@@ -292,8 +295,8 @@ const WishlistSearchModal: React.FC<Props> = ({ visible, onClose, onAdded }) => 
                 color={theme.colors.accent}
               />
               <Text style={styles.hintText}>
-                Image search needs a Google Vision API key. Text search uses a
-                curated catalog in the meantime.
+                Photo search isn't available right now. Try searching by text
+                instead.
               </Text>
             </View>
           )}
@@ -368,6 +371,10 @@ const ResultCard: React.FC<{
   disabled: boolean;
   onAdd: () => void;
 }> = ({ result, adding, disabled, onAdd }) => {
+  // iOS blocks plain-http images, so use the https form of the link and fall
+  // back to the placeholder if the picture can't be loaded.
+  const imageUri = toSecureImageUrl(result.imageUrl);
+  const [imageFailed, setImageFailed] = useState(false);
   return (
     <Pressable
       onPress={onAdd}
@@ -377,11 +384,12 @@ const ResultCard: React.FC<{
         { opacity: pressed ? 0.75 : disabled && !adding ? 0.5 : 1 },
       ]}
     >
-      {/^https?:\/\//i.test(result.imageUrl || '') ? (
+      {imageUri && !imageFailed ? (
         <Image
-          source={{ uri: result.imageUrl }}
+          source={{ uri: imageUri }}
           style={styles.cardImage}
           resizeMode="cover"
+          onError={() => setImageFailed(true)}
         />
       ) : (
         <View style={[styles.cardImage, styles.cardImagePlaceholder]}>

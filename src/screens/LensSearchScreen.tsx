@@ -32,6 +32,7 @@ import { useTheme } from '../styles/ThemeProvider';
 import { pickImageFromLibrary } from '../platform/imagePicker';
 import {
   searchByImage,
+  toSecureImageUrl,
   type LensResult,
   type LensSearchResponse,
 } from '../services/lensSearchService';
@@ -170,13 +171,6 @@ const LensSearchScreen: React.FC = () => {
               Lens search uses AI to find visually similar items across the
               web. This feature is not available right now.
             </Text>
-            <Button
-              label="Try searching by text instead"
-              variant="secondary"
-              size="md"
-              onPress={() => {}}
-              style={{ marginTop: 14 }}
-            />
           </Card>
         )}
 
@@ -244,6 +238,10 @@ const ResultCard: React.FC<{ result: LensResult; onPress: () => void }> = ({
   onPress,
 }) => {
   const { theme } = useTheme();
+  // iOS blocks plain-http images: use the https form, and fall back to the
+  // placeholder if the picture can't be loaded.
+  const imageUri = toSecureImageUrl(result.imageUrl);
+  const [imageFailed, setImageFailed] = useState(false);
   return (
     <Pressable
       onPress={onPress}
@@ -257,8 +255,13 @@ const ResultCard: React.FC<{ result: LensResult; onPress: () => void }> = ({
         },
       ]}
     >
-      {result.imageUrl ? (
-        <Image source={{ uri: result.imageUrl }} style={styles.resultImage} resizeMode="cover" />
+      {imageUri && !imageFailed ? (
+        <Image
+          source={{ uri: imageUri }}
+          style={styles.resultImage}
+          resizeMode="cover"
+          onError={() => setImageFailed(true)}
+        />
       ) : (
         <View
           style={[

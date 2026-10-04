@@ -4,7 +4,10 @@
  * Three ordered result tiers:
  *   1. Knowledge-base matches (crowd-sourced, high confidence)
  *   2. Vision lens shopping results (web detection, filtered + ranked)
- *   3. User-driven extra searches (text, URL paste, curated catalog browse)
+ *   3. User-driven extra searches (text, URL paste)
+ *
+ * Only real matches are ever shown. When there are none (or the search
+ * failed) the sheet says so and the user fills in the details themselves.
  *
  * Tapping any candidate auto-fills the Add Item form + records a contribution
  * to the KB (source = 'kb_match' | 'lens_match'). "Enter manually" dismisses
@@ -26,13 +29,12 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {
-  rankCatalogByAttributes,
   searchProductsByText,
+  toSecureImageUrl,
   type LensResult,
 } from '../services/lensSearchService';
 import { fetchProductMetadata } from '../services/productUrlService';
 import type { KBMatch } from '../services/productContributions';
-import type { RecognitionResult } from '../services/imageRecognition';
 import theme from '../styles/theme';
 
 export type PickedMatch = {
@@ -56,25 +58,27 @@ type Props = {
   loading: boolean;
   kbMatches: KBMatch[];
   lensResults: LensResult[];
-  /** Detection attributes used to re-rank any user-driven searches. */
-  detection?: RecognitionResult | null;
+  /** Friendly reason the automatic match search failed (shown instead of "no matches"). */
+  searchError?: string | null;
   onPick: (match: PickedMatch) => void;
   onSkip: () => void;
 };
 
-type ExtraSource = 'text' | 'url' | 'catalog';
+type ExtraSource = 'text' | 'url';
 
 const MatchPickerSheet: React.FC<Props> = ({
   loading,
   kbMatches,
   lensResults,
-  detection,
+  searchError,
   onPick,
   onSkip,
 }) => {
-  // Additional results from user-driven searches (text / URL / catalog browse)
+  // Additional results from user-driven searches (text / URL)
   const [extraResults, setExtraResults] = useState<LensResult[]>([]);
   const [extraLoading, setExtraLoading] = useState(false);
+  // Outcome of the last user-driven search when it found nothing or failed.
+  const [extraMessage, setExtraMessage] = useState<string | null>(null);
   const [activeInput, setActiveInput] = useState<ExtraSource | null>(null);
   const [textQuery, setTextQuery] = useState('');
   const [urlQuery, setUrlQuery] = useState('');
@@ -88,17 +92,21 @@ const MatchPickerSheet: React.FC<Props> = ({
     const q = textQuery.trim();
     if (!q) return;
     setExtraLoading(true);
+    setExtraMessage(null);
     try {
       const resp = await searchProductsByText(q);
       // Only keep shopping-domain results with a real image URL —
       // everything else (YouTube, Pinterest, blogs) is dropped upstream
       // by lensSearchService, but belt-and-braces here too.
       const shopOnly = resp.results.filter(
-        r => r.isShopping && /^https?:\/\//i.test(r.imageUrl || ''),
+        r => r.isShopping && !!toSecureImageUrl(r.imageUrl),
       );
       setExtraResults(prev => mergeUniqueById(prev, shopOnly));
+      if (resp.error) setExtraMessage(resp.error);
+      else if (shopOnly.length === 0) setExtraMessage('No results for that search. Try different words.');
     } catch (err: any) {
       console.warn('[MatchPicker] text search failed:', err?.message);
+      setExtraMessage("Couldn't search right now. Check your connection and try again.");
     } finally {
       setExtraLoading(false);
     }
@@ -108,6 +116,7 @@ const MatchPickerSheet: React.FC<Props> = ({
     const u = urlQuery.trim();
     if (!u) return;
     setExtraLoading(true);
+    setExtraMessage(null);
     try {
       const result = await fetchProductMetadata(u);
       if (result) {
@@ -117,39 +126,36 @@ const MatchPickerSheet: React.FC<Props> = ({
         Alert.alert('Couldn\'t read that page', 'Try a different product URL.');
       }
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to fetch URL');
+      console.warn('[MatchPicker] URL lookup failed:', err?.message);
+      Alert.alert('Couldn\'t read that page', 'Check the link and your connection, then try again.');
     } finally {
       setExtraLoading(false);
     }
   }, [urlQuery]);
 
-  const browseCatalog = useCallback(() => {
-    const attrs = {
-      color: detection?.color,
-      subtype: detection?.subtype,
-      category: detection?.category,
-      material: detection?.material,
-    };
-    const ranked = rankCatalogByAttributes(attrs, 12);
-    setExtraResults(prev => mergeUniqueById(prev, ranked));
-    setActiveInput(null);
-  }, [detection]);
-
   const toggleInput = useCallback((src: ExtraSource) => {
     setActiveInput(curr => (curr === src ? null : src));
   }, []);
+
+  const empty = !loading && !hasResults;
 
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>
-            {kbMatches.length > 0 ? '✨ Community match found' : 'Is it one of these?'}
+            {kbMatches.length > 0
+              ? '✨ Community match found'
+              : empty
+                ? searchError ? "Couldn't search for matches" : 'No matches found'
+                : 'Is it one of these?'}
           </Text>
           <Text style={styles.subtitle}>
             {kbMatches.length > 0
               ? 'Other users added this item. Tap to auto-fill.'
-              : 'Pick the closest match, or search more to teach the app.'}
+              : empty
+                ? 'You can still fill in the details yourself.'
+                : 'Pick the closest match, or search more to teach the app.'}
           </Text>
         </View>
         <Pressable onPress={onSkip} style={styles.skipButton}>
@@ -164,14 +170,15 @@ const MatchPickerSheet: React.FC<Props> = ({
         </View>
       )}
 
-      {!loading && !hasResults && (
+      {empty && (
         <View style={styles.emptyWrap}>
-          <Icon name="sparkles-outline" size={28} color={theme.colors.accent} />
-          <Text style={styles.emptyTitle}>Be the first to add this!</Text>
+          <Icon
+            name={searchError ? 'cloud-offline-outline' : 'search-outline'}
+            size={28}
+            color={theme.colors.mediumGray}
+          />
           <Text style={styles.emptyText}>
-            Search more sources below, or fill in the details directly. Your
-            entry will teach the app to recognize this item next time — for you
-            and anyone else who uploads a similar photo.
+            {searchError || 'Try a text or URL search below, or fill in the details directly.'}
           </Text>
         </View>
       )}
@@ -207,12 +214,6 @@ const MatchPickerSheet: React.FC<Props> = ({
             label="URL"
             active={activeInput === 'url'}
             onPress={() => toggleInput('url')}
-          />
-          <ToolbarButton
-            icon="grid-outline"
-            label="Browse"
-            active={false}
-            onPress={browseCatalog}
           />
         </View>
       </View>
@@ -263,6 +264,10 @@ const MatchPickerSheet: React.FC<Props> = ({
           <ActivityIndicator color={theme.colors.accent} size="small" />
           <Text style={styles.loadingText}>Looking that up…</Text>
         </View>
+      )}
+
+      {!extraLoading && !!extraMessage && (
+        <Text style={styles.extraMessage}>{extraMessage}</Text>
       )}
     </View>
   );
@@ -328,7 +333,7 @@ const KBCard: React.FC<{
       <Text style={styles.cardTitle} numberOfLines={2}>
         {match.name}
       </Text>
-      {(match.brand || match.retailer) && (
+      {!!(match.brand || match.retailer) && (
         <Text style={styles.cardMeta} numberOfLines={1}>
           {[match.brand, match.retailer].filter(Boolean).join(' · ')}
         </Text>
@@ -351,6 +356,11 @@ const LensCard: React.FC<{
     return Number.isFinite(n) && n > 0 ? n : undefined;
   })();
 
+  // Retailer photos can fail to load (dead link, blocked host); show the
+  // placeholder instead of an empty box.
+  const imageUri = toSecureImageUrl(result.imageUrl);
+  const [imageFailed, setImageFailed] = useState(false);
+
   const brandGuess = (() => {
     const host = result.source.replace(/^www\./, '').split('.')[0];
     if (host && !['www', 'shop', 'store', 'us', 'uk'].includes(host)) {
@@ -369,13 +379,17 @@ const LensCard: React.FC<{
           retailer: result.source,
           cost: parsedCost,
           sourceUrl: result.url,
-          imageUrl: result.imageUrl,
+          imageUrl: imageUri || undefined,
           source: 'lens_match',
         })
       }
     >
-      {/^https?:\/\//i.test(result.imageUrl || '') ? (
-        <Image source={{ uri: result.imageUrl }} style={styles.cardImage} />
+      {imageUri && !imageFailed ? (
+        <Image
+          source={{ uri: imageUri }}
+          style={styles.cardImage}
+          onError={() => setImageFailed(true)}
+        />
       ) : (
         <View style={[styles.cardImage, styles.cardImagePlaceholder]}>
           <Icon name="image-outline" size={24} color={theme.colors.mediumGray} />
@@ -391,7 +405,7 @@ const LensCard: React.FC<{
         <Text style={styles.cardMeta} numberOfLines={1}>
           {result.source}
         </Text>
-        {result.price && <Text style={styles.cardPrice}>{result.price}</Text>}
+        {!!result.price && <Text style={styles.cardPrice}>{result.price}</Text>}
       </View>
     </Pressable>
   );
@@ -441,12 +455,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 18,
     paddingHorizontal: 20,
-  },
-  emptyTitle: {
-    marginTop: 8,
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.colors.text,
   },
   emptyText: {
     marginTop: 6,
@@ -511,6 +519,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.colors.text,
     marginTop: 4,
+  },
+
+  extraMessage: {
+    marginTop: 6,
+    fontSize: 12,
+    color: theme.colors.mediumGray,
+    textAlign: 'center',
   },
 
   toolbar: {

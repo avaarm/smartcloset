@@ -9,7 +9,7 @@
 import { ClothingCategory } from '../types/clothing';
 import { env, hasGoogleVision } from '../config/env';
 import { readImageAsBase64 } from '../platform/fileSystem';
-import { callAiProxy } from './aiProxy';
+import { callAiProxy, classifyAiError, classifyAiErrors, type AiFailure } from './aiProxy';
 
 // Define pattern types for clothing
 export type PatternType = 'solid' | 'striped' | 'plaid' | 'floral' | 'polka_dot' | 'graphic' | 'other';
@@ -63,6 +63,8 @@ export interface RecognitionResult {
   rawLabels?: string[];
   /** True when the result came from a real Vision API call, false for mock fallback. */
   isReal?: boolean;
+  /** Why there is no real result (only set when isReal is false), so the UI can explain it kindly. */
+  unavailableReason?: AiFailure;
   /** Vision WEB_DETECTION bestGuessLabel — Google's reverse-image-search guess (e.g. "bottega veneta cassette bag"). */
   bestGuess?: string;
   /** Top WEB_DETECTION webEntities, ordered by score. Useful for brand/model inference. */
@@ -780,16 +782,21 @@ export const analyzeClothingImage = async (imageUri: string): Promise<Recognitio
         return convertGPT4ToResult(gpt4Data);
       }
 
-      return getMockRecognitionResult(imageUri);
+      // Both calls failed: carry the cause so the screen can say why in plain
+      // words (signed out, AI turned off, offline) instead of a developer error.
+      const causes = [visionSettled, gpt4Settled]
+        .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+        .map(r => r.reason);
+      return { ...getMockRecognitionResult(imageUri), unavailableReason: classifyAiErrors(causes) };
     }
 
     // ── Mock fallback (proxy not configured) ──
     console.warn('[Vision] SKIPPED — SUPABASE_URL not configured. Check .env and rebuild.');
     await new Promise(resolve => setTimeout(resolve, 300));
-    return getMockRecognitionResult(imageUri);
+    return { ...getMockRecognitionResult(imageUri), unavailableReason: 'other' };
   } catch (error: any) {
     console.error('[Vision] Exception in analyze:', error?.message || error);
-    return getMockRecognitionResult(imageUri);
+    return { ...getMockRecognitionResult(imageUri), unavailableReason: classifyAiError(error) };
   }
 };
 
