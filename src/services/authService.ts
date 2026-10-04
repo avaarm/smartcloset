@@ -1,6 +1,8 @@
 import { supabase } from '../config/supabase';
 import { Session, User } from '@supabase/supabase-js';
 import { clearSignedImageCache } from './imageUrls';
+import { adoptPersonalLocalData, clearPersonalLocalData, stashPersonalLocalData } from './localData';
+import { getAuthUserId } from './authUser';
 
 // Google and Apple native SDKs are loaded dynamically to avoid
 // crashes when client IDs are not yet configured.
@@ -18,12 +20,19 @@ export const configureGoogleSignIn = () => {
 
 // ─── Email Auth ───────────────────────────────────────────────────────────────
 
+/** Gives a freshly signed-in account back what it saved on this device before. */
+const adoptLocalData = async (data: { session?: Session | null; user?: User | null } | null) => {
+  const uid = data?.session?.user?.id ?? data?.user?.id;
+  if (uid && data?.session) await adoptPersonalLocalData(uid);
+};
+
 export const signInWithEmail = async (email: string, password: string) => {
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
   if (error) throw error;
+  await adoptLocalData(data);
   return data;
 };
 
@@ -38,6 +47,7 @@ export const signUpWithEmail = async (
     options: { data: { name } },
   });
   if (error) throw error;
+  await adoptLocalData(data);
   return data;
 };
 
@@ -72,6 +82,7 @@ export const resetPasswordWithCode = async (
     }
     throw updateError;
   }
+  await adoptLocalData(data);
   return data;
 };
 
@@ -106,6 +117,7 @@ export const signInWithGoogle = async () => {
     token: idToken,
   });
   if (error) throw error;
+  await adoptLocalData(data);
   return data;
 };
 
@@ -135,6 +147,7 @@ export const signInWithApple = async () => {
     token: appleAuthResponse.identityToken,
   });
   if (error) throw error;
+  await adoptLocalData(data);
 
   // Apple only shares the user's name the first time they authorise the app, and
   // not in the token itself - keep it now or the app never learns it.
@@ -155,8 +168,21 @@ export const signInWithApple = async () => {
 // ─── Session Management ───────────────────────────────────────────────────────
 
 export const signOut = async () => {
-  const { error } = await supabase.auth.signOut();
+  // Known before signing out: it is who the on-device data gets filed under.
+  const uid = await getAuthUserId();
+  let error: unknown = null;
+  try {
+    ({ error } = await supabase.auth.signOut());
+  } catch (e) {
+    error = e;
+  }
   await clearSignedImageCache();
+  // When sign-out fails (e.g. offline) the session is kept and it is still the
+  // same person's device, so only wipe their local data if no login remains.
+  if (!error || !(await getAuthUserId())) {
+    if (uid) await stashPersonalLocalData(uid);
+    else await clearPersonalLocalData();
+  }
   if (error) throw error;
 };
 

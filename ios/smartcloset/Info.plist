@@ -39,7 +39,7 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>SmartCloset needs access to your photo library so you can add clothing images to your wardrobe.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>SmartCloset saves outfit photos to your photo library.</string>
+	<string>SmartCloset only saves a photo to your library if you ask it to.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>UILaunchStoryboardName</key>
@@ -51,9 +51,9 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>UIUserInterfaceStyle</key>
+	<string>Light</string>
 	<key>GIDClientID</key>
 	<string>859514026306-97ovnfc131l6kdt7gjhg5jcqt6n0jk0h.apps.googleusercontent.com</string>
 	<key>CFBundleURLTypes</key>

@@ -40,6 +40,16 @@ describe('deleteAccount', () => {
     expect(out.photosIncomplete).toBe(false);
   });
 
+  it('wipes everything on the device, including guest data that sign-out keeps', async () => {
+    mockInvoke.mockResolvedValue({ data: { ok: true }, error: null });
+    await AsyncStorage.setItem('@smartcloset_items', '[{"id":"1"}]');
+    await AsyncStorage.setItem('@smartcloset_saved_outfits', '[{"id":"o1"}]');
+    await AsyncStorage.setItem('@smartcloset_ai_consent_v1:u1', 'granted');
+    await AsyncStorage.setItem('@smartcloset_lookbooks', '[]');
+    await deleteAccount();
+    expect(await AsyncStorage.getAllKeys()).toEqual([]);
+  });
+
   it('touches nothing on the device if the server could not delete the account', async () => {
     mockInvoke.mockResolvedValue({ data: null, error: new Error('500') });
     await expect(deleteAccount()).rejects.toThrow('500');

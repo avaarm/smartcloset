@@ -4,6 +4,10 @@ const mockUpdateUser = jest.fn();
 const mockSignOut = jest.fn();
 const mockClearCache = jest.fn();
 const mockSignInWithIdToken = jest.fn();
+const mockClearPersonal = jest.fn();
+const mockStash = jest.fn();
+const mockAdopt = jest.fn();
+const mockUserId = jest.fn();
 
 jest.mock('../../src/config/supabase', () => ({
   supabase: {
@@ -17,11 +21,21 @@ jest.mock('../../src/config/supabase', () => ({
   },
 }));
 jest.mock('../../src/services/imageUrls', () => ({ clearSignedImageCache: () => mockClearCache() }));
+jest.mock('../../src/services/localData', () => ({
+  clearPersonalLocalData: () => mockClearPersonal(),
+  stashPersonalLocalData: (...a: any[]) => mockStash(...a),
+  adoptPersonalLocalData: (...a: any[]) => mockAdopt(...a),
+}));
+jest.mock('../../src/services/authUser', () => ({ getAuthUserId: () => mockUserId() }));
 
 import { requestPasswordReset, resetPasswordWithCode, signInWithApple, signInWithGoogle, signOut } from '../../src/services/authService';
 
 beforeEach(() => {
-  [mockResetForEmail, mockVerifyOtp, mockUpdateUser, mockSignOut, mockClearCache, mockSignInWithIdToken].forEach(m => m.mockReset());
+  [mockResetForEmail, mockVerifyOtp, mockUpdateUser, mockSignOut, mockClearCache, mockSignInWithIdToken, mockClearPersonal, mockStash, mockAdopt, mockUserId].forEach(m => m.mockReset());
+  mockClearPersonal.mockResolvedValue(undefined);
+  mockStash.mockResolvedValue(undefined);
+  mockAdopt.mockResolvedValue(undefined);
+  mockUserId.mockResolvedValue(null);
 });
 
 describe('password reset by emailed code', () => {
@@ -64,6 +78,48 @@ describe('signOut', () => {
     await expect(signOut()).rejects.toThrow('network');
     expect(mockClearCache).toHaveBeenCalledTimes(1);
   });
+
+  it("files the person's on-device data under their id after the session is gone", async () => {
+    const order: string[] = [];
+    mockUserId.mockResolvedValue('u1');
+    mockSignOut.mockImplementation(async () => { order.push('supabase'); return { error: null }; });
+    mockStash.mockImplementation(async () => { order.push('stash'); });
+    await signOut();
+    expect(order).toEqual(['supabase', 'stash']);
+    expect(mockStash).toHaveBeenCalledWith('u1');
+    expect(mockClearPersonal).not.toHaveBeenCalled();
+  });
+
+  it('wipes it when nobody is known to be signed in', async () => {
+    mockSignOut.mockResolvedValue({ error: null });
+    mockUserId.mockResolvedValue(null);
+    await signOut();
+    expect(mockClearPersonal).toHaveBeenCalledTimes(1);
+    expect(mockStash).not.toHaveBeenCalled();
+  });
+
+  it('still files it when sign-out reports an error but no login remains', async () => {
+    mockUserId.mockResolvedValueOnce('u1').mockResolvedValue(null);
+    mockSignOut.mockResolvedValue({ error: new Error('network') });
+    await expect(signOut()).rejects.toThrow('network');
+    expect(mockStash).toHaveBeenCalledWith('u1');
+  });
+
+  it('still files it when the sign-out call itself throws and no login remains', async () => {
+    mockUserId.mockResolvedValueOnce('u1').mockResolvedValue(null);
+    mockSignOut.mockRejectedValue(new Error('boom'));
+    await expect(signOut()).rejects.toThrow('boom');
+    expect(mockClearCache).toHaveBeenCalledTimes(1);
+    expect(mockStash).toHaveBeenCalledWith('u1');
+  });
+
+  it('keeps their local data in place when sign-out fails and they are still signed in', async () => {
+    mockSignOut.mockResolvedValue({ error: new Error('offline') });
+    mockUserId.mockResolvedValue('u1');
+    await expect(signOut()).rejects.toThrow('offline');
+    expect(mockClearPersonal).not.toHaveBeenCalled();
+    expect(mockStash).not.toHaveBeenCalled();
+  });
 });
 
 describe('reset with a bad new password', () => {
@@ -93,12 +149,13 @@ describe('Google / Apple sign-in', () => {
     await expect(signInWithGoogle()).rejects.toThrow('network down');
   });
 
-  it('Google: exchanges the id token for a session', async () => {
+  it('Google: exchanges the id token for a session and restores that account\'s on-device data', async () => {
     GoogleSignin.signIn.mockResolvedValueOnce({ data: { idToken: 'g-token' } });
-    mockSignInWithIdToken.mockResolvedValue({ data: { session: { access_token: 'a' }, user: {} }, error: null });
+    mockSignInWithIdToken.mockResolvedValue({ data: { session: { access_token: 'a', user: { id: 'u9' } }, user: { id: 'u9' } }, error: null });
     const data = await signInWithGoogle();
     expect(mockSignInWithIdToken).toHaveBeenCalledWith({ provider: 'google', token: 'g-token' });
     expect(data?.session).toBeTruthy();
+    expect(mockAdopt).toHaveBeenCalledWith('u9');
   });
 
   it('Apple: backing out of the sheet is not an error', async () => {
