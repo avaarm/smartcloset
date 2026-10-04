@@ -9,11 +9,17 @@ import LinearGradient from 'react-native-linear-gradient';
 import theme from '../styles/theme';
 import { sampleClothes } from '../data/sampleClothes';
 import WishlistSearchModal from './WishlistSearchModal';
+import LoadError from '../components/LoadError';
+import { BodyProfile, getBodyProfile } from '../services/profileService';
+import { parseMoney } from '../utils/money';
 
 const WishlistScreen = () => {
   const navigation = useNavigation();
   const [items, setItems] = useState<ClothingItemType[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  // Read once here (not per card) for the colour-match hint on each card.
+  const [profile, setProfile] = useState<BodyProfile | null>(null);
   const [budget, setBudget] = useState(0);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [budgetInput, setBudgetInput] = useState('');
@@ -32,11 +38,17 @@ const WishlistScreen = () => {
 
   const loadWishlistItems = async () => {
     try {
-      const allItems = await getClothingItems({ all: true });
-      const wishlistItems = allItems.filter(item => item.isWishlist === true);
-      setItems(wishlistItems);
+      const [allItems, bodyProfile] = await Promise.all([
+        getClothingItems({ all: true }),
+        getBodyProfile().catch(() => null),
+      ]);
+      setItems(allItems.filter(item => item.isWishlist === true));
+      setProfile(bodyProfile);
+      setLoadFailed(false);
     } catch (error) {
       console.error('Error loading wishlist items:', error);
+      // Keep whatever is already on screen; only a first load with nothing to show is an error state.
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -113,7 +125,7 @@ const WishlistScreen = () => {
   };
 
   const handleSaveBudget = () => {
-    const amount = parseFloat(budgetInput);
+    const amount = parseMoney(budgetInput);
     if (!isNaN(amount) && amount >= 0) {
       setBudget(amount);
       setShowBudgetModal(false);
@@ -129,6 +141,7 @@ const WishlistScreen = () => {
       onPress={() => (navigation as any).navigate('ItemDetails', { item })}
       onEdit={handleEditItem}
       onDelete={handleDeleteItem}
+      bodyProfile={profile}
       showActions={true}
     />
   );
@@ -165,6 +178,8 @@ const WishlistScreen = () => {
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={theme.colors.accent} />
           </View>
+        ) : loadFailed && items.length === 0 ? (
+          <LoadError what="wishlist" onRetry={loadWishlistItems} />
         ) : (
           <FlatList
             data={items}

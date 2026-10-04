@@ -275,12 +275,31 @@ const mapDbToOutfit = (row: any, items: ClothingItem[]): Outfit => ({
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
+/** Same pieces, in any order. */
+const sameItems = (a: string[], b: string[]): boolean =>
+  a.length === b.length && [...a].sort().join('|') === [...b].sort().join('|');
+
+/**
+ * Save an outfit. Saving a set of items that is already saved is a no-op, so a
+ * second tap on a suggestion's bookmark can't create a duplicate.
+ */
 export const saveOutfit = async (outfit: Outfit): Promise<void> => {
   try {
-    const userId = await getAuthUserId();
-    if (!userId) return saveLocalOutfit(outfit);
-
     const itemIds = outfit.items.map(item => item.id);
+    const userId = await getAuthUserId();
+    if (!userId) {
+      const existing = await getLocalOutfits();
+      if (existing.some(o => sameItems((o.items || []).map(i => i.id), itemIds))) return;
+      return saveLocalOutfit(outfit);
+    }
+
+    const { data: existing, error: existingError } = await supabase
+      .from('outfits')
+      .select('item_ids')
+      .eq('user_id', userId);
+    if (existingError) throw existingError;
+    if ((existing || []).some((o: any) => sameItems(o.item_ids || [], itemIds))) return;
+
     const { error } = await supabase.from('outfits').insert({
       user_id: userId,
       name: outfit.name,

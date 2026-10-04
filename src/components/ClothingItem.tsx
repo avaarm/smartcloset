@@ -1,43 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Image, StyleSheet, Dimensions, TouchableOpacity, Alert, Animated } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import LinearGradient from 'react-native-linear-gradient';
 import type { ClothingItem as ClothingItemType } from '../types';
 import theme from '../styles/theme';
-import { getBodyProfile, BodyProfile } from '../services/profileService';
-import { colorNameToHex, paletteMatchScore } from '../services/styleRulesEngine';
+import type { BodyProfile } from '../services/profileService';
+import { getColorMatch } from './clothingColorMatch';
 
 interface Props {
   item: ClothingItemType;
+  /** Loaded once by the screen; the card must not fetch it itself (one query per card). */
+  bodyProfile?: BodyProfile | null;
   onEdit?: (item: ClothingItemType) => void;
   onDelete?: (id: string) => void;
   onPress?: (item: ClothingItemType) => void;
   showActions?: boolean;
 }
 
-const ClothingItem: React.FC<Props> = ({ item, onEdit, onDelete, onPress, showActions = false }) => {
+const ClothingItem: React.FC<Props> = ({ item, bodyProfile, onEdit, onDelete, onPress, showActions = false }) => {
   const [scaleAnim] = useState(new Animated.Value(1));
   const [imageError, setImageError] = useState(false);
   useEffect(() => {
     setImageError(false);
   }, [item.userImage, item.retailerImage]);
-  const [colorMatch, setColorMatch] = useState<'match' | 'avoid' | null>(null);
+  const colorMatch = getColorMatch(bodyProfile, item.color);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const profile = await getBodyProfile();
-        if (!profile || !item.color) return;
-        const hex = colorNameToHex(item.color);
-        if (!hex) return;
-        const recScore = paletteMatchScore(profile.recommendedPalette, hex);
-        const avoidScore = paletteMatchScore(profile.avoidColors, hex);
-        if (recScore > 0.5 && recScore > avoidScore) setColorMatch('match');
-        else if (avoidScore > 0.5 && avoidScore > recScore) setColorMatch('avoid');
-      } catch {}
-    })();
-  }, [item.color]);
-  
   const handleDelete = () => {
     Alert.alert(
       'Delete Item',
@@ -119,7 +105,7 @@ const ClothingItem: React.FC<Props> = ({ item, onEdit, onDelete, onPress, showAc
         <View style={styles.details}>
           <Text style={styles.name}>{item.name}</Text>
           <Text style={styles.category}>{item.category}</Text>
-          {item.brand && <Text style={styles.brand}>{item.brand}</Text>}
+          {item.brand ? <Text style={styles.brand}>{item.brand}</Text> : null}
           {colorMatch && (
             <View style={styles.colorMatchRow}>
               <View style={[
@@ -229,4 +215,5 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ClothingItem;
+// Memoized: the grid re-renders on every search keystroke, and the screen passes stable handlers.
+export default React.memo(ClothingItem);

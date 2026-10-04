@@ -5,25 +5,27 @@
  * solid accent FAB (no gradients), themed via useTheme.
  */
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import {
+  Alert,
   FlatList,
   Pressable,
+  RefreshControl,
   StyleSheet,
   TextInput,
   View,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { Badge, Button, EmptyState, Screen, Text } from '../ui';
+import { Badge, EmptyState, Screen, Text } from '../ui';
 import { useTheme } from '../styles/ThemeProvider';
 import ClothingItem from '../components/ClothingItem';
+import LoadError from '../components/LoadError';
+import { useLoadable } from '../hooks/useLoadable';
 import { ClothingItem as ClothingItemType } from '../types';
-import {
-  getOwnedClothingItems,
-  deleteClothingItem,
-  resetStorage,
-} from '../services/storage';
+import { getOwnedClothingItems, deleteClothingItem } from '../services/storage';
+import { BodyProfile, getBodyProfile } from '../services/profileService';
 import FilterModal, { FilterOptions } from '../components/FilterModal';
 import { ClothingCategory, Season } from '../types';
 
@@ -31,10 +33,29 @@ type WardrobeScreenProps = {
   navigation: NativeStackNavigationProp<any, 'WardrobeMain'>;
 };
 
+type WardrobeData = { items: ClothingItemType[]; profile: BodyProfile | null };
+
+const EMPTY_WARDROBE: WardrobeData = { items: [], profile: null };
+
+// The body profile is read once here (not per card) for the color-match hints.
+const loadWardrobe = async (): Promise<WardrobeData> => {
+  const [items, profile] = await Promise.all([getOwnedClothingItems(), getBodyProfile()]);
+  return { items, profile };
+};
+
 const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
   const { theme } = useTheme();
-  const [clothes, setClothes] = useState<ClothingItemType[]>([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    data: { items: clothes, profile },
+    hasLoaded,
+    failed,
+    loading,
+    blocked,
+    refreshing,
+    reload,
+    refresh,
+    update,
+  } = useLoadable(loadWardrobe, EMPTY_WARDROBE);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<FilterOptions>({
@@ -44,63 +65,40 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
     sortOrder: 'desc',
   });
 
-  useEffect(() => {
-    const loadClothes = async () => {
-      setLoading(true);
+  // Runs on mount and on every return to this screen (after adding, editing or
+  // deleting an item elsewhere). The list stays on screen while it refreshes.
+  useFocusEffect(
+    useCallback(() => {
+      reload();
+    }, [reload]),
+  );
+
+  const handleEdit = useCallback(
+    (item: ClothingItemType) => {
+      navigation.navigate('AddClothing', { editItem: item });
+    },
+    [navigation],
+  );
+
+  const handleDelete = useCallback(
+    async (id: string) => {
       try {
-        const items = await getOwnedClothingItems();
-        setClothes(items);
+        await deleteClothingItem(id);
+        update(d => ({ ...d, items: d.items.filter(i => i.id !== id) }));
       } catch (error) {
-        console.error('Error loading clothes:', error);
-      } finally {
-        setLoading(false);
+        console.error('Error deleting item:', error);
+        Alert.alert('Could not delete item', 'Check your connection and try again.');
       }
-    };
-    loadClothes();
-  }, []);
+    },
+    [update],
+  );
 
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', async () => {
-      setLoading(true);
-      try {
-        const items = await getOwnedClothingItems();
-        setClothes(items);
-      } catch (error) {
-        console.error('Error loading clothes:', error);
-      } finally {
-        setLoading(false);
-      }
-    });
-    return unsubscribe;
-  }, [navigation]);
-
-  const handleEdit = (item: ClothingItemType) => {
-    navigation.navigate('AddClothing', { editItem: item });
-  };
-
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteClothingItem(id);
-      const updatedItems = await getOwnedClothingItems();
-      setClothes(updatedItems);
-    } catch (error) {
-      console.error('Error deleting item:', error);
-    }
-  };
-
-  const handleItemPress = (item: ClothingItemType) => {
-    (navigation as any).navigate('ItemDetails', { item });
-  };
-
-  const handleResetStorage = async () => {
-    try {
-      await resetStorage();
-      const items = await getOwnedClothingItems();
-      setClothes(items);
-    } catch (error) {
-      console.error('Error resetting storage:', error);
-    }
-  };
+  const handleItemPress = useCallback(
+    (item: ClothingItemType) => {
+      (navigation as any).navigate('ItemDetails', { item });
+    },
+    [navigation],
+  );
 
   const handleApplyFilters = (newFilters: FilterOptions) => {
     setFilters(newFilters);
@@ -157,14 +155,18 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
     return result;
   }, [clothes, filters, searchQuery]);
 
-  const renderItem = ({ item }: { item: ClothingItemType }) => (
-    <ClothingItem
-      item={item}
-      onEdit={handleEdit}
-      onDelete={handleDelete}
-      onPress={handleItemPress}
-      showActions={true}
-    />
+  const renderItem = useCallback(
+    ({ item }: { item: ClothingItemType }) => (
+      <ClothingItem
+        item={item}
+        bodyProfile={profile}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onPress={handleItemPress}
+        showActions={true}
+      />
+    ),
+    [profile, handleEdit, handleDelete, handleItemPress],
   );
 
   const activeFiltersCount = filters.categories.length + filters.seasons.length;
@@ -174,9 +176,11 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
           <Text variant="h2">My Wardrobe</Text>
-          <Text variant="caption" color="muted" style={{ marginTop: 2 }}>
-            {filteredAndSortedClothes.length} of {clothes.length} items
-          </Text>
+          {hasLoaded ? (
+            <Text variant="caption" color="muted" style={{ marginTop: 2 }}>
+              {filteredAndSortedClothes.length} of {clothes.length} items
+            </Text>
+          ) : null}
         </View>
         <View style={styles.headerActions}>
           <Pressable
@@ -286,27 +290,51 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
           <View style={styles.center}>
             <Text variant="body" color="muted">Loading wardrobe...</Text>
           </View>
-        ) : filteredAndSortedClothes.length > 0 ? (
-          <FlatList
-            data={filteredAndSortedClothes}
-            renderItem={renderItem}
-            keyExtractor={item => item.id}
-            numColumns={2}
-            contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 100 }}
-            showsVerticalScrollIndicator={false}
-          />
-        ) : (
+        ) : blocked ? (
           <View style={styles.center}>
-            <EmptyState
-              icon={<Icon name="shirt-outline" size={32} color={theme.colors.textSubtle} />}
-              title={clothes.length === 0 ? 'Your wardrobe is empty' : 'No matches'}
-              body={
-                clothes.length === 0
-                  ? 'Add some clothing items to get started.'
-                  : 'Try a different search or clear your filters.'
+            <LoadError what="wardrobe" onRetry={reload} />
+          </View>
+        ) : (
+          <>
+            {failed ? (
+              <View style={styles.banner}>
+                <LoadError
+                  variant="banner"
+                  what="wardrobe"
+                  title="Couldn't refresh your wardrobe"
+                  onRetry={reload}
+                />
+              </View>
+            ) : null}
+            <FlatList
+              data={filteredAndSortedClothes}
+              renderItem={renderItem}
+              keyExtractor={item => item.id}
+              numColumns={2}
+              contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 12, paddingBottom: 100 }}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={refresh}
+                  tintColor={theme.colors.accent}
+                />
+              }
+              ListEmptyComponent={
+                <View style={styles.center}>
+                  <EmptyState
+                    icon={<Icon name="shirt-outline" size={32} color={theme.colors.textSubtle} />}
+                    title={clothes.length === 0 ? 'Your wardrobe is empty' : 'No matches'}
+                    body={
+                      clothes.length === 0
+                        ? 'Add some clothing items to get started.'
+                        : 'Try a different search or clear your filters.'
+                    }
+                  />
+                </View>
               }
             />
-          </View>
+          </>
         )}
 
         {/* FAB */}
@@ -391,6 +419,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     marginTop: 10,
+  },
+  banner: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
   },
   center: {
     flex: 1,

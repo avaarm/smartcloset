@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Outfit } from '../services/outfitService';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -7,7 +7,8 @@ import theme from '../styles/theme';
 
 interface OutfitCardProps {
   outfit: Outfit;
-  onSave?: () => void;
+  /** Should reject if the save failed; the card shows the error and lets the user retry. */
+  onSave?: () => Promise<void> | void;
   onDelete?: () => void;
   onMarkAsWorn?: () => void;
   saved?: boolean;
@@ -15,6 +16,9 @@ interface OutfitCardProps {
 
 const OutfitCard: React.FC<OutfitCardProps> = ({ outfit, onSave, onDelete, onMarkAsWorn, saved = false }) => {
   const navigation = useNavigation<any>();
+  const [bookmarked, setBookmarked] = useState(false);
+  // A ref, not state: two quick taps can both run before the next render.
+  const saving = useRef(false);
 
   const handleCardPress = () => {
     navigation.navigate('OutfitDetails', { outfit, saved });
@@ -27,17 +31,43 @@ const OutfitCard: React.FC<OutfitCardProps> = ({ outfit, onSave, onDelete, onMar
     }
   };
 
+  const handleSave = async () => {
+    // Not latched on `bookmarked`: if the saved copy was deleted since, tapping
+    // again must save it again (saveOutfit ignores a duplicate if it still exists).
+    if (!onSave || saving.current) return;
+    saving.current = true;
+    try {
+      await onSave();
+      setBookmarked(true);
+    } catch {
+      Alert.alert("Couldn't save outfit", 'Check your connection and try again.');
+    } finally {
+      saving.current = false;
+    }
+  };
+
   return (
     <TouchableOpacity style={styles.container} onPress={handleCardPress} activeOpacity={0.9}>
       <View style={styles.header}>
         <Text style={styles.outfitName}>{outfit.name}</Text>
         {saved ? (
-          <TouchableOpacity onPress={onDelete} style={styles.actionButton}>
+          <TouchableOpacity
+            onPress={onDelete}
+            style={styles.actionButton}
+            accessibilityRole="button"
+            accessibilityLabel="Delete saved outfit"
+          >
             <Icon name="trash-outline" size={22} color="#FF3B30" />
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity onPress={onSave} style={styles.actionButton}>
-            <Icon name="bookmark-outline" size={22} color="#C4975A" />
+          <TouchableOpacity
+            onPress={handleSave}
+            style={styles.actionButton}
+            accessibilityRole="button"
+            accessibilityLabel={bookmarked ? 'Outfit saved' : 'Save outfit'}
+            accessibilityState={{ selected: bookmarked }}
+          >
+            <Icon name={bookmarked ? 'bookmark' : 'bookmark-outline'} size={22} color="#C4975A" />
           </TouchableOpacity>
         )}
       </View>

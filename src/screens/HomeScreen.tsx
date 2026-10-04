@@ -10,7 +10,7 @@
  *   5. Recently added horizontal strip
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   Image,
@@ -30,6 +30,8 @@ import {
   Text,
 } from '../ui';
 import { useTheme } from '../styles/ThemeProvider';
+import LoadError from '../components/LoadError';
+import { summarizeWardrobe } from '../utils/wardrobeSummary';
 import { ClothingItem } from '../types';
 import { getClothingItems } from '../services/storage';
 import { getSavedOutfits } from '../services/outfitService';
@@ -45,19 +47,33 @@ const HomeScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
 
-  const [recentItems, setRecentItems] = useState<ClothingItem[]>([]);
+  // null = not loaded yet (or never loaded successfully): shown as "–", not 0.
+  const [wardrobe, setWardrobe] = useState<ClothingItem[] | null>(null);
+  const [outfitCount, setOutfitCount] = useState<number | null>(null);
+  const [failed, setFailed] = useState({ wardrobe: false, outfits: false });
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [hasProfile, setHasProfile] = useState(true); // optimistic; avoid flash
-  const [stats, setStats] = useState({ totalItems: 0, outfits: 0, wishlist: 0 });
-  const [wardrobeValue, setWardrobeValue] = useState<number>(0);
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [stylePrefs, setStylePrefs] = useState<StylePreference[]>([]);
+  const latestLoad = useRef(0);
 
+  const summary = useMemo(() => (wardrobe ? summarizeWardrobe(wardrobe) : null), [wardrobe]);
+  const recentItems = summary?.recent ?? [];
+  const wardrobeValue = summary?.value ?? 0;
+  const failedSections = [failed.wardrobe && 'wardrobe', failed.outfits && 'outfits'].filter(
+    Boolean,
+  ) as string[];
+  // True when every section that failed is still showing its earlier data.
+  const onlyStale = (!failed.wardrobe || wardrobe !== null) && (!failed.outfits || outfitCount !== null);
+
+  // Each section loads independently, so one failing never zeroes another, and
+  // a failed reload keeps whatever was already on screen. `loading` (the
+  // skeleton) is only for the very first load, not every return to this tab.
   const loadData = useCallback(async () => {
+    const id = ++latestLoad.current;
     try {
-      setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         setIsAuthenticated(true);
@@ -68,27 +84,28 @@ const HomeScreen: React.FC = () => {
         setUserName(null);
       }
 
-      const [wardrobe, outfits, profile, rawStylePrefs] = await Promise.all([
+      const [wardrobeRes, outfitsRes, profileRes, prefsRes] = await Promise.allSettled([
         getClothingItems({ all: true }),
         getSavedOutfits(),
-        getBodyProfile().catch(() => null),
+        getBodyProfile(),
         AsyncStorage.getItem(STYLE_PREFS_KEY),
       ]);
+      if (id !== latestLoad.current) return; // a newer load owns the screen
 
-      const wishlist = wardrobe.filter(item => item.isWishlist);
-      const owned = wardrobe.filter(item => !item.isWishlist);
-      const totalValue = owned.reduce((sum, item) => sum + (item.cost || 0), 0);
-      setStats({ totalItems: owned.length, outfits: outfits.length, wishlist: wishlist.length });
-      setWardrobeValue(totalValue);
-      setHasProfile(!!profile);
-      if (rawStylePrefs) setStylePrefs(JSON.parse(rawStylePrefs));
-
-      const sorted = [...wardrobe].sort((a, b) => {
-        const dateA = a.dateAdded ? new Date(a.dateAdded).getTime() : 0;
-        const dateB = b.dateAdded ? new Date(b.dateAdded).getTime() : 0;
-        return dateB - dateA;
+      if (wardrobeRes.status === 'fulfilled') setWardrobe(wardrobeRes.value);
+      if (outfitsRes.status === 'fulfilled') setOutfitCount(outfitsRes.value.length);
+      setFailed({
+        wardrobe: wardrobeRes.status === 'rejected',
+        outfits: outfitsRes.status === 'rejected',
       });
-      setRecentItems(sorted.slice(0, 10));
+      if (profileRes.status === 'fulfilled') setHasProfile(!!profileRes.value);
+      if (prefsRes.status === 'fulfilled' && prefsRes.value) {
+        try {
+          setStylePrefs(JSON.parse(prefsRes.value));
+        } catch {
+          // Corrupt saved prefs: treat as not set.
+        }
+      }
 
       // Load weather in the background (non-blocking)
       getCurrentLocation()
@@ -97,20 +114,18 @@ const HomeScreen: React.FC = () => {
         .catch(() => {});
     } catch (error) {
       console.error('[HomeScreen] load error:', error);
+      if (id === latestLoad.current) setFailed({ wardrobe: true, outfits: true });
     } finally {
-      setLoading(false);
+      if (id === latestLoad.current) setLoading(false);
     }
   }, []);
 
+  // Runs on mount and on every return to this tab.
   useFocusEffect(
     useCallback(() => {
       loadData();
     }, [loadData]),
   );
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
 
   const greeting = (() => {
     const hour = new Date().getHours();
@@ -126,13 +141,13 @@ const HomeScreen: React.FC = () => {
   }> = [
     {
       label: 'Wardrobe',
-      sub: `${stats.totalItems} items`,
+      sub: summary ? `${summary.owned} items` : 'Your closet',
       icon: 'shirt-outline',
       onPress: () => navigation.navigate('Wardrobe'),
     },
     {
       label: 'Outfits',
-      sub: `${stats.outfits} saved`,
+      sub: outfitCount !== null ? `${outfitCount} saved` : 'Saved looks',
       icon: 'albums-outline',
       onPress: () => navigation.navigate('Outfits'),
     },
@@ -253,19 +268,30 @@ const HomeScreen: React.FC = () => {
       </View>
       <View style={{ marginHorizontal: 20, height: 1, backgroundColor: theme.colors.border, marginBottom: 8 }} />
 
+      {failedSections.length > 0 ? (
+        <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
+          <LoadError
+            variant="banner"
+            what={failedSections.join(' and ')}
+            title={`Couldn't ${onlyStale ? 'refresh' : 'load'} your ${failedSections.join(' and ')}`}
+            onRetry={loadData}
+          />
+        </View>
+      ) : null}
+
       {/* Stats */}
       <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
         <Card padding={0}>
           <View style={styles.statsRow}>
             {[
-              { label: 'Items', value: stats.totalItems },
-              { label: 'Outfits', value: stats.outfits },
-              { label: 'Wishlist', value: stats.wishlist },
+              { label: 'Items', value: summary?.owned ?? null },
+              { label: 'Outfits', value: outfitCount },
+              { label: 'Wishlist', value: summary?.wishlist ?? null },
             ].map((s, i) => (
               <React.Fragment key={s.label}>
                 <View style={styles.statCell}>
                   <Text variant="h1" align="center">
-                    {s.value}
+                    {s.value ?? '–'}
                   </Text>
                   <Text variant="overline" color="muted" align="center" style={{ marginTop: 4 }}>
                     {s.label}
@@ -309,7 +335,7 @@ const HomeScreen: React.FC = () => {
                     : wardrobeValue.toFixed(0)}
                 </Text>
                 <Text variant="caption" style={{ color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>
-                  Across {stats.totalItems} item{stats.totalItems !== 1 ? 's' : ''}
+                  Across {summary?.owned ?? 0} item{summary?.owned !== 1 ? 's' : ''}
                 </Text>
               </View>
               <Icon name="chevron-forward" size={20} color="rgba(255,255,255,0.6)" />
@@ -358,7 +384,7 @@ const HomeScreen: React.FC = () => {
       )}
 
       {/* Style quiz CTA — only if no style prefs set */}
-      {stylePrefs.length === 0 && stats.totalItems > 0 && (
+      {stylePrefs.length === 0 && (summary?.owned ?? 0) > 0 && (
         <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
           <Card bordered>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -447,52 +473,56 @@ const HomeScreen: React.FC = () => {
         </View>
       ) : null}
 
-      {/* Recently added */}
-      <View style={styles.sectionHeader}>
-        <Text variant="overline" color="muted">
-          Recently added
-        </Text>
-        {recentItems.length > 0 ? (
-          <Pressable
-            onPress={() => navigation.navigate('Wardrobe')}
-            accessibilityRole="button"
-            accessibilityLabel="View all recently added items"
-          >
-            <Text variant="label" color="accent">
-              View all
+      {/* Recently added — hidden if the wardrobe failed to load (the banner says so) */}
+      {loading || summary ? (
+        <>
+          <View style={styles.sectionHeader}>
+            <Text variant="overline" color="muted">
+              Recently added
             </Text>
-          </Pressable>
-        ) : null}
-      </View>
+            {recentItems.length > 0 ? (
+              <Pressable
+                onPress={() => navigation.navigate('Wardrobe')}
+                accessibilityRole="button"
+                accessibilityLabel="View all recently added items"
+              >
+                <Text variant="label" color="accent">
+                  View all
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
 
-      {loading ? (
-        <View style={{ flexDirection: 'row', paddingHorizontal: 20, gap: 12 }}>
-          {[0, 1, 2, 3].map(i => (
-            <Skeleton key={i} width={120} height={160} borderRadius={theme.radius.lg} />
-          ))}
-        </View>
-      ) : recentItems.length === 0 ? (
-        <View style={{ paddingHorizontal: 20, marginBottom: 32 }}>
-          <Card bordered>
-            <EmptyState
-              icon={<Icon name="shirt-outline" size={32} color={theme.colors.textSubtle} />}
-              title="Your wardrobe is empty"
-              body="Add your first item to start building outfits."
-              actionLabel="Add item"
-              onAction={() => navigation.navigate('Wardrobe', { screen: 'AddClothing' })}
+          {!summary ? (
+            <View style={{ flexDirection: 'row', paddingHorizontal: 20, gap: 12 }}>
+              {[0, 1, 2, 3].map(i => (
+                <Skeleton key={i} width={120} height={160} borderRadius={theme.radius.lg} />
+              ))}
+            </View>
+          ) : recentItems.length === 0 ? (
+            <View style={{ paddingHorizontal: 20, marginBottom: 32 }}>
+              <Card bordered>
+                <EmptyState
+                  icon={<Icon name="shirt-outline" size={32} color={theme.colors.textSubtle} />}
+                  title="Your wardrobe is empty"
+                  body="Add your first item to start building outfits."
+                  actionLabel="Add item"
+                  onAction={() => navigation.navigate('Wardrobe', { screen: 'AddClothing' })}
+                />
+              </Card>
+            </View>
+          ) : (
+            <FlatList
+              data={recentItems}
+              renderItem={renderRecentItem}
+              keyExtractor={(_, i) => `recent-${i}`}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32, gap: 12 }}
             />
-          </Card>
-        </View>
-      ) : (
-        <FlatList
-          data={recentItems}
-          renderItem={renderRecentItem}
-          keyExtractor={(_, i) => `recent-${i}`}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32, gap: 12 }}
-        />
-      )}
+          )}
+        </>
+      ) : null}
     </Screen>
   );
 };

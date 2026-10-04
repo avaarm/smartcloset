@@ -4,7 +4,7 @@
  * Uses the new 21st.dev-style design system. Theming via useTheme().
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -12,14 +12,23 @@ import {
   RefreshControl,
   Alert,
   Pressable,
+  ScrollView,
 } from 'react-native';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
-import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
+import {
+  useFocusEffect,
+  useNavigation,
+  NavigationProp,
+  ParamListBase,
+} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { Badge, Button, Card, EmptyState, Screen, Text } from '../ui';
+import { Button, Card, EmptyState, Screen, Text } from '../ui';
 import { useTheme } from '../styles/ThemeProvider';
 import { getOwnedClothingItems } from '../services/storage';
 import OutfitCard from '../components/OutfitCard';
+import LoadError from '../components/LoadError';
+import { useLoadable } from '../hooks/useLoadable';
+import { outfitSuggestionKey } from '../utils/outfitSuggestionKey';
 import {
   generateOutfitSuggestions,
   Outfit,
@@ -33,69 +42,100 @@ import { WeatherData } from '../types/weather';
 
 const Tab = createMaterialTopTabNavigator();
 
-const SuggestionsTab = () => {
+type Suggestions = {
+  outfits: Outfit[];
+  weather: WeatherData | null;
+  tips: string[];
+  /** outfitSuggestionKey of the wardrobe these were built from. */
+  key: string | null;
+};
+
+const NO_SUGGESTIONS: Suggestions = { outfits: [], weather: null, tips: [], key: null };
+const NO_OUTFITS: Outfit[] = [];
+
+type Request = {
+  /** Build new suggestions even if the wardrobe is unchanged (pull-to-refresh). */
+  force: boolean;
+  weatherMode: boolean;
+};
+
+/** Empty-state container that still supports pull-to-refresh. */
+const EmptyScroll: React.FC<{
+  refreshing: boolean;
+  onRefresh: () => void;
+  children: React.ReactNode;
+}> = ({ refreshing, onRefresh, children }) => {
+  const { theme } = useTheme();
+  return (
+    <ScrollView
+      contentContainerStyle={styles.emptyScroll}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={theme.colors.accent}
+        />
+      }
+    >
+      {children}
+    </ScrollView>
+  );
+};
+
+export const SuggestionsTab = () => {
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
-  const [outfits, setOutfits] = useState<Outfit[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [weather, setWeather] = useState<WeatherData | null>(null);
-  const [weatherTips, setWeatherTips] = useState<string[]>([]);
   const [useWeatherMode, setUseWeatherMode] = useState(true);
+  // Mirrors what is on screen so a focus reload can tell the wardrobe is unchanged.
+  const shown = useRef<Suggestions>(NO_SUGGESTIONS);
 
-  const generateOutfits = useCallback(async () => {
-    try {
-      setLoading(true);
-      const clothingItems = await getOwnedClothingItems();
+  // A plain reload keeps the suggestions the user is looking at unless the
+  // wardrobe or the weather mode changed; `force` always builds new ones.
+  const generate = useCallback(async ({ force, weatherMode }: Request): Promise<Suggestions> => {
+    const clothingItems = await getOwnedClothingItems();
+    const key = outfitSuggestionKey(clothingItems, weatherMode);
+    if (!force && shown.current.key === key) return shown.current;
 
-      if (clothingItems.length < 2) {
-        setOutfits([]);
-        setWeather(null);
-        setWeatherTips([]);
-        return;
-      }
-
-      if (useWeatherMode) {
-        try {
-          const weatherRec =
-            await WeatherOutfitService.getWeatherBasedRecommendations(clothingItems, 5);
-          setOutfits(weatherRec.recommendedOutfits);
-          setWeather(weatherRec.weather);
-          setWeatherTips(weatherRec.tips);
-        } catch {
-          const suggestions = generateOutfitSuggestions(clothingItems, 5);
-          setOutfits(suggestions);
-          setWeather(null);
-          setWeatherTips([]);
-        }
-      } else {
-        const suggestions = generateOutfitSuggestions(clothingItems, 5);
-        setOutfits(suggestions);
-      }
-    } catch (error) {
-      console.error('Error generating outfits:', error);
-    } finally {
-      setLoading(false);
+    if (clothingItems.length < 2) {
+      return { outfits: [], weather: null, tips: [], key };
     }
-  }, [useWeatherMode]);
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await generateOutfits();
-    setRefreshing(false);
-  }, [generateOutfits]);
-
-  useEffect(() => {
-    generateOutfits();
-  }, [generateOutfits]);
-
-  const handleSaveOutfit = async (outfit: Outfit) => {
-    try {
-      await saveOutfit(outfit);
-    } catch (error) {
-      console.error('Error saving outfit:', error);
+    if (weatherMode) {
+      try {
+        const weatherRec =
+          await WeatherOutfitService.getWeatherBasedRecommendations(clothingItems, 5);
+        return {
+          outfits: weatherRec.recommendedOutfits,
+          weather: weatherRec.weather,
+          tips: weatherRec.tips,
+          key,
+        };
+      } catch {
+        // No location/weather: fall through to plain suggestions.
+      }
     }
-  };
+    return { outfits: generateOutfitSuggestions(clothingItems, 5), weather: null, tips: [], key };
+  }, []);
+
+  const {
+    data: suggestions,
+    failed,
+    loading,
+    blocked,
+    refreshing,
+    reload,
+    refresh,
+  } = useLoadable(generate, NO_SUGGESTIONS);
+  shown.current = suggestions;
+  const { outfits, weather, tips: weatherTips } = suggestions;
+  const request = (force: boolean): Request => ({ force, weatherMode: useWeatherMode });
+
+  // Re-runs when the weather toggle flips, which changes the key and rebuilds.
+  useFocusEffect(
+    useCallback(() => {
+      reload({ force: false, weatherMode: useWeatherMode });
+    }, [reload, useWeatherMode]),
+  );
 
   if (loading) {
     return (
@@ -107,13 +147,33 @@ const SuggestionsTab = () => {
     );
   }
 
+  if (blocked) {
+    return (
+      <View style={[styles.tab, { backgroundColor: theme.colors.background }]}>
+        <View style={styles.center}>
+          <LoadError what="outfit suggestions" onRetry={() => reload(request(false))} />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.tab, { backgroundColor: theme.colors.background }]}>
+      {failed ? (
+        <View style={styles.banner}>
+          <LoadError
+            variant="banner"
+            what="outfit suggestions"
+            title="Couldn't refresh your outfit suggestions"
+            onRetry={() => reload(request(false))}
+          />
+        </View>
+      ) : null}
       {outfits.length > 0 ? (
         <FlatList
           data={outfits}
           renderItem={({ item }) => (
-            <OutfitCard outfit={item} onSave={() => handleSaveOutfit(item)} />
+            <OutfitCard outfit={item} onSave={() => saveOutfit(item)} />
           )}
           keyExtractor={item => item.id}
           contentContainerStyle={{ padding: 16 }}
@@ -162,65 +222,59 @@ const SuggestionsTab = () => {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={onRefresh}
+              onRefresh={() => refresh(request(true))}
               tintColor={theme.colors.accent}
             />
           }
         />
       ) : (
-        <View style={styles.center}>
+        <EmptyScroll refreshing={refreshing} onRefresh={() => refresh(request(true))}>
           <EmptyState
             icon={<Icon name="albums-outline" size={28} color={theme.colors.textSubtle} />}
             title="No Outfit Suggestions"
-            body="Add at least 2 clothing items to your wardrobe to get outfit suggestions."
+            body="Add a top and a bottom, or a dress, to your wardrobe to get outfit suggestions."
           />
           <Button
             label="Create Outfits"
             variant="primary"
             onPress={() => navigation.navigate('ManualOutfitBuilder')}
-            style={{ marginTop: 16 }}
+            style={{ marginTop: 16, alignSelf: 'center' }}
           />
-        </View>
+        </EmptyScroll>
       )}
     </View>
   );
 };
 
-const SavedOutfitsTab = () => {
+export const SavedOutfitsTab = () => {
   const { theme } = useTheme();
-  const [savedOutfits, setSavedOutfits] = useState<Outfit[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const {
+    data: savedOutfits,
+    failed,
+    loading,
+    blocked,
+    refreshing,
+    reload,
+    refresh,
+    update,
+  } = useLoadable(getSavedOutfits, NO_OUTFITS);
 
-  const loadSavedOutfits = useCallback(async () => {
-    try {
-      setLoading(true);
-      const outfits = await getSavedOutfits();
-      setSavedOutfits(outfits);
-    } catch (error) {
-      console.error('Error loading saved outfits:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await loadSavedOutfits();
-    setRefreshing(false);
-  }, [loadSavedOutfits]);
-
-  useEffect(() => {
-    loadSavedOutfits();
-  }, [loadSavedOutfits]);
+  // Reload whenever the tab is shown so an outfit saved from Suggestions (or the
+  // manual builder) appears; the loaded list stays visible while it refreshes.
+  useFocusEffect(
+    useCallback(() => {
+      reload();
+    }, [reload]),
+  );
 
   const handleDeleteOutfit = async (outfitId: string) => {
     try {
       await deleteSavedOutfit(outfitId);
-      setSavedOutfits(savedOutfits.filter(o => o.id !== outfitId));
+      update(list => list.filter(o => o.id !== outfitId));
     } catch (error) {
       console.error('Error deleting outfit:', error);
+      Alert.alert('Could not delete outfit', 'Check your connection and try again.');
     }
   };
 
@@ -245,8 +299,28 @@ const SavedOutfitsTab = () => {
     );
   }
 
+  if (blocked) {
+    return (
+      <View style={[styles.tab, { backgroundColor: theme.colors.background }]}>
+        <View style={styles.center}>
+          <LoadError what="saved outfits" onRetry={reload} />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.tab, { backgroundColor: theme.colors.background }]}>
+      {failed ? (
+        <View style={styles.banner}>
+          <LoadError
+            variant="banner"
+            what="saved outfits"
+            title="Couldn't refresh your saved outfits"
+            onRetry={reload}
+          />
+        </View>
+      ) : null}
       {savedOutfits.length > 0 ? (
         <FlatList
           data={savedOutfits}
@@ -263,13 +337,13 @@ const SavedOutfitsTab = () => {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={onRefresh}
+              onRefresh={() => refresh()}
               tintColor={theme.colors.accent}
             />
           }
         />
       ) : (
-        <View style={styles.center}>
+        <EmptyScroll refreshing={refreshing} onRefresh={() => refresh()}>
           <EmptyState
             icon={<Icon name="bookmark-outline" size={28} color={theme.colors.textSubtle} />}
             title="No Saved Outfits"
@@ -279,9 +353,9 @@ const SavedOutfitsTab = () => {
             label="Browse Suggestions"
             variant="secondary"
             onPress={() => navigation.navigate('Suggestions')}
-            style={{ marginTop: 16 }}
+            style={{ marginTop: 16, alignSelf: 'center' }}
           />
-        </View>
+        </EmptyScroll>
       )}
     </View>
   );
@@ -371,6 +445,16 @@ const styles = StyleSheet.create({
   },
   tab: {
     flex: 1,
+  },
+  banner: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  emptyScroll: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
   },
   center: {
     flex: 1,
