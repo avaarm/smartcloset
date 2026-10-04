@@ -11,6 +11,7 @@ import { useTheme } from '../styles/ThemeProvider';
 import { ClothingItem } from '../types';
 import { getFriendCloset } from '../services/friendService';
 import ClothingCard from '../components/ClothingCard';
+import UserSafetySheet from '../components/UserSafetySheet';
 
 type RouteParams = {
   friendId: string;
@@ -25,6 +26,7 @@ const FriendClosetScreen = () => {
 
   const [items, setItems] = useState<ClothingItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [safetyOpen, setSafetyOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -54,6 +56,14 @@ const FriendClosetScreen = () => {
       <Text variant="h3" style={{ flex: 1, marginLeft: 12 }} numberOfLines={1}>
         {friendName ? `${friendName}’s Closet` : 'Closet'}
       </Text>
+      <Pressable
+        onPress={() => setSafetyOpen(true)}
+        hitSlop={12}
+        accessibilityRole="button"
+        accessibilityLabel={`Report or block ${friendName || 'this person'}`}
+      >
+        <Icon name="ellipsis-horizontal" size={22} color={theme.colors.text} />
+      </Pressable>
     </View>
   );
 
@@ -79,6 +89,17 @@ const FriendClosetScreen = () => {
             />
           ) : null
         }
+      />
+      <UserSafetySheet
+        visible={safetyOpen}
+        userId={friendId}
+        userName={friendName || 'this person'}
+        context="friend_closet"
+        onClose={() => setSafetyOpen(false)}
+        onBlocked={() => {
+          setSafetyOpen(false);
+          navigation.goBack();
+        }}
       />
     </Screen>
   );
