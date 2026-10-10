@@ -1,21 +1,7 @@
-export type MaterialTier =
-  | 'primary'
-  | 'secondary'
-  | 'lining'
-  | 'fill'
-  | 'trim'
-  | 'upper'
-  | 'sole'
-  | 'hardware';
+import type { ClothingCategory, MaterialComponent, MaterialTier, Season } from './clothing';
 
-export interface MaterialComponent {
-  /** Canonical lowercase name: cotton, wool, polyester, leather, nylon, etc. */
-  name: string;
-  /** Percent by weight if known (0–100). Omit for non-blend components. */
-  percentage?: number;
-  /** Which part of the garment. Defaults to 'primary'. */
-  tier?: MaterialTier;
-}
+// One definition of each, in clothing.ts, so the two modules can't drift apart.
+export type { ClothingCategory, MaterialComponent, MaterialTier, Season };
 
 export interface ClothingItem {
   id: string;
@@ -45,19 +31,6 @@ export interface ClothingItem {
   /** Full material composition with tier + percentage — seeds the fabric DB. */
   materials?: MaterialComponent[];
 }
-
-export type ClothingCategory = 'tops' | 'bottoms' | 'dresses' | 'outerwear' | 'shoes' | 'accessories';
-
-export enum ClothingCategoryEnum {
-  TOPS = 'tops',
-  BOTTOMS = 'bottoms',
-  DRESSES = 'dresses',
-  OUTERWEAR = 'outerwear',
-  SHOES = 'shoes',
-  ACCESSORIES = 'accessories'
-}
-
-export type Season = 'spring' | 'summer' | 'fall' | 'winter';
 
 export enum SeasonEnum {
   SPRING = 'spring',

@@ -28,6 +28,8 @@ const ACCESSORIES = ['accessories', 'bags', 'jewelry', 'belts', 'scarves', 'hats
 
 const getCategoryGroup = (category: string): string => {
   const c = category.toLowerCase();
+  // Not part of the everyday tops/bottoms/shoes mix, but real categories rather than "other".
+  if (c === 'activewear' || c === 'swimwear') return c;
   if (TOPS.some(t => c.includes(t))) return 'tops';
   if (BOTTOMS.some(t => c.includes(t))) return 'bottoms';
   if (DRESSES.some(t => c.includes(t))) return 'dresses';

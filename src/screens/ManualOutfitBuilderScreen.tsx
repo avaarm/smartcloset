@@ -18,6 +18,7 @@ import { ClothingItem, ClothingCategory, Season } from '../types';
 import { getClothingItems } from '../services/storage';
 import { saveOutfit } from '../services/outfitService';
 import theme from '../styles/theme';
+import { CLOTHING_CATEGORIES, SEASONS, categoryLabel, isAllSeasons, toggleSeasonChoice } from '../utils/clothingOptions';
 
 const ManualOutfitBuilderScreen = () => {
   const navigation = useNavigation();
@@ -30,17 +31,7 @@ const ManualOutfitBuilderScreen = () => {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const categories: Array<ClothingCategory | 'all'> = [
-    'all',
-    'tops',
-    'bottoms',
-    'dresses',
-    'outerwear',
-    'shoes',
-    'accessories',
-  ];
-
-  const seasons: Season[] = ['spring', 'summer', 'fall', 'winter'];
+  const categories: Array<ClothingCategory | 'all'> = ['all', ...CLOTHING_CATEGORIES];
 
   const occasions = ['Casual', 'Work', 'Formal', 'Date Night', 'Workout', 'Party', 'Travel'];
 
@@ -71,12 +62,10 @@ const ManualOutfitBuilderScreen = () => {
     }
   };
 
-  const toggleSeason = (season: Season) => {
-    if (selectedSeasons.includes(season)) {
-      setSelectedSeasons(selectedSeasons.filter((s) => s !== season));
-    } else {
-      setSelectedSeasons([...selectedSeasons, season]);
-    }
+  // "All" stands for the four seasons, the same as the Add Item form.
+  const allSeasonsOn = isAllSeasons(selectedSeasons);
+  const toggleSeason = (choice: Season | 'all') => {
+    setSelectedSeasons(toggleSeasonChoice(selectedSeasons, choice));
   };
 
   const getFilteredItems = () => {
@@ -163,7 +152,7 @@ const ManualOutfitBuilderScreen = () => {
         <Text style={styles.itemName} numberOfLines={1}>
           {item.name}
         </Text>
-        <Text style={styles.itemCategory}>{item.category}</Text>
+        <Text style={styles.itemCategory}>{categoryLabel(item.category)}</Text>
       </TouchableOpacity>
     );
   };
@@ -224,7 +213,7 @@ const ManualOutfitBuilderScreen = () => {
                   filterCategory === category && styles.filterChipTextActive,
                 ]}
               >
-                {category === 'all' ? 'All' : category}
+                {category === 'all' ? 'All' : categoryLabel(category)}
               </Text>
             </TouchableOpacity>
           ))}
@@ -303,25 +292,22 @@ const ManualOutfitBuilderScreen = () => {
               <View style={styles.modalSection}>
                 <Text style={styles.modalLabel}>Seasons (Optional)</Text>
                 <View style={styles.seasonsContainer}>
-                  {seasons.map((season) => (
-                    <TouchableOpacity
-                      key={season}
-                      style={[
-                        styles.seasonChip,
-                        selectedSeasons.includes(season) && styles.seasonChipActive,
-                      ]}
-                      onPress={() => toggleSeason(season)}
-                    >
-                      <Text
-                        style={[
-                          styles.seasonChipText,
-                          selectedSeasons.includes(season) && styles.seasonChipTextActive,
-                        ]}
+                  {(['all', ...SEASONS] as Array<Season | 'all'>).map((season) => {
+                    const on = season === 'all' ? allSeasonsOn : !allSeasonsOn && selectedSeasons.includes(season);
+                    return (
+                      <TouchableOpacity
+                        key={season}
+                        style={[styles.seasonChip, on && styles.seasonChipActive]}
+                        onPress={() => toggleSeason(season)}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: on }}
                       >
-                        {season}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                        <Text style={[styles.seasonChipText, on && styles.seasonChipTextActive]}>
+                          {season}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               </View>
 

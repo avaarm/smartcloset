@@ -1,6 +1,21 @@
-export type ClothingCategory = 'tops' | 'bottoms' | 'dresses' | 'outerwear' | 'shoes' | 'accessories';
+export type ClothingCategory =
+  | 'tops'
+  | 'bottoms'
+  | 'dresses'
+  | 'outerwear'
+  | 'shoes'
+  | 'bags'
+  | 'jewelry'
+  | 'hats'
+  | 'activewear'
+  | 'swimwear'
+  | 'accessories';
 
-export type Season = 'spring' | 'summer' | 'fall' | 'winter' | 'all';
+/**
+ * The four seasons. Items saved long ago may hold the single value 'all' for
+ * "every season"; normalizeSeasons() in utils/clothingOptions reads those as all four.
+ */
+export type Season = 'spring' | 'summer' | 'fall' | 'winter';
 
 export type Occasion = 'casual' | 'formal' | 'business' | 'sports' | 'party' | 'everyday';
 

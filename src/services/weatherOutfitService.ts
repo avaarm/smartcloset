@@ -78,9 +78,13 @@ export class WeatherOutfitService {
   private static isItemSuitableForTemp(item: ClothingItem, temp: number): boolean {
     const category = item.category;
 
+    // Swimwear only makes sense in the heat; bags and jewelry don't depend on it.
+    if (category === 'swimwear') return temp >= 75;
+    if (category === 'bags' || category === 'jewelry') return true;
+
     if (temp < 40) {
       // Very cold - need warm items
-      return ['outerwear', 'accessories'].includes(category) || 
+      return ['outerwear', 'accessories', 'hats'].includes(category) || 
              (category === 'tops' && item.name.toLowerCase().includes('sweater'));
     } else if (temp < 60) {
       // Cool - layers recommended
@@ -126,6 +130,13 @@ export class WeatherOutfitService {
         }
         if (category === 'accessories') {
           return itemName.includes('scarf') || itemName.includes('glove') || itemName.includes('hat');
+        }
+        // A hat suits the snow unless it's made for the sun; bags and jewelry don't mind.
+        if (category === 'hats') {
+          return !itemName.includes('sun') && !itemName.includes('straw');
+        }
+        if (category === 'bags' || category === 'jewelry') {
+          return true;
         }
         return category === 'outerwear' || itemName.includes('sweater');
 

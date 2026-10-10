@@ -111,7 +111,7 @@ export const sampleOutfits: Outfit[] = [
       {
         id: 'sample-9',
         name: 'Straw Hat',
-        category: 'accessories',
+        category: 'hats',
         retailerImage: 'https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=400',
         color: 'beige',
         season: ['summer'],
@@ -150,7 +150,7 @@ export const sampleOutfits: Outfit[] = [
       {
         id: 'sample-12',
         name: 'Statement Necklace',
-        category: 'accessories',
+        category: 'jewelry',
         retailerImage: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=400',
         color: 'gold',
         season: ['spring', 'summer', 'fall', 'winter'],
@@ -297,7 +297,7 @@ export const sampleOutfits: Outfit[] = [
       {
         id: 'sample-24',
         name: 'Clutch Bag',
-        category: 'accessories',
+        category: 'bags',
         retailerImage: 'https://images.unsplash.com/photo-1566150905458-1bf1fc113f0d?w=400',
         color: 'gold',
         season: ['spring', 'summer', 'fall', 'winter'],

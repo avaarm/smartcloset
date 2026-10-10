@@ -17,6 +17,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import LinearGradient from 'react-native-linear-gradient';
 import theme from '../styles/theme';
 import { ClothingItem } from '../types';
+import { categoryLabel } from '../utils/clothingOptions';
 import { WearTrackingService } from '../services/wearTrackingService';
 import { deleteClothingItem, getClothingItem, updateClothingItem } from '../services/storage';
 
@@ -261,7 +262,7 @@ const ItemDetailsScreen: React.FC = () => {
             <View style={styles.titleRow}>
               <View style={styles.titleContainer}>
                 <Text style={styles.itemName}>{item.name}</Text>
-                <Text style={styles.itemCategory}>{item.category}</Text>
+                <Text style={styles.itemCategory}>{categoryLabel(item.category)}</Text>
               </View>
               <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
                 <Icon name="pencil" size={20} color={theme.colors.accent} />

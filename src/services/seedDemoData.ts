@@ -310,7 +310,7 @@ const seedWishlistItems = async (): Promise<void> => {
     {
       id: 'wish_001',
       name: 'Burgundy Leather Clutch',
-      category: 'accessories' as any,
+      category: 'bags',
       retailerImage: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=500',
       color: 'burgundy',
       season: ['fall' as any, 'winter' as any],
@@ -391,7 +391,7 @@ const seedWishlistItems = async (): Promise<void> => {
     {
       id: 'wish_006',
       name: 'Gold Hoop Earrings',
-      category: 'accessories' as any,
+      category: 'jewelry',
       retailerImage: 'https://images.unsplash.com/photo-1535632787350-4e68ef0ac584?w=500',
       color: 'gold',
       season: ['spring' as any, 'summer' as any, 'fall' as any, 'winter' as any],

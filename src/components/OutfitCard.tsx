@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Outfit } from '../services/outfitService';
 import Icon from 'react-native-vector-icons/Ionicons';
 import theme from '../styles/theme';
+import { categoryLabel } from '../utils/clothingOptions';
 
 interface OutfitCardProps {
   outfit: Outfit;
@@ -101,7 +102,7 @@ const OutfitCard: React.FC<OutfitCardProps> = ({ outfit, onSave, onDelete, onMar
               resizeMode="cover"
             />
             <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-            <Text style={styles.itemCategory}>{item.category}</Text>
+            <Text style={styles.itemCategory}>{categoryLabel(item.category)}</Text>
           </View>
         ))}
       </ScrollView>

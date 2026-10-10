@@ -279,7 +279,7 @@ export const sampleClothes: ClothingItem[] = [
   {
     id: '25',
     name: 'Leather Handbag',
-    category: 'accessories',
+    category: 'bags',
     retailerImage: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=500',
     color: 'brown',
     season: ['spring', 'summer', 'fall', 'winter'],
@@ -312,7 +312,7 @@ export const sampleClothes: ClothingItem[] = [
   {
     id: '28',
     name: 'Watch',
-    category: 'accessories',
+    category: 'jewelry',
     retailerImage: 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=500',
     color: 'silver',
     season: ['spring', 'summer', 'fall', 'winter'],
@@ -323,7 +323,7 @@ export const sampleClothes: ClothingItem[] = [
   {
     id: '29',
     name: 'Statement Necklace',
-    category: 'accessories',
+    category: 'jewelry',
     retailerImage: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=500',
     color: 'gold',
     season: ['spring', 'summer', 'fall', 'winter'],
@@ -334,7 +334,7 @@ export const sampleClothes: ClothingItem[] = [
   {
     id: '30',
     name: 'Crossbody Bag',
-    category: 'accessories',
+    category: 'bags',
     retailerImage: 'https://images.unsplash.com/photo-1566150905458-1bf1fc113f0d?w=500',
     color: 'black',
     season: ['spring', 'summer', 'fall', 'winter'],

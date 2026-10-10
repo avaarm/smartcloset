@@ -11,7 +11,13 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import LinearGradient from 'react-native-linear-gradient';
 import theme from '../styles/theme';
-import { ClothingCategory, Season, ClothingCategoryEnum, SeasonEnum } from '../types';
+import { ClothingCategory, Season } from '../types';
+import {
+  CATEGORY_LABELS,
+  CLOTHING_CATEGORIES,
+  SEASONS,
+  SEASON_ICONS,
+} from '../utils/clothingOptions';
 
 interface FilterModalProps {
   visible: boolean;
@@ -94,8 +100,11 @@ const FilterModal: React.FC<FilterModalProps> = ({
     onApplyFilters(resetFilters);
   };
 
-  const categories = Object.values(ClothingCategoryEnum) as ClothingCategory[];
-  const seasons = Object.values(SeasonEnum) as Season[];
+  // Nothing selected means no filter, so "All" is simply the empty selection.
+  const clearCategories = () => setFilters({ ...filters, categories: [] });
+  const clearSeasons = () => setFilters({ ...filters, seasons: [] });
+  const allCategories = (filters?.categories || []).length === 0;
+  const allSeasons = (filters?.seasons || []).length === 0;
 
   const translateY = slideAnim.interpolate({
     inputRange: [0, 1],
@@ -230,7 +239,16 @@ const FilterModal: React.FC<FilterModalProps> = ({
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Categories</Text>
               <View style={styles.chipsContainer}>
-                {categories.map((category) => (
+                <TouchableOpacity
+                  style={[styles.chip, allCategories && styles.chipActive]}
+                  onPress={clearCategories}
+                  accessibilityRole="button"
+                  accessibilityLabel="All categories"
+                  accessibilityState={{ selected: allCategories }}
+                >
+                  <Text style={[styles.chipText, allCategories && styles.chipTextActive]}>All</Text>
+                </TouchableOpacity>
+                {CLOTHING_CATEGORIES.map((category) => (
                   <TouchableOpacity
                     key={category}
                     style={[
@@ -238,6 +256,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
                       filters?.categories?.includes(category) && styles.chipActive,
                     ]}
                     onPress={() => toggleCategory(category)}
+                    accessibilityState={{ selected: !!filters?.categories?.includes(category) }}
                   >
                     <Text
                       style={[
@@ -245,7 +264,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
                         filters?.categories?.includes(category) && styles.chipTextActive,
                       ]}
                     >
-                      {category}
+                      {CATEGORY_LABELS[category]}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -256,7 +275,16 @@ const FilterModal: React.FC<FilterModalProps> = ({
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Seasons</Text>
               <View style={styles.chipsContainer}>
-                {seasons.map((season) => (
+                <TouchableOpacity
+                  style={[styles.chip, allSeasons && styles.chipActive]}
+                  onPress={clearSeasons}
+                  accessibilityRole="button"
+                  accessibilityLabel="All seasons"
+                  accessibilityState={{ selected: allSeasons }}
+                >
+                  <Text style={[styles.chipText, allSeasons && styles.chipTextActive]}>All</Text>
+                </TouchableOpacity>
+                {SEASONS.map((season) => (
                   <TouchableOpacity
                     key={season}
                     style={[
@@ -264,17 +292,10 @@ const FilterModal: React.FC<FilterModalProps> = ({
                       filters?.seasons?.includes(season) && styles.chipActive,
                     ]}
                     onPress={() => toggleSeason(season)}
+                    accessibilityState={{ selected: !!filters?.seasons?.includes(season) }}
                   >
                     <Icon
-                      name={
-                        season === 'spring'
-                          ? 'flower-outline'
-                          : season === 'summer'
-                          ? 'sunny-outline'
-                          : season === 'fall'
-                          ? 'leaf-outline'
-                          : 'snow-outline'
-                      }
+                      name={SEASON_ICONS[season]}
                       size={16}
                       color={
                         filters?.seasons?.includes(season)

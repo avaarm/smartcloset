@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { rehomeItemImages } from './localImagePaths';
 import { supabase } from '../config/supabase';
 import { getAuthUserId } from './authUser';
+import { EXTRA_CATEGORIES } from '../utils/clothingOptions';
 
 // Define outfit structure
 export interface Outfit {
@@ -14,148 +15,158 @@ export interface Outfit {
   createdAt: string;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Suggestions ─────────────────────────────────────────────────────────────
 
+export interface OutfitSuggestionOptions {
+  /**
+   * What the outfits are for; casual when omitted. Only 'sports' changes what
+   * can be suggested: activewear then forms the outfit, where in any other
+   * occasion it (and swimwear) is never part of one.
+   */
+  occasion?: string;
+}
+
+const capitalize = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** Items with no season listed are suitable year-round. */
+const isYearRound = (item: ClothingItem): boolean => !item.season || item.season.length === 0;
+
+const seasonsOverlap = (a: ClothingItem, b: ClothingItem): boolean =>
+  isYearRound(a) || isYearRound(b) || a.season.some((season: Season) => b.season.includes(season));
+
+const getRandomItem = <T>(array: T[]): T | undefined =>
+  array.length === 0 ? undefined : array[Math.floor(Math.random() * array.length)];
+
+const dressOutfitName = (dress: ClothingItem): string =>
+  dress.color ? `${capitalize(dress.color)} Dress Outfit` : 'Dress Outfit';
+
+const currentSeasonName = (): Season => {
+  const month = new Date().getMonth();
+  if (month >= 2 && month <= 4) return 'spring';
+  if (month >= 5 && month <= 7) return 'summer';
+  if (month >= 8 && month <= 10) return 'fall';
+  return 'winter';
+};
 
 /**
- * Generate outfit suggestions based on available clothing items
+ * Generate outfit suggestions based on available clothing items.
+ *
+ * An outfit is a top and a bottom (or a dress) plus shoes, optionally with
+ * outerwear in the cold and ONE small extra: a bag, jewelry, a hat or an
+ * accessory. The extras only ever finish an outfit; they never stand in for a
+ * top, bottom, dress or shoes.
+ *
  * @param items All clothing items in the wardrobe
  * @param count Number of outfits to generate
  * @returns Array of outfit suggestions
  */
-export const generateOutfitSuggestions = (items: ClothingItem[], count: number = 3): Outfit[] => {
+export const generateOutfitSuggestions = (
+  items: ClothingItem[],
+  count: number = 3,
+  options: OutfitSuggestionOptions = {},
+): Outfit[] => {
   const outfits: Outfit[] = [];
-  
-  // Group items by category
-  const tops = items.filter(item => item.category === 'tops');
-  const bottoms = items.filter(item => item.category === 'bottoms');
-  const dresses = items.filter(item => item.category === 'dresses');
-  const outerwear = items.filter(item => item.category === 'outerwear');
-  const shoes = items.filter(item => item.category === 'shoes');
-  const accessories = items.filter(item => item.category === 'accessories');
-  
-  // Helper function to get random item from array
-  const getRandomItem = <T>(array: T[]): T | undefined => {
-    if (array.length === 0) return undefined;
-    return array[Math.floor(Math.random() * array.length)];
+  const currentSeason = currentSeasonName();
+  const wantsLayer = currentSeason === 'fall' || currentSeason === 'winter';
+
+  const inCategory = (...categories: ClothingItem['category'][]) =>
+    items.filter(item => categories.includes(item.category));
+  const inSeason = (list: ClothingItem[]) =>
+    list.filter(item => isYearRound(item) || item.season.includes(currentSeason));
+
+  const tops = inCategory('tops');
+  const bottoms = inCategory('bottoms');
+  const dresses = inCategory('dresses');
+  const outerwear = inCategory('outerwear');
+  const shoes = inCategory('shoes');
+  const extras = inCategory(...EXTRA_CATEGORIES);
+
+  const makeOutfit = (
+    id: string,
+    name: string,
+    pieces: ClothingItem[],
+    extra: Partial<Outfit> = {},
+  ): Outfit => ({
+    id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${id}`,
+    name,
+    items: pieces,
+    occasion: 'casual',
+    createdAt: new Date().toISOString(),
+    ...extra,
+  });
+
+  /**
+   * Add shoes, a fall/winter layer and one extra to the core pieces. With
+   * `matchSeasons` each must share a season with everything already chosen.
+   */
+  const finish = (
+    core: ClothingItem[],
+    pool: { shoes: ClothingItem[]; outerwear: ClothingItem[]; extras: ClothingItem[] },
+    matchSeasons: boolean,
+  ): ClothingItem[] => {
+    const pieces = [...core];
+    const tryAdd = (candidate: ClothingItem | undefined) => {
+      if (candidate && (!matchSeasons || pieces.every(piece => seasonsOverlap(piece, candidate)))) {
+        pieces.push(candidate);
+      }
+    };
+    tryAdd(getRandomItem(pool.shoes));
+    if (wantsLayer) tryAdd(getRandomItem(pool.outerwear));
+    tryAdd(getRandomItem(pool.extras));
+    return pieces;
   };
-  
-  // Helper function to check if seasons overlap
-  const seasonsOverlap = (item1: ClothingItem, item2: ClothingItem): boolean => {
-    if (!item1.season || !item2.season) return true;
-    return item1.season.some((season: Season) => item2.season!.includes(season));
-  };
-  
-  // Generate outfits based on current season
-  const currentMonth = new Date().getMonth();
-  let currentSeason: Season;
-  
-  // Determine current season
-  if (currentMonth >= 2 && currentMonth <= 4) {
-    currentSeason = 'spring' as const;
-  } else if (currentMonth >= 5 && currentMonth <= 7) {
-    currentSeason = 'summer' as const;
-  } else if (currentMonth >= 8 && currentMonth <= 10) {
-    currentSeason = 'fall' as const;
-  } else {
-    currentSeason = 'winter' as const;
+
+  // Sports: the activewear itself is the outfit (e.g. leggings and a sports top).
+  const activewear = inCategory('activewear');
+  if (options.occasion === 'sports' && activewear.length > 0) {
+    for (let i = 0; i < count; i++) {
+      const first = getRandomItem(activewear)!;
+      const second = getRandomItem(activewear.filter(item => item !== first));
+      const core = second ? [first, second] : [first];
+      outfits.push(
+        makeOutfit(`sports-${i}`, 'Workout Outfit', finish(core, { shoes, outerwear: [], extras }, false), {
+          occasion: 'sports',
+        }),
+      );
+    }
+    return outfits;
   }
-  
+
   // Filter items by current season
-  const seasonalTops = tops.filter(item => !item.season || item.season.includes(currentSeason));
-  const seasonalBottoms = bottoms.filter(item => !item.season || item.season.includes(currentSeason));
-  const seasonalDresses = dresses.filter(item => !item.season || item.season.includes(currentSeason));
-  const seasonalOuterwear = outerwear.filter(item => !item.season || item.season.includes(currentSeason));
-  const seasonalShoes = shoes.filter(item => !item.season || item.season.includes(currentSeason));
-  
+  const seasonal = {
+    tops: inSeason(tops),
+    bottoms: inSeason(bottoms),
+    dresses: inSeason(dresses),
+    outerwear: inSeason(outerwear),
+    shoes: inSeason(shoes),
+    extras: inSeason(extras),
+  };
+
   // Try to create outfits with tops and bottoms
   for (let i = 0; i < count * 2 && outfits.length < count; i++) {
-    if (seasonalTops.length > 0 && seasonalBottoms.length > 0) {
-      const top = getRandomItem(seasonalTops);
-      const bottom = getRandomItem(seasonalBottoms);
-      
-      if (top && bottom && seasonsOverlap(top, bottom)) {
-        const outfitItems: ClothingItem[] = [top, bottom];
-        
-        // Add shoes if available and matching season
-        const shoe = getRandomItem(seasonalShoes);
-        if (shoe && (outfitItems.every(item => seasonsOverlap(item, shoe)))) {
-          outfitItems.push(shoe);
-        }
-        
-        // Add outerwear if it's fall or winter
-        if ((currentSeason === 'fall' || currentSeason === 'winter') && seasonalOuterwear.length > 0) {
-          const jacket = getRandomItem(seasonalOuterwear);
-          if (jacket && (outfitItems.every(item => seasonsOverlap(item, jacket)))) {
-            outfitItems.push(jacket);
-          }
-        }
-        
-        // Add an accessory if available
-        if (accessories.length > 0) {
-          const accessory = getRandomItem(accessories);
-          if (accessory) {
-            outfitItems.push(accessory);
-          }
-        }
-        
-        // Create outfit object
-        const outfit: Outfit = {
-          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${i}`,
-          name: `${currentSeason.charAt(0).toUpperCase() + currentSeason.slice(1)} Outfit`,
-          items: outfitItems,
-          season: [currentSeason],
-          occasion: 'casual',
-          createdAt: new Date().toISOString()
-        };
-        
-        outfits.push(outfit);
-      }
+    const top = getRandomItem(seasonal.tops);
+    const bottom = getRandomItem(seasonal.bottoms);
+    if (top && bottom && seasonsOverlap(top, bottom)) {
+      outfits.push(
+        makeOutfit(
+          String(i),
+          `${capitalize(currentSeason)} Outfit`,
+          finish([top, bottom], seasonal, true),
+          { season: [currentSeason] },
+        ),
+      );
     }
   }
-  
+
   // If we don't have enough outfits, try to create some with dresses
-  if (outfits.length < count && seasonalDresses.length > 0) {
+  if (outfits.length < count && seasonal.dresses.length > 0) {
     for (let i = 0; i < count && outfits.length < count; i++) {
-      const dress = getRandomItem(seasonalDresses);
-      
-      if (dress) {
-        const outfitItems: ClothingItem[] = [dress];
-        
-        // Add shoes if available and matching season
-        const shoe = getRandomItem(seasonalShoes);
-        if (shoe && seasonsOverlap(dress, shoe)) {
-          outfitItems.push(shoe);
-        }
-        
-        // Add outerwear if it's fall or winter
-        if ((currentSeason === 'fall' || currentSeason === 'winter') && seasonalOuterwear.length > 0) {
-          const jacket = getRandomItem(seasonalOuterwear);
-          if (jacket && seasonsOverlap(dress, jacket)) {
-            outfitItems.push(jacket);
-          }
-        }
-        
-        // Add an accessory if available
-        if (accessories.length > 0) {
-          const accessory = getRandomItem(accessories);
-          if (accessory) {
-            outfitItems.push(accessory);
-          }
-        }
-        
-        // Create outfit object
-        const outfit: Outfit = {
-          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}-dress-${i}`,
-          name: `${dress.color || ''} Dress Outfit`,
-          items: outfitItems,
+      const dress = getRandomItem(seasonal.dresses)!;
+      outfits.push(
+        makeOutfit(`dress-${i}`, dressOutfitName(dress), finish([dress], seasonal, true), {
           season: [currentSeason],
-          occasion: 'casual',
-          createdAt: new Date().toISOString()
-        };
-        
-        outfits.push(outfit);
-      }
+        }),
+      );
     }
   }
 
@@ -164,71 +175,14 @@ export const generateOutfitSuggestions = (items: ClothingItem[], count: number =
   // a season). Ignore season constraints entirely rather than surfacing zero
   // suggestions when the wardrobe actually has enough items to combine.
   if (outfits.length === 0) {
+    const anySeason = { shoes, outerwear, extras };
     for (let i = 0; i < count * 2 && outfits.length < count; i++) {
       if (tops.length > 0 && bottoms.length > 0) {
-        const top = getRandomItem(tops);
-        const bottom = getRandomItem(bottoms);
-
-        if (top && bottom) {
-          const outfitItems: ClothingItem[] = [top, bottom];
-
-          const shoe = getRandomItem(shoes);
-          if (shoe) {
-            outfitItems.push(shoe);
-          }
-
-          if ((currentSeason === 'fall' || currentSeason === 'winter') && outerwear.length > 0) {
-            const jacket = getRandomItem(outerwear);
-            if (jacket) {
-              outfitItems.push(jacket);
-            }
-          }
-
-          if (accessories.length > 0) {
-            const accessory = getRandomItem(accessories);
-            if (accessory) {
-              outfitItems.push(accessory);
-            }
-          }
-
-          const outfit: Outfit = {
-            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}-fallback-${i}`,
-            name: 'Outfit Idea',
-            items: outfitItems,
-            occasion: 'casual',
-            createdAt: new Date().toISOString()
-          };
-
-          outfits.push(outfit);
-        }
+        const core = [getRandomItem(tops)!, getRandomItem(bottoms)!];
+        outfits.push(makeOutfit(`fallback-${i}`, 'Outfit Idea', finish(core, anySeason, false)));
       } else if (dresses.length > 0) {
-        const dress = getRandomItem(dresses);
-
-        if (dress) {
-          const outfitItems: ClothingItem[] = [dress];
-
-          const shoe = getRandomItem(shoes);
-          if (shoe) {
-            outfitItems.push(shoe);
-          }
-
-          if (accessories.length > 0) {
-            const accessory = getRandomItem(accessories);
-            if (accessory) {
-              outfitItems.push(accessory);
-            }
-          }
-
-          const outfit: Outfit = {
-            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}-fallback-dress-${i}`,
-            name: `${dress.color || ''} Dress Outfit`,
-            items: outfitItems,
-            occasion: 'casual',
-            createdAt: new Date().toISOString()
-          };
-
-          outfits.push(outfit);
-        }
+        const dress = getRandomItem(dresses)!;
+        outfits.push(makeOutfit(`fallback-dress-${i}`, dressOutfitName(dress), finish([dress], anySeason, false)));
       } else {
         break;
       }

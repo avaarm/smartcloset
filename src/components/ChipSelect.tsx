@@ -12,11 +12,42 @@ type Props<T extends string> = {
   accessibilityLabel?: string;
 };
 
+type MultiProps<T extends string> = {
+  options: ChipOption<T>[];
+  /** Which chips are lit; the caller decides, so a chip like "All" can stand for several. */
+  selected: readonly T[];
+  onToggle: (value: T) => void;
+  accessibilityLabel?: string;
+};
+
 const GOLD = '#C4975A';
+
+type ChipProps = {
+  label: string;
+  selected: boolean;
+  role: 'radio' | 'checkbox';
+  onPress: () => void;
+};
+
+function Chip({ label, selected, role, onPress }: ChipProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.chip, selected && styles.chipSelected]}
+      accessibilityRole={role}
+      accessibilityState={role === 'radio' ? { selected } : { checked: selected }}
+      accessibilityLabel={label}
+      hitSlop={4}
+    >
+      <Text style={[styles.label, selected && styles.labelSelected]}>{label}</Text>
+    </Pressable>
+  );
+}
 
 /**
  * A wrapping row of tappable chips for picking one value. Replaces the iOS
  * scroll-wheel picker, which needs a lot of vertical space to be usable.
+ * The row has no outer margin: the form around it sets the spacing.
  */
 function ChipSelect<T extends string>({ options, value, onChange, allowClear = false, accessibilityLabel }: Props<T>) {
   return (
@@ -24,8 +55,11 @@ function ChipSelect<T extends string>({ options, value, onChange, allowClear = f
       {options.map(opt => {
         const selected = opt.value === value;
         return (
-          <Pressable
+          <Chip
             key={opt.value}
+            label={opt.label}
+            selected={selected}
+            role="radio"
             onPress={() => {
               if (selected) {
                 if (allowClear) onChange(null);
@@ -33,22 +67,32 @@ function ChipSelect<T extends string>({ options, value, onChange, allowClear = f
               }
               onChange(opt.value);
             }}
-            style={[styles.chip, selected && styles.chipSelected]}
-            accessibilityRole="radio"
-            accessibilityState={{ selected }}
-            accessibilityLabel={opt.label}
-            hitSlop={4}
-          >
-            <Text style={[styles.label, selected && styles.labelSelected]}>{opt.label}</Text>
-          </Pressable>
+          />
         );
       })}
     </View>
   );
 }
 
+/** Same look as ChipSelect, for fields where several chips can be on at once. */
+export function ChipMultiSelect<T extends string>({ options, selected, onToggle, accessibilityLabel }: MultiProps<T>) {
+  return (
+    <View style={styles.row} accessibilityLabel={accessibilityLabel}>
+      {options.map(opt => (
+        <Chip
+          key={opt.value}
+          label={opt.label}
+          selected={selected.includes(opt.value)}
+          role="checkbox"
+          onPress={() => onToggle(opt.value)}
+        />
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     minHeight: 40,
     paddingHorizontal: 16,

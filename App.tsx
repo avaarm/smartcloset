@@ -842,6 +842,9 @@ const ModeAwareTabs = () => {
         options={{
           title: 'My Wardrobe',
           tabBarLabel: 'Wardrobe',
+          // Every screen in this stack draws its own header (AddClothing included).
+          // Without this the tab's own "My Wardrobe" bar sat above them, doubling the header.
+          headerShown: false,
           tabBarIcon: ({ color }) => (
             <Icon name="shirt-outline" size={24} color={color} />
           )

@@ -20,6 +20,7 @@ import { Button, Screen, Text } from '../ui';
 import { useTheme } from '../styles/ThemeProvider';
 import { getClothingItems } from '../services/storage';
 import { ClothingItem } from '../types';
+import { categoryLabel } from '../utils/clothingOptions';
 
 type Decision = 'keep' | 'donate' | 'store' | 'skip';
 
@@ -225,8 +226,8 @@ const WardrobeEditScreen: React.FC = () => {
             {current.brand && (
               <Text variant="caption" color="muted">{current.brand}</Text>
             )}
-            <Text variant="caption" color="muted" style={{ textTransform: 'capitalize' }}>
-              {current.category}
+            <Text variant="caption" color="muted">
+              {categoryLabel(current.category)}
             </Text>
             {current.wearCount !== undefined && current.wearCount > 0 && (
               <Text variant="caption" color="muted">· {current.wearCount} wears</Text>

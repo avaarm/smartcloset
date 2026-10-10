@@ -1,4 +1,5 @@
-import { ClothingItem, WardrobeStats, ClothingCategory, Season, ClothingCategoryEnum, SeasonEnum } from '../types';
+import { ClothingItem, WardrobeStats, ClothingCategory, Season } from '../types';
+import { CLOTHING_CATEGORIES, SEASONS } from '../utils/clothingOptions';
 
 export class StatsService {
   static calculateWardrobeStats(items: ClothingItem[]): WardrobeStats {
@@ -12,9 +13,9 @@ export class StatsService {
     }, {} as Record<ClothingCategory, number>);
 
     // Initialize all categories with 0
-    Object.values(ClothingCategoryEnum).forEach(category => {
-      if (!itemsByCategory[category as ClothingCategory]) {
-        itemsByCategory[category as ClothingCategory] = 0;
+    CLOTHING_CATEGORIES.forEach(category => {
+      if (!itemsByCategory[category]) {
+        itemsByCategory[category] = 0;
       }
     });
 
@@ -28,9 +29,9 @@ export class StatsService {
     }, {} as Record<Season, number>);
 
     // Initialize all seasons with 0
-    Object.values(SeasonEnum).forEach(season => {
-      if (!itemsBySeason[season as Season]) {
-        itemsBySeason[season as Season] = 0;
+    SEASONS.forEach(season => {
+      if (!itemsBySeason[season]) {
+        itemsBySeason[season] = 0;
       }
     });
 

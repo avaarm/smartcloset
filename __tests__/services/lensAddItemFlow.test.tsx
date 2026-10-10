@@ -271,7 +271,11 @@ describe('re-picking a photo while the previous one is still being searched', ()
 
   it('drops the old photo\'s analysis if a newer photo was picked first', async () => {
     const analysisA = defer<any>();
-    analyze.mockReturnValueOnce(analysisA.promise).mockResolvedValueOnce(realResult({ color: 'red' }));
+    // Photo B is a red dress, so the "Red dress" result below is a match for it
+    // (the ranking drops a dress when the photo shows a shirt).
+    analyze
+      .mockReturnValueOnce(analysisA.promise)
+      .mockResolvedValueOnce(realResult({ color: 'red', subtype: 'dress', category: 'dresses' }));
     search.mockResolvedValue({
       query: '',
       bestGuessLabels: [],

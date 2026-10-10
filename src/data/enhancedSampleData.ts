@@ -107,7 +107,7 @@ export const enhancedClothingItems: ClothingItem[] = [
   {
     id: '26',
     name: 'Leather Tote Bag',
-    category: 'accessories' as any,
+    category: 'bags',
     retailerImage: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=500',
     color: 'brown',
     season: ['spring' as any, 'summer' as any, 'fall' as any, 'winter' as any],
@@ -328,7 +328,7 @@ export const enhancedClothingItems: ClothingItem[] = [
   {
     id: '27',
     name: 'Gold Hoop Earrings',
-    category: 'accessories' as any,
+    category: 'jewelry',
     retailerImage: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=500',
     color: 'gold',
     season: ['spring' as any, 'summer' as any, 'fall' as any, 'winter' as any],
@@ -686,7 +686,7 @@ export const enhancedClothingItems: ClothingItem[] = [
   {
     id: '47',
     name: 'Crossbody Bag',
-    category: 'accessories' as any,
+    category: 'bags',
     retailerImage: 'https://images.unsplash.com/photo-1590874103328-eac38a683ce7?w=500',
     color: 'black',
     season: ['spring' as any, 'summer' as any, 'fall' as any, 'winter' as any],
@@ -737,7 +737,7 @@ export const enhancedClothingItems: ClothingItem[] = [
   {
     id: '50',
     name: 'Wool Beanie',
-    category: 'accessories' as any,
+    category: 'hats',
     retailerImage: 'https://images.unsplash.com/photo-1576871337632-b9aef4c17ab9?w=500',
     color: 'gray',
     season: ['fall' as any, 'winter' as any],
@@ -754,7 +754,7 @@ export const enhancedClothingItems: ClothingItem[] = [
   {
     id: '51',
     name: 'Statement Necklace',
-    category: 'accessories' as any,
+    category: 'jewelry',
     retailerImage: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=500',
     color: 'gold',
     season: ['spring' as any, 'summer' as any, 'fall' as any, 'winter' as any],
@@ -771,7 +771,7 @@ export const enhancedClothingItems: ClothingItem[] = [
   {
     id: '52',
     name: 'Watch',
-    category: 'accessories' as any,
+    category: 'jewelry',
     retailerImage: 'https://images.unsplash.com/photo-1524592094714-0f0654e20314?w=500',
     color: 'silver',
     season: ['spring' as any, 'summer' as any, 'fall' as any, 'winter' as any],

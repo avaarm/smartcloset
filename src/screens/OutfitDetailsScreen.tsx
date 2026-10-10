@@ -18,6 +18,7 @@ import { Outfit } from '../services/outfitService';
 import { WearTrackingService } from '../services/wearTrackingService';
 import { OutfitHistory } from '../types';
 import theme from '../styles/theme';
+import { categoryLabel } from '../utils/clothingOptions';
 
 type RouteParams = {
   OutfitDetails: {
@@ -200,7 +201,7 @@ const OutfitDetailsScreen = () => {
                 <Text style={styles.itemName} numberOfLines={1}>
                   {item.name}
                 </Text>
-                <Text style={styles.itemCategory}>{item.category}</Text>
+                <Text style={styles.itemCategory}>{categoryLabel(item.category)}</Text>
               </View>
             ))}
           </ScrollView>

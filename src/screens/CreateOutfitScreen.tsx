@@ -20,6 +20,12 @@ import { ClothingItem } from '../types';
 import { getOwnedClothingItems } from '../services/storage';
 import { saveOutfit, Outfit } from '../services/outfitService';
 import theme from '../styles/theme';
+import {
+  CATEGORY_ICONS,
+  CATEGORY_LABELS,
+  CLOTHING_CATEGORIES,
+  categoryLabel,
+} from '../utils/clothingOptions';
 
 const { width } = Dimensions.get('window');
 
@@ -35,12 +41,7 @@ const CreateOutfitScreen: React.FC = () => {
 
   const categories = [
     { id: 'all', label: 'All', icon: 'apps-outline' },
-    { id: 'tops', label: 'Tops', icon: 'shirt-outline' },
-    { id: 'bottoms', label: 'Bottoms', icon: 'fitness-outline' },
-    { id: 'dresses', label: 'Dresses', icon: 'woman-outline' },
-    { id: 'outerwear', label: 'Outerwear', icon: 'snow-outline' },
-    { id: 'shoes', label: 'Shoes', icon: 'footsteps-outline' },
-    { id: 'accessories', label: 'Accessories', icon: 'watch-outline' },
+    ...CLOTHING_CATEGORIES.map(id => ({ id: id as string, label: CATEGORY_LABELS[id], icon: CATEGORY_ICONS[id] })),
   ];
 
   const occasions = [
@@ -158,7 +159,7 @@ const CreateOutfitScreen: React.FC = () => {
           <Text style={styles.availableItemName} numberOfLines={1}>
             {item.name}
           </Text>
-          <Text style={styles.availableItemCategory}>{item.category}</Text>
+          <Text style={styles.availableItemCategory}>{categoryLabel(item.category)}</Text>
         </View>
       </TouchableOpacity>
     );

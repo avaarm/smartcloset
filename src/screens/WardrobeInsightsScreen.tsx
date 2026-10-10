@@ -23,26 +23,12 @@ import { Card, Screen, Text, Badge, EmptyState } from '../ui';
 import { useTheme } from '../styles/ThemeProvider';
 import { ClothingItem, ClothingCategory } from '../types';
 import { getClothingItems } from '../services/storage';
-
-// ─── Category colors ────────────────────────────────────────────────────────
-
-const CATEGORY_COLORS: Record<ClothingCategory, string> = {
-  tops: '#D9B978',
-  bottoms: '#9C7A4A',
-  dresses: '#C48A82',
-  outerwear: '#C4A962',
-  shoes: '#C4975A',
-  accessories: '#8A6D4E',
-};
-
-const CATEGORY_ICONS: Record<ClothingCategory, string> = {
-  tops: 'shirt-outline',
-  bottoms: 'resize-outline',
-  dresses: 'body-outline',
-  outerwear: 'cloudy-outline',
-  shoes: 'footsteps-outline',
-  accessories: 'watch-outline',
-};
+import {
+  CATEGORY_COLORS,
+  CATEGORY_ICONS,
+  CLOTHING_CATEGORIES,
+  categoryLabel,
+} from '../utils/clothingOptions';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -176,12 +162,15 @@ const WardrobeInsightsScreen: React.FC = () => {
     .slice(0, 5);
   const idleTotal = idleItems.reduce((s, x) => s + x.tiedUp, 0);
 
-  // Category breakdown
-  const categoryBreakdown: Record<ClothingCategory, number> = {
-    tops: 0, bottoms: 0, dresses: 0, outerwear: 0, shoes: 0, accessories: 0,
-  };
+  // Category breakdown: only the categories the wardrobe actually has, most first
+  // (eleven rows, most of them empty, would bury the ones that matter).
+  const categoryBreakdown = {} as Record<ClothingCategory, number>;
+  CLOTHING_CATEGORIES.forEach(c => { categoryBreakdown[c] = 0; });
   items.forEach(i => { categoryBreakdown[i.category] = (categoryBreakdown[i.category] || 0) + 1; });
-  const maxCatCount = Math.max(...Object.values(categoryBreakdown), 1);
+  const categoryRows = (Object.entries(categoryBreakdown) as [ClothingCategory, number][])
+    .filter(([, count]) => count > 0)
+    .sort(([, a], [, b]) => b - a);
+  const maxCatCount = Math.max(...categoryRows.map(([, count]) => count), 1);
 
   // Most & least worn
   const worn = items.filter(i => (i.wearCount || 0) > 0).sort((a, b) => (b.wearCount || 0) - (a.wearCount || 0));
@@ -279,12 +268,12 @@ const WardrobeInsightsScreen: React.FC = () => {
       {/* ── Category Breakdown ── */}
       <Text variant="h3" style={s.sectionTitle}>Category Breakdown</Text>
       <Card style={{ marginBottom: 20 }}>
-        {(Object.entries(categoryBreakdown) as [ClothingCategory, number][]).map(([cat, count]) => (
+        {categoryRows.map(([cat, count]) => (
           <View key={cat} style={s.barRow}>
             <View style={s.barLabel}>
               <Icon name={CATEGORY_ICONS[cat]} size={18} color={CATEGORY_COLORS[cat]} />
-              <Text variant="label" style={{ marginLeft: 8, textTransform: 'capitalize' }}>
-                {cat}
+              <Text variant="label" numberOfLines={1} style={{ marginLeft: 8, flexShrink: 1 }}>
+                {categoryLabel(cat)}
               </Text>
             </View>
             <View style={s.barTrack}>
@@ -576,7 +565,7 @@ const s = StyleSheet.create({
   barLabel: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: 110,
+    width: 124,
   },
   barTrack: {
     flex: 1,
