@@ -173,9 +173,10 @@ describe('searchByImage', () => {
       expect(r.url).toMatch(/^https?:\/\//);
       expect(r.imageUrl === '' || r.imageUrl.startsWith('https://')).toBe(true);
     }
-    // page links stay as given (not rewritten), image-only matches link to the image page as given
+    // page links stay as given (not rewritten); a bare similar image is a picture, not a result
     expect(res.results.find(r => r.title === 'ok')?.url).toBe('http://www.zara.com/p1');
-    expect(res.results.find(r => r.id.startsWith('sim-'))?.imageUrl).toBe('https://cdn.zara.net/s2.jpg');
+    expect(res.results.some(r => r.id.startsWith('sim-'))).toBe(false);
+    expect(res.results.some(r => r.url.endsWith('.jpg'))).toBe(false);
   });
 
   it('returns an empty list, not invented products, when the web has nothing', async () => {
@@ -254,7 +255,11 @@ describe('searchProductsByText', () => {
 
     const res = await lens.searchProductsByText('  burgundy clutch ');
 
-    expect(proxy).toHaveBeenCalledWith('brave', { q: 'burgundy clutch', num: 10, safe: 'active' });
+    // Resale hosts are excluded at the source and plenty of results are asked for, since many get filtered.
+    expect(proxy).toHaveBeenCalledWith(
+      'brave',
+      expect.objectContaining({ q: expect.stringMatching(/^burgundy clutch -site:ebay\.com /), num: 50, safe: 'active' }),
+    );
     expect(res.error).toBeUndefined();
     const byTitle = Object.fromEntries(res.results.map(r => [r.title, r]));
     expect(Object.keys(byTitle).sort()).toEqual(['Burgundy clutch', 'No image', 'Old shop']);
@@ -301,12 +306,13 @@ describe('no invented catalog', () => {
 });
 
 describe('refineLensResults (unchanged behaviour)', () => {
+  // Each result has its own picture: the same picture twice is one product.
   const r = (over: Partial<lens.LensResult>): lens.LensResult => ({
     id: 'x',
     title: 'Burgundy leather clutch',
     source: 'net-a-porter.com',
     url: 'https://www.net-a-porter.com/clutch-1',
-    imageUrl: 'https://img.example.com/1.jpg',
+    imageUrl: `https://img.example.com/${over.id ?? 'x'}.jpg`,
     similarity: 0.5,
     isShopping: true,
     ...over,

@@ -1,10 +1,11 @@
 /**
  * MatchPickerSheet — "Which one is this?" section shown after AI analysis.
  *
- * Three ordered result tiers:
+ * Ordered result tiers:
  *   1. Knowledge-base matches (crowd-sourced, high confidence)
- *   2. Vision lens shopping results (web detection, filtered + ranked)
- *   3. User-driven extra searches (text, URL paste)
+ *   2. Web results: the Vision lens search and the person's own extra searches
+ *      (text, URL paste), together ranked shops first and second-hand last,
+ *      each card labelled with the kind of site
  *
  * Only real matches are ever shown. When there are none (or the search
  * failed) the sheet says so and the user fills in the details themselves.
@@ -15,7 +16,7 @@
  * 'manual'), growing the KB either way.
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -34,8 +35,11 @@ import {
   type LensResult,
 } from '../services/lensSearchService';
 import { fetchProductMetadata } from '../services/productUrlService';
+import { brandFromHost, sourceKindOf } from '../services/retailerDomains';
+import { sortByTier } from '../services/searchRanking';
 import type { KBMatch } from '../services/productContributions';
 import theme from '../styles/theme';
+import SourceKindBadge from '../components/SourceKindBadge';
 
 export type PickedMatch = {
   name: string;
@@ -76,6 +80,8 @@ const MatchPickerSheet: React.FC<Props> = ({
 }) => {
   // Additional results from user-driven searches (text / URL)
   const [extraResults, setExtraResults] = useState<LensResult[]>([]);
+  // A page the person pasted is the match they asked for: it stays first, whatever the site is.
+  const [pastedResults, setPastedResults] = useState<LensResult[]>([]);
   const [extraLoading, setExtraLoading] = useState(false);
   // Outcome of the last user-driven search when it found nothing or failed.
   const [extraMessage, setExtraMessage] = useState<string | null>(null);
@@ -83,8 +89,18 @@ const MatchPickerSheet: React.FC<Props> = ({
   const [textQuery, setTextQuery] = useState('');
   const [urlQuery, setUrlQuery] = useState('');
 
-  const hasResults =
-    kbMatches.length > 0 || lensResults.length > 0 || extraResults.length > 0;
+  // One list, so a shop found by the person's own search is not stuck behind
+  // second-hand listings from the photo search. Ties keep their order.
+  const webResults = useMemo(() => {
+    const seen = new Set(lensResults.map(r => r.url));
+    const card = (r: LensResult, key: string) => ({ r, key, source: r.source, sourceKind: sourceKindOf(r) });
+    return sortByTier([
+      ...lensResults.map(r => card(r, `lens-${r.id}`)),
+      ...extraResults.filter(r => !seen.has(r.url)).map(r => card(r, `extra-${r.id}`)),
+    ]);
+  }, [lensResults, extraResults]);
+
+  const hasResults = kbMatches.length > 0 || pastedResults.length > 0 || webResults.length > 0;
 
   // ── Extra search handlers ──
 
@@ -95,15 +111,12 @@ const MatchPickerSheet: React.FC<Props> = ({
     setExtraMessage(null);
     try {
       const resp = await searchProductsByText(q);
-      // Only keep shopping-domain results with a real image URL —
-      // everything else (YouTube, Pinterest, blogs) is dropped upstream
-      // by lensSearchService, but belt-and-braces here too.
-      const shopOnly = resp.results.filter(
-        r => r.isShopping && !!toSecureImageUrl(r.imageUrl),
-      );
-      setExtraResults(prev => mergeUniqueById(prev, shopOnly));
+      // A card without a picture is no use for picking a match. YouTube,
+      // Pinterest and blogs are already dropped by lensSearchService.
+      const withImage = resp.results.filter(r => !!toSecureImageUrl(r.imageUrl));
+      setExtraResults(prev => mergeUniqueById(prev, withImage));
       if (resp.error) setExtraMessage(resp.error);
-      else if (shopOnly.length === 0) setExtraMessage('No results for that search. Try different words.');
+      else if (withImage.length === 0) setExtraMessage('No shop results for that. Try fewer words.');
     } catch (err: any) {
       console.warn('[MatchPicker] text search failed:', err?.message);
       setExtraMessage("Couldn't search right now. Check your connection and try again.");
@@ -120,7 +133,7 @@ const MatchPickerSheet: React.FC<Props> = ({
     try {
       const result = await fetchProductMetadata(u);
       if (result) {
-        setExtraResults(prev => mergeUniqueById(prev, [result]));
+        setPastedResults(prev => mergeUniqueById(prev, [result]));
         setUrlQuery('');
       } else {
         Alert.alert('Couldn\'t read that page', 'Try a different product URL.');
@@ -189,11 +202,11 @@ const MatchPickerSheet: React.FC<Props> = ({
             {kbMatches.map((m, idx) => (
               <KBCard key={`kb-${idx}`} match={m} onPick={onPick} />
             ))}
-            {lensResults.map(r => (
-              <LensCard key={`lens-${r.id}`} result={r} onPick={onPick} badge="Shop" />
+            {pastedResults.map(r => (
+              <LensCard key={`pasted-${r.id}`} result={r} onPick={onPick} />
             ))}
-            {extraResults.map(r => (
-              <LensCard key={`extra-${r.id}`} result={r} onPick={onPick} badge="More" />
+            {webResults.map(({ r, key }) => (
+              <LensCard key={key} result={r} onPick={onPick} />
             ))}
           </View>
         </ScrollView>
@@ -348,8 +361,7 @@ const KBCard: React.FC<{
 const LensCard: React.FC<{
   result: LensResult;
   onPick: (p: PickedMatch) => void;
-  badge: string;
-}> = ({ result, onPick, badge }) => {
+}> = ({ result, onPick }) => {
   const parsedCost = (() => {
     if (!result.price) return undefined;
     const n = parseFloat(result.price.replace(/[^\d.]/g, ''));
@@ -361,13 +373,8 @@ const LensCard: React.FC<{
   const imageUri = toSecureImageUrl(result.imageUrl);
   const [imageFailed, setImageFailed] = useState(false);
 
-  const brandGuess = (() => {
-    const host = result.source.replace(/^www\./, '').split('.')[0];
-    if (host && !['www', 'shop', 'store', 'us', 'uk'].includes(host)) {
-      return host.charAt(0).toUpperCase() + host.slice(1);
-    }
-    return undefined;
-  })();
+  // Only a brand's own site names the brand; eBay or a department store sells every brand.
+  const brandGuess = brandFromHost(result.source);
 
   return (
     <Pressable
@@ -396,9 +403,7 @@ const LensCard: React.FC<{
         </View>
       )}
       <View style={styles.cardBody}>
-        <View style={styles.shopBadge}>
-          <Text style={styles.shopBadgeText}>{badge}</Text>
-        </View>
+        <SourceKindBadge kind={sourceKindOf(result)} />
         <Text style={styles.cardTitle} numberOfLines={2}>
           {result.title}
         </Text>
@@ -494,15 +499,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   kbBadgeText: { fontSize: 9, fontWeight: '600', color: '#4338CA' },
-  shopBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: theme.colors.accent,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginBottom: 4,
-  },
-  shopBadgeText: { fontSize: 9, fontWeight: '600', color: '#FFFFFF' },
   cardTitle: {
     fontSize: 12,
     fontWeight: '500',

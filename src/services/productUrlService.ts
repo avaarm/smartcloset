@@ -10,7 +10,9 @@
  * no usable tags) — the caller should fall back to letting the user type.
  */
 
-import type { LensResult } from './lensSearchService';
+import { toSecureImageUrl, type LensResult } from './lensSearchService';
+import { classifyUrl } from './retailerDomains';
+import { cleanResultTitle } from './searchRanking';
 
 type OgMatch = {
   title?: string;
@@ -203,13 +205,16 @@ export const fetchProductMetadata = async (
     const source = hostOf(fullUrl) || merged.siteName || 'unknown';
     return {
       id: `url-${Date.now()}`,
-      title: (merged.title || source).substring(0, 120),
+      // "Gucci Jackie | GUCCI US" becomes the item's name: drop the site suffix.
+      title: cleanResultTitle(merged.title || source, source, 120),
       source,
       url: fullUrl,
-      imageUrl: /^https?:\/\//i.test(merged.image || '') ? merged.image! : '',
+      // iOS blocks plain-http pictures: use the https form, and nothing that is not a web URL.
+      imageUrl: toSecureImageUrl(merged.image),
       price: formatPrice(merged.price, merged.priceCurrency),
       similarity: 1, // user-chosen URL is a perfect "match"
       isShopping: true,
+      sourceKind: classifyUrl(fullUrl),
     };
   } catch (e: any) {
     console.warn('[productUrl] fetch failed:', e?.message);

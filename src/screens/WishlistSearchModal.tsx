@@ -5,11 +5,15 @@
  *   1. Text search — product search results from the web
  *   2. Photo search — reuse the existing Vision-based reverse-image pipeline
  *
+ * Shops come first and each card says what kind of site it is. Second-hand
+ * listings (eBay, Poshmark...) are left out once there are enough shop
+ * results, unless "Include resale" is on.
+ *
  * Tap a result → saves it as a wishlist item (isWishlist=true) with the
  * retailer image, title, brand guess, source URL, and a best-guess category.
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -31,12 +35,21 @@ import {
   type LensResult,
   type LensSearchResponse,
 } from '../services/lensSearchService';
-
-const SEARCH_FAILED_MESSAGE = "Couldn't search right now. Check your connection and try again.";
+import { brandFromHost, sourceKindOf } from '../services/retailerDomains';
+import { selectVisibleResults } from '../services/searchRanking';
+import { categoryFromText } from '../utils/clothingCategories';
 import { pickImageFromLibrary } from '../platform/imagePicker';
 import { saveClothingItem } from '../services/storage';
 import type { ClothingCategory } from '../types/clothing';
 import theme from '../styles/theme';
+import IncludeResaleToggle from '../components/IncludeResaleToggle';
+import SourceKindBadge from '../components/SourceKindBadge';
+
+const SEARCH_FAILED_MESSAGE = "Couldn't search right now. Check your connection and try again.";
+
+// Resale is already kept whenever shops are scarce, so "include resale" never fixes an empty list.
+export const EMPTY_TEXT_RESULTS_MESSAGE = 'No results for that. Try different or fewer words.';
+export const EMPTY_PHOTO_RESULTS_MESSAGE = 'No matches found. Try a clearer photo or a different angle.';
 
 type Props = {
   visible: boolean;
@@ -49,29 +62,14 @@ type Mode = 'text' | 'image';
 
 // ─── Heuristic parsers ──────────────────────────────────────────────────────
 
-const guessCategory = (title: string): ClothingCategory => {
-  const t = title.toLowerCase();
-  if (/\b(shoe|sneaker|boot|heel|loafer|sandal|flat)s?\b/.test(t)) return 'shoes';
-  if (
-    /\b(bag|clutch|tote|purse|backpack|hat|belt|scarf|earring|hoop|necklace|bracelet|watch|sunglass)/.test(
-      t,
-    )
-  )
-    return 'accessories';
-  if (/\b(dress|gown|jumpsuit|romper)\b/.test(t)) return 'dresses';
-  if (/\b(pant|jean|trouser|short|skirt|chino|legging)s?\b/.test(t)) return 'bottoms';
-  if (/\b(coat|jacket|blazer|parka|vest|trench)\b/.test(t)) return 'outerwear';
-  return 'tops';
-};
+// The shared whole-word matcher: a bag is bags, a necklace jewelry, a hat hats. A
+// title that names no product ("Andiamo Large") is a small thing of some kind.
+export const guessCategory = (title: string): ClothingCategory =>
+  categoryFromText(title) ?? 'accessories';
 
-const guessBrand = (title: string, source: string): string | undefined => {
-  const host = source.replace(/^www\./, '').split('.')[0];
-  if (host && !['www', 'shop', 'store', 'us', 'uk'].includes(host)) {
-    return host.charAt(0).toUpperCase() + host.slice(1);
-  }
-  const first = title.split(/[\s,]/)[0];
-  return first && first.length > 1 ? first : undefined;
-};
+// Only a brand's own site says what the brand is. A department store, eBay or a
+// shop we do not know sells other people's brands, so the retailer is never the brand.
+export const guessBrand = (source: string): string | undefined => brandFromHost(source);
 
 const parsePrice = (priceStr?: string): number | undefined => {
   if (!priceStr) return undefined;
@@ -89,12 +87,28 @@ const WishlistSearchModal: React.FC<Props> = ({ visible, onClose, onAdded }) => 
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [response, setResponse] = useState<LensSearchResponse | null>(null);
   const [addingId, setAddingId] = useState<string | null>(null);
+  // Kept while the modal stays mounted, so closing and reopening it does not
+  // turn resale back off.
+  const [includeResale, setIncludeResale] = useState(false);
+  // A search that was started later (or the modal closing) makes an earlier
+  // one's answer stale: it must not replace what is on screen.
+  const searchSeq = useRef(0);
+  // The text search the results on screen came from, so flipping "Include
+  // resale" can repeat it. Null after a photo search, which already holds the
+  // resale listings and only needs filtering.
+  const shownTextQuery = useRef<string | null>(null);
+  // Which kind of search the answer on screen came from: the tabs can be flipped
+  // while it is showing, and its empty-state advice has to fit the search that ran.
+  const [answerMode, setAnswerMode] = useState<Mode>('text');
 
   const resetState = useCallback(() => {
+    searchSeq.current += 1;
+    shownTextQuery.current = null;
     setQuery('');
     setPhotoUri(null);
     setResponse(null);
     setAddingId(null);
+    setLoading(false);
   }, []);
 
   const handleClose = useCallback(() => {
@@ -102,45 +116,68 @@ const WishlistSearchModal: React.FC<Props> = ({ visible, onClose, onAdded }) => 
     onClose();
   }, [onClose, resetState]);
 
-  const runTextSearch = useCallback(async () => {
-    if (!query.trim()) return;
+  const searchText = useCallback(async (text: string, resale: boolean) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const seq = ++searchSeq.current;
+    shownTextQuery.current = trimmed;
+    setAnswerMode('text');
     setLoading(true);
     setResponse(null);
     try {
-      const result = await searchProductsByText(query);
-      setResponse(result);
+      const result = await searchProductsByText(trimmed, { includeResale: resale });
+      if (seq === searchSeq.current) setResponse(result);
     } catch (err: any) {
-      setResponse({
-        query,
-        bestGuessLabels: [],
-        results: [],
-        error: SEARCH_FAILED_MESSAGE,
-      });
+      if (seq === searchSeq.current) {
+        setResponse({ query: trimmed, bestGuessLabels: [], results: [], error: SEARCH_FAILED_MESSAGE });
+      }
     } finally {
-      setLoading(false);
+      if (seq === searchSeq.current) setLoading(false);
     }
-  }, [query]);
+  }, []);
+
+  const runTextSearch = useCallback(() => searchText(query, includeResale), [searchText, query, includeResale]);
 
   const runImageSearch = useCallback(async () => {
     const picked = await pickImageFromLibrary();
     if (!picked) return;
+    const seq = ++searchSeq.current;
+    shownTextQuery.current = null;
+    setAnswerMode('image');
     setPhotoUri(picked.uri);
     setLoading(true);
     setResponse(null);
     try {
       const result = await searchByImage(picked.uri);
-      setResponse(result);
+      if (seq === searchSeq.current) setResponse(result);
     } catch (err: any) {
-      setResponse({
-        query: '',
-        bestGuessLabels: [],
-        results: [],
-        error: SEARCH_FAILED_MESSAGE,
-      });
+      if (seq === searchSeq.current) {
+        setResponse({
+          query: '',
+          bestGuessLabels: [],
+          results: [],
+          error: SEARCH_FAILED_MESSAGE,
+        });
+      }
     } finally {
-      setLoading(false);
+      if (seq === searchSeq.current) setLoading(false);
     }
   }, []);
+
+  const toggleResale = useCallback(
+    (value: boolean) => {
+      setIncludeResale(value);
+      if (shownTextQuery.current) searchText(shownTextQuery.current, value);
+    },
+    [searchText],
+  );
+
+  // A text search has already left resale out (or in); a photo search returns
+  // everything, so the same rule is applied here to both.
+  const results = useMemo(
+    () => (response ? selectVisibleResults(response.results, includeResale) : []),
+    [response, includeResale],
+  );
 
   const addToWishlist = useCallback(
     async (r: LensResult) => {
@@ -153,7 +190,7 @@ const WishlistSearchModal: React.FC<Props> = ({ visible, onClose, onAdded }) => 
           retailerImage: r.imageUrl,
           color: '',
           season: [],
-          brand: guessBrand(r.title, r.source) || '',
+          brand: guessBrand(r.source) || '',
           retailer: r.source,
           dateAdded: new Date().toISOString(),
           isWishlist: true,
@@ -244,6 +281,7 @@ const WishlistSearchModal: React.FC<Props> = ({ visible, onClose, onAdded }) => 
               autoCapitalize="none"
               autoCorrect={false}
               autoFocus
+              accessibilityLabel="Search for a product"
             />
             {query.length > 0 && (
               <Pressable onPress={() => setQuery('')} hitSlop={12}>
@@ -266,6 +304,8 @@ const WishlistSearchModal: React.FC<Props> = ({ visible, onClose, onAdded }) => 
             )}
           </Pressable>
         )}
+
+        <IncludeResaleToggle value={includeResale} onValueChange={toggleResale} />
 
         {/* Results */}
         <ScrollView
@@ -301,10 +341,10 @@ const WishlistSearchModal: React.FC<Props> = ({ visible, onClose, onAdded }) => 
             </View>
           )}
 
-          {!loading && response?.query && response?.results?.length > 0 && (
+          {!loading && !!response?.query && results.length > 0 && (
             <Text style={styles.resultsCount}>
-              {response.results.length} result
-              {response.results.length !== 1 ? 's' : ''} for{' '}
+              {results.length} result
+              {results.length !== 1 ? 's' : ''} for{' '}
               <Text style={{ color: theme.colors.text, fontWeight: '600' }}>
                 "{response.query}"
               </Text>
@@ -313,19 +353,20 @@ const WishlistSearchModal: React.FC<Props> = ({ visible, onClose, onAdded }) => 
 
           {!loading &&
             response &&
-            response.results.length === 0 &&
-            !response.error && (
+            results.length === 0 &&
+            !response.error &&
+            !response.notConfigured && (
               <View style={styles.emptyBox}>
                 <Icon name="search-outline" size={40} color={theme.colors.lightGray} />
-                <Text style={[styles.mutedText, { marginTop: 12 }]}>
-                  No matches — try different keywords.
+                <Text style={[styles.mutedText, styles.emptyMessage]}>
+                  {answerMode === 'image' ? EMPTY_PHOTO_RESULTS_MESSAGE : EMPTY_TEXT_RESULTS_MESSAGE}
                 </Text>
               </View>
             )}
 
-          {!loading && response?.results && response.results.length > 0 && (
+          {!loading && results.length > 0 && (
             <View style={styles.grid}>
-              {response.results.map(r => (
+              {results.map(r => (
                 <ResultCard
                   key={r.id}
                   result={r}
@@ -397,6 +438,7 @@ const ResultCard: React.FC<{
         </View>
       )}
       <View style={styles.cardBody}>
+        <SourceKindBadge kind={sourceKindOf(result)} />
         <Text style={styles.cardTitle} numberOfLines={2}>
           {result.title}
         </Text>
@@ -554,6 +596,7 @@ const styles = StyleSheet.create({
     paddingVertical: 80,
     paddingHorizontal: 20,
   },
+  emptyMessage: { marginTop: 12, textAlign: 'center', lineHeight: 20 },
   emptyTitle: {
     marginTop: 14,
     fontSize: 16,

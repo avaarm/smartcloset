@@ -2,13 +2,14 @@
  * LensSearchScreen — "Google Lens for clothes".
  *
  * Pick a photo → call lensSearchService → render a grid of visually similar
- * items found online, prioritizing shopping sites. Tap a result to open the
- * source URL in the browser.
+ * items found online, shops first. Second-hand listings (eBay, Poshmark...) are
+ * left out once there are enough shop results, unless "Include resale" is on.
+ * Tap a result to open the source URL in the browser.
  *
  * Gracefully handles the no-API-key case with an inline setup hint.
  */
 
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Image,
   Linking,
@@ -36,6 +37,12 @@ import {
   type LensResult,
   type LensSearchResponse,
 } from '../services/lensSearchService';
+import { sourceKindOf } from '../services/retailerDomains';
+import { selectVisibleResults } from '../services/searchRanking';
+import IncludeResaleToggle from '../components/IncludeResaleToggle';
+import SourceKindBadge from '../components/SourceKindBadge';
+
+const SEARCH_FAILED_MESSAGE = "Couldn't search right now. Check your connection and try again.";
 
 const LensSearchScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -44,25 +51,33 @@ const LensSearchScreen: React.FC = () => {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<LensSearchResponse | null>(null);
+  const [includeResale, setIncludeResale] = useState(false);
+  // A newer photo (or Clear) makes an earlier search's answer stale.
+  const searchSeq = useRef(0);
+
+  // The search returns everything it found, resale included, so the switch
+  // filters what is already here instead of searching again.
+  const results = useMemo(
+    () => (response ? selectVisibleResults(response.results, includeResale) : []),
+    [response, includeResale],
+  );
 
   const handlePick = async () => {
     const picked = await pickImageFromLibrary();
     if (!picked) return;
+    const seq = ++searchSeq.current;
     setPhotoUri(picked.uri);
     setLoading(true);
     setResponse(null);
     try {
       const result = await searchByImage(picked.uri);
-      setResponse(result);
+      if (seq === searchSeq.current) setResponse(result);
     } catch (err: any) {
-      setResponse({
-        query: '',
-        bestGuessLabels: [],
-        results: [],
-        error: err?.message ?? 'Unknown error',
-      });
+      if (seq === searchSeq.current) {
+        setResponse({ query: '', bestGuessLabels: [], results: [], error: SEARCH_FAILED_MESSAGE });
+      }
     } finally {
-      setLoading(false);
+      if (seq === searchSeq.current) setLoading(false);
     }
   };
 
@@ -71,8 +86,10 @@ const LensSearchScreen: React.FC = () => {
   };
 
   const reset = () => {
+    searchSeq.current += 1;
     setPhotoUri(null);
     setResponse(null);
+    setLoading(false);
   };
 
   return (
@@ -126,6 +143,12 @@ const LensSearchScreen: React.FC = () => {
             <Button label="Clear" variant="ghost" size="sm" onPress={reset} />
           </View>
         ) : null}
+
+        <IncludeResaleToggle
+          value={includeResale}
+          onValueChange={setIncludeResale}
+          style={styles.resaleToggle}
+        />
 
         {/* Query hint */}
         {response && response.query ? (
@@ -188,7 +211,7 @@ const LensSearchScreen: React.FC = () => {
         )}
 
         {/* Empty state after completed search */}
-        {!loading && response && !response.error && !response.notConfigured && response.results.length === 0 && photoUri && (
+        {!loading && response && !response.error && !response.notConfigured && results.length === 0 && photoUri && (
           <View style={{ marginTop: 30 }}>
             <EmptyState
               icon={<Icon name="search-outline" size={28} color={theme.colors.textSubtle} />}
@@ -199,14 +222,13 @@ const LensSearchScreen: React.FC = () => {
         )}
 
         {/* Results grid */}
-        {!loading && response?.results && response.results.length > 0 && (
+        {!loading && results.length > 0 && (
           <>
             <Text variant="overline" color="muted" style={{ marginTop: 24, marginBottom: 10 }}>
-              {response.results.filter(r => r.isShopping).length} shopping results ·{' '}
-              {response.results.length} total
+              {results.length} result{results.length !== 1 ? 's' : ''}
             </Text>
             <View style={styles.grid}>
-              {response.results.map(r => (
+              {results.map(r => (
                 <ResultCard key={r.id} result={r} onPress={() => openResult(r)} />
               ))}
             </View>
@@ -273,9 +295,7 @@ const ResultCard: React.FC<{ result: LensResult; onPress: () => void }> = ({
         </View>
       )}
       <View style={{ padding: 12 }}>
-        {result.isShopping ? (
-          <Badge label="Shop" tone="accent" style={{ marginBottom: 6 }} />
-        ) : null}
+        <SourceKindBadge kind={sourceKindOf(result)} />
         <Text variant="bodySmall" weight="600" numberOfLines={2}>
           {result.title}
         </Text>
@@ -313,6 +333,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  resaleToggle: { marginHorizontal: 0, marginTop: 16 },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

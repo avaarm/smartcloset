@@ -176,10 +176,10 @@ const callOpenAIVision = async (payload: any): Promise<Response> => {
   const prompt =
     `You are an expert fashion identification AI. Analyze the clothing item in this image and return ONLY a JSON object — no markdown, no prose — with these exact keys:
 {
-  "category": "tops" | "bottoms" | "dresses" | "outerwear" | "shoes" | "accessories",
+  "category": "tops" | "bottoms" | "dresses" | "outerwear" | "shoes" | "bags" | "jewelry" | "hats" | "activewear" | "swimwear" | "accessories",
   "subcategory": "<specific type, e.g. 'crew-neck t-shirt', 'wide-leg jeans', 'ankle boots', 'structured tote'>",
   "brand": "<visible or identifiable brand, or null>",
-  "colors": ["<primary color>", "<secondary color if present>"],
+  "colors": ["<up to 3 colours of the item itself, most prominent first, each from this list: white, ivory, cream, beige, tan, camel, khaki, taupe, brown, dark brown, light gray, gray, silver, charcoal, black, red, burgundy, maroon, rust, terracotta, coral, pink, blush, hot pink, orange, peach, mustard, yellow, gold, olive, sage, green, forest green, lime, mint, teal, turquoise, navy, blue, light blue, purple, lavender, plum, mauve, multicolor>"],
   "pattern": "solid" | "striped" | "plaid" | "floral" | "polka_dot" | "graphic" | "other",
   "material": "<primary material, e.g. cotton, leather, denim, wool, silk>",
   "season": ["spring" | "summer" | "fall" | "winter"],
@@ -188,7 +188,9 @@ const callOpenAIVision = async (payload: any): Promise<Response> => {
   "gender": "men" | "women" | "unisex",
   "description": "<one natural-language sentence>",
   "confidence": <float 0.0–1.0>
-}${ctxHint}`;
+}
+
+Describe ONLY the single main garment or accessory; ignore floors, walls, furniture, hands, people, mannequins and other items. Boots, sneakers, heels and flats are shoes; handbags, totes and backpacks are bags.${ctxHint}`;
 
   const resp = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -231,18 +233,32 @@ const callOpenAIVision = async (payload: any): Promise<Response> => {
 // billing/enablement status — confirmed against this project's own key).
 // Expects { q, num?, safe? }; uses the Image Search endpoint since callers
 // want product photos, not web page results.
+//
+// The app asks for many results (most get filtered out client-side: resale,
+// children's items, category pages) and sends `-site:` exclusions for the main
+// second-hand sites, which is why q may be up to Brave's own limit of 400
+// characters / 50 words. Keep these in step with BRAVE_QUERY_MAX,
+// BRAVE_QUERY_MAX_WORDS and SEARCH_RESULT_COUNT in src/services/searchRanking.ts
+// (__tests__/services/searchProxyLimits.test.ts checks they match).
+const BRAVE_MAX_Q_CHARS = 400;
+const BRAVE_MAX_Q_WORDS = 50;
+const BRAVE_MAX_COUNT = 50;
+const BRAVE_DEFAULT_COUNT = 10;
+
 const callBrave = async (payload: any): Promise<Response> => {
   const key = Deno.env.get("BRAVE_API_KEY");
   if (!key) return json({ error: "BRAVE_API_KEY not configured" }, 503);
 
   const { q, num } = payload ?? {};
   if (typeof q !== "string" || !q.trim()) return json({ error: "q required" }, 400);
-  if (q.length > 200) return json({ error: "q too long" }, 400);
+  if (q.length > BRAVE_MAX_Q_CHARS || q.trim().split(/\s+/).length > BRAVE_MAX_Q_WORDS) {
+    return json({ error: "q too long" }, 400);
+  }
 
   // Safe-search is always strict; clients cannot turn it off.
   const params = new URLSearchParams({
     q,
-    count: String(Math.min(Number(num) || 10, 20)),
+    count: String(Math.min(Number(num) || BRAVE_DEFAULT_COUNT, BRAVE_MAX_COUNT)),
     safesearch: "strict",
   });
 
