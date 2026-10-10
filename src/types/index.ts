@@ -30,6 +30,10 @@ export interface ClothingItem {
   material?: string;
   /** Full material composition with tier + percentage — seeds the fabric DB. */
   materials?: MaterialComponent[];
+  /** What the item is worth today, in dollars. Estimated when added; the owner can edit it. */
+  estimatedValue?: number;
+  /** 'user' once the owner typed a value, 'estimate' when the app worked it out. */
+  valueSource?: 'user' | 'estimate';
 }
 
 export enum SeasonEnum {

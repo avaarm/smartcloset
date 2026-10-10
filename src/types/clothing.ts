@@ -84,4 +84,8 @@ export interface ClothingItem extends ClothingItemBase {
   /** Full material composition by tier + percentage. The source of truth for
    *  fabric reporting. Accepts multiple entries at the same tier for blends. */
   materials?: MaterialComponent[];
+  /** What the item is worth today, in dollars. Estimated when added; the owner can edit it. */
+  estimatedValue?: number;
+  /** 'user' once the owner typed a value, 'estimate' when the app worked it out. */
+  valueSource?: 'user' | 'estimate';
 }
