@@ -20,7 +20,6 @@ import {
   Image,
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -44,6 +43,7 @@ import type { ClothingCategory } from '../types/clothing';
 import theme from '../styles/theme';
 import IncludeResaleToggle from '../components/IncludeResaleToggle';
 import SourceKindBadge from '../components/SourceKindBadge';
+import { KeyboardSafeScrollView } from '../components/KeyboardSafe';
 
 const SEARCH_FAILED_MESSAGE = "Couldn't search right now. Check your connection and try again.";
 
@@ -307,11 +307,10 @@ const WishlistSearchModal: React.FC<Props> = ({ visible, onClose, onAdded }) => 
 
         <IncludeResaleToggle value={includeResale} onValueChange={toggleResale} />
 
-        {/* Results */}
-        <ScrollView
+        {/* Results: scroll clear of the keyboard that the search box opens */}
+        <KeyboardSafeScrollView
           style={styles.scroll}
           contentContainerStyle={{ paddingBottom: 40 }}
-          keyboardShouldPersistTaps="handled"
         >
           {loading && (
             <View style={styles.loadingWrap}>
@@ -398,7 +397,7 @@ const WishlistSearchModal: React.FC<Props> = ({ visible, onClose, onAdded }) => 
               </Text>
             </View>
           )}
-        </ScrollView>
+        </KeyboardSafeScrollView>
       </SafeAreaView>
     </Modal>
   );

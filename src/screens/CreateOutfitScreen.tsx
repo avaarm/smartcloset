@@ -20,6 +20,7 @@ import { ClothingItem } from '../types';
 import { getOwnedClothingItems } from '../services/storage';
 import { saveOutfit, Outfit } from '../services/outfitService';
 import theme from '../styles/theme';
+import { KeyboardSafeScrollView, singleLineDoneProps } from '../components/KeyboardSafe';
 import {
   CATEGORY_ICONS,
   CATEGORY_LABELS,
@@ -209,7 +210,7 @@ const CreateOutfitScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <KeyboardSafeScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Outfit Name Input */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Outfit Name</Text>
@@ -219,6 +220,7 @@ const CreateOutfitScreen: React.FC = () => {
             placeholderTextColor={theme.colors.mediumGray}
             value={outfitName}
             onChangeText={setOutfitName}
+            {...singleLineDoneProps}
           />
         </View>
 
@@ -257,6 +259,7 @@ const CreateOutfitScreen: React.FC = () => {
               keyExtractor={(item) => item.id}
               horizontal
               showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.selectedItemsList}
             />
           ) : (
@@ -278,6 +281,7 @@ const CreateOutfitScreen: React.FC = () => {
             keyExtractor={(item) => item.id}
             horizontal
             showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.categoryFilterList}
           />
         </View>
@@ -295,7 +299,7 @@ const CreateOutfitScreen: React.FC = () => {
             ))}
           </View>
         </View>
-      </ScrollView>
+      </KeyboardSafeScrollView>
 
       {/* Occasion Modal */}
       <Modal

@@ -25,7 +25,10 @@ export type InputProps = Omit<TextInputProps, 'style'> & {
   inputStyle?: StyleProp<TextStyle>;
 };
 
-export const Input: React.FC<InputProps> = ({
+// The ref reaches the TextInput so a screen can move focus to the next field.
+// Everything else (returnKeyType, onSubmitEditing, inputAccessoryViewID...) is
+// forwarded as-is through `rest`.
+export const Input = React.forwardRef<TextInput, InputProps>(({
   label,
   helper,
   error,
@@ -36,7 +39,7 @@ export const Input: React.FC<InputProps> = ({
   onFocus,
   onBlur,
   ...rest
-}) => {
+}, ref) => {
   const { theme } = useTheme();
   const [focused, setFocused] = useState(false);
 
@@ -57,6 +60,7 @@ export const Input: React.FC<InputProps> = ({
       <View
         style={[
           styles.field,
+          rest.multiline && styles.fieldMultiline,
           {
             backgroundColor: theme.colors.surface,
             borderColor,
@@ -68,6 +72,7 @@ export const Input: React.FC<InputProps> = ({
         {leftIcon ? <View style={{ marginRight: 8 }}>{leftIcon}</View> : null}
         <TextInput
           {...rest}
+          ref={ref}
           placeholderTextColor={theme.colors.textSubtle}
           onFocus={e => {
             setFocused(true);
@@ -79,6 +84,7 @@ export const Input: React.FC<InputProps> = ({
           }}
           style={[
             styles.input,
+            rest.multiline && styles.inputMultiline,
             {
               color: theme.colors.text,
               fontSize: 15,
@@ -100,7 +106,8 @@ export const Input: React.FC<InputProps> = ({
       ) : null}
     </View>
   );
-};
+});
+Input.displayName = 'Input';
 
 const styles = StyleSheet.create({
   wrapper: {
@@ -112,9 +119,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     minHeight: 44,
   },
+  // A tall field keeps its text at the top instead of floating in the middle.
+  fieldMultiline: {
+    alignItems: 'flex-start',
+  },
   input: {
     flex: 1,
     paddingVertical: 10,
+  },
+  inputMultiline: {
+    textAlignVertical: 'top',
   },
 });
 

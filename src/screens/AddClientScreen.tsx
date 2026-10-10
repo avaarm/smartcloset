@@ -6,7 +6,6 @@ import React, { useState } from 'react';
 import {
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   TextInput,
   View,
@@ -15,6 +14,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../styles/ThemeProvider';
 import { Text } from '../ui';
+import {
+  KeyboardDoneBar,
+  KeyboardSafeScrollView,
+  keyboardDoneProps,
+  singleLineDoneProps,
+} from '../components/KeyboardSafe';
 import { addClient, updateClient, getStylistProfile } from '../services/stylistService';
 import { Client } from '../types/stylist';
 
@@ -114,7 +119,7 @@ const AddClientScreen = ({ navigation, route }: Props) => {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+      <KeyboardSafeScrollView contentContainerStyle={{ padding: 20 }}>
         <Text variant="overline" color="muted" style={{ marginBottom: 8 }}>
           Basic Info
         </Text>
@@ -124,6 +129,7 @@ const AddClientScreen = ({ navigation, route }: Props) => {
           placeholderTextColor={theme.colors.textSubtle}
           value={name}
           onChangeText={setName}
+          {...singleLineDoneProps}
         />
         <TextInput
           style={inputStyle}
@@ -133,6 +139,7 @@ const AddClientScreen = ({ navigation, route }: Props) => {
           onChangeText={setEmail}
           keyboardType="email-address"
           autoCapitalize="none"
+          {...singleLineDoneProps}
         />
         <TextInput
           style={inputStyle}
@@ -141,6 +148,7 @@ const AddClientScreen = ({ navigation, route }: Props) => {
           value={phone}
           onChangeText={setPhone}
           keyboardType="phone-pad"
+          {...keyboardDoneProps}
         />
 
         <Text variant="overline" color="muted" style={{ marginTop: 20, marginBottom: 8 }}>
@@ -152,6 +160,7 @@ const AddClientScreen = ({ navigation, route }: Props) => {
           placeholderTextColor={theme.colors.textSubtle}
           value={styles_}
           onChangeText={setStyles}
+          {...singleLineDoneProps}
         />
         <TextInput
           style={inputStyle}
@@ -160,6 +169,7 @@ const AddClientScreen = ({ navigation, route }: Props) => {
           value={budget}
           onChangeText={setBudget}
           keyboardType="numeric"
+          {...keyboardDoneProps}
         />
 
         <Text variant="overline" color="muted" style={{ marginTop: 20, marginBottom: 8 }}>
@@ -172,8 +182,10 @@ const AddClientScreen = ({ navigation, route }: Props) => {
           value={notes}
           onChangeText={setNotes}
           multiline
+          {...keyboardDoneProps}
         />
-      </ScrollView>
+      </KeyboardSafeScrollView>
+      <KeyboardDoneBar />
     </SafeAreaView>
   );
 };

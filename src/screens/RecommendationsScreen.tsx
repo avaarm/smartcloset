@@ -17,6 +17,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { getRecommendations, getClients } from '../services/stylistService';
 import { StylingRecommendation, Client } from '../types/stylist';
 import theme from '../styles/theme';
+import { keyboardListProps } from '../utils/keyboardListProps';
 
 type RecommendationsScreenProps = {
   navigation: NativeStackNavigationProp<any>;
@@ -212,6 +213,7 @@ const RecommendationsScreen = ({ navigation }: RecommendationsScreenProps) => {
             onChangeText={setSearchQuery}
             autoCapitalize="none"
             autoCorrect={false}
+            returnKeyType="search"
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
@@ -224,6 +226,7 @@ const RecommendationsScreen = ({ navigation }: RecommendationsScreenProps) => {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           style={styles.filterTabs}
           contentContainerStyle={styles.filterTabsContent}
         >
@@ -287,6 +290,7 @@ const RecommendationsScreen = ({ navigation }: RecommendationsScreenProps) => {
         data={filteredRecommendations}
         renderItem={renderRecommendation}
         keyExtractor={item => item.id}
+        {...keyboardListProps}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <View style={styles.emptyState}>

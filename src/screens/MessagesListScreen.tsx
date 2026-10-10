@@ -15,6 +15,7 @@ import { getThreads, markThreadAsRead } from '../services/messagingService';
 import { getCurrentClientAccount } from '../services/marketplaceService';
 import { getStylistProfile } from '../services/stylistService';
 import { MessageThread } from '../types/stylist';
+import { keyboardListProps } from '../utils/keyboardListProps';
 
 interface ThreadWithContact extends MessageThread {
   contactName: string;
@@ -190,6 +191,7 @@ const MessagesListScreen = ({ navigation, route }: any) => {
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholderTextColor={theme.colors.textSecondary}
+            returnKeyType="search"
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
@@ -204,6 +206,7 @@ const MessagesListScreen = ({ navigation, route }: any) => {
         data={filteredThreads}
         renderItem={renderThread}
         keyExtractor={(item) => item.id}
+        {...keyboardListProps}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Icon name="chatbubbles-outline" size={64} color="#ccc" />

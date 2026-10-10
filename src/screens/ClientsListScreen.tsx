@@ -15,6 +15,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { getClients, getActiveClients } from '../services/stylistService';
 import { Client } from '../types/stylist';
 import theme from '../styles/theme';
+import { keyboardListProps } from '../utils/keyboardListProps';
 
 type ClientsListScreenProps = {
   navigation: NativeStackNavigationProp<any>;
@@ -161,6 +162,7 @@ const ClientsListScreen = ({ navigation }: ClientsListScreenProps) => {
             onChangeText={setSearchQuery}
             autoCapitalize="none"
             autoCorrect={false}
+            returnKeyType="search"
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
@@ -215,6 +217,7 @@ const ClientsListScreen = ({ navigation }: ClientsListScreenProps) => {
         data={filteredClients}
         renderItem={renderClient}
         keyExtractor={item => item.id}
+        {...keyboardListProps}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <View style={styles.emptyState}>

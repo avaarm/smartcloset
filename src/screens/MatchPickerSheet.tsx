@@ -197,7 +197,7 @@ const MatchPickerSheet: React.FC<Props> = ({
       )}
 
       {!loading && hasResults && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <ScrollView horizontal keyboardShouldPersistTaps="handled" showsHorizontalScrollIndicator={false}>
           <View style={styles.row}>
             {kbMatches.map((m, idx) => (
               <KBCard key={`kb-${idx}`} match={m} onPick={onPick} />
@@ -261,7 +261,7 @@ const MatchPickerSheet: React.FC<Props> = ({
             value={urlQuery}
             onChangeText={setUrlQuery}
             onSubmitEditing={runUrlLookup}
-            returnKeyType="done"
+            returnKeyType="go"
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"

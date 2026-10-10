@@ -6,7 +6,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   TextInput,
   View,
@@ -16,6 +15,12 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { Picker } from '@react-native-picker/picker';
 import { useTheme } from '../styles/ThemeProvider';
 import { Text } from '../ui';
+import {
+  KeyboardDoneBar,
+  KeyboardSafeScrollView,
+  keyboardDoneProps,
+  singleLineDoneProps,
+} from '../components/KeyboardSafe';
 import {
   getClients,
   getStylistProfile,
@@ -114,7 +119,7 @@ const CreateRecommendationScreen = ({ navigation }: Props) => {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+      <KeyboardSafeScrollView contentContainerStyle={{ padding: 20 }}>
         <Text variant="overline" color="muted" style={{ marginBottom: 8 }}>
           Client
         </Text>
@@ -154,6 +159,7 @@ const CreateRecommendationScreen = ({ navigation }: Props) => {
           placeholderTextColor={theme.colors.textSubtle}
           value={title}
           onChangeText={setTitle}
+          {...singleLineDoneProps}
         />
         <TextInput
           style={[...inputStyle, { height: 100, textAlignVertical: 'top' }]}
@@ -162,6 +168,7 @@ const CreateRecommendationScreen = ({ navigation }: Props) => {
           value={description}
           onChangeText={setDescription}
           multiline
+          {...keyboardDoneProps}
         />
         <TextInput
           style={[...inputStyle, { height: 80, textAlignVertical: 'top' }]}
@@ -170,8 +177,10 @@ const CreateRecommendationScreen = ({ navigation }: Props) => {
           value={notes}
           onChangeText={setNotes}
           multiline
+          {...keyboardDoneProps}
         />
-      </ScrollView>
+      </KeyboardSafeScrollView>
+      <KeyboardDoneBar />
     </SafeAreaView>
   );
 };

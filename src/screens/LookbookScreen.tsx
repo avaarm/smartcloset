@@ -21,6 +21,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Badge, Button, Card, Screen, Text } from '../ui';
+import {
+  KeyboardDoneBar,
+  KeyboardSafeScrollView,
+  keyboardDoneProps,
+  singleLineDoneProps,
+} from '../components/KeyboardSafe';
 import { useTheme } from '../styles/ThemeProvider';
 import { getClothingItems } from '../services/storage';
 import { ClothingItem } from '../types';
@@ -159,8 +165,11 @@ const LookbookScreen: React.FC = () => {
   const uncategorized = lookbook.looks.filter(l => !CHAPTERS.includes(l.chapter));
 
   // ── Item picker modal ────────────────────────────────────────────────────
+  // The two modals are plain elements, not components declared here: a component
+  // declared inside the render is a new type every time, so React remounted the
+  // form on each keystroke and the keyboard closed after one letter.
 
-  const ItemPickerModal = () => (
+  const itemPickerModal = (
     <Modal visible={showItemPicker} animationType="slide" presentationStyle="pageSheet">
       <View style={[styles.modalContainer, { backgroundColor: theme.colors.background }]}>
         <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}>
@@ -198,7 +207,7 @@ const LookbookScreen: React.FC = () => {
 
   // ── Look form modal ──────────────────────────────────────────────────────
 
-  const LookFormModal = () => (
+  const lookFormModal = (
     <Modal visible={showLookForm} animationType="slide" presentationStyle="pageSheet">
       <View style={[styles.modalContainer, { backgroundColor: theme.colors.background }]}>
         <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}>
@@ -211,7 +220,7 @@ const LookbookScreen: React.FC = () => {
           </Pressable>
         </View>
 
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+        <KeyboardSafeScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
           {/* Image picker */}
           <Pressable
             onPress={() => setShowItemPicker(true)}
@@ -229,7 +238,7 @@ const LookbookScreen: React.FC = () => {
 
           {/* Chapter */}
           <Text variant="label" style={{ marginTop: 20, marginBottom: 8 }}>Chapter</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+          <ScrollView horizontal keyboardShouldPersistTaps="handled" showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {CHAPTERS.map(c => (
                 <Pressable
@@ -259,6 +268,7 @@ const LookbookScreen: React.FC = () => {
             placeholder="e.g. Monday Power Look"
             placeholderTextColor={theme.colors.textSubtle}
             style={[styles.textField, { borderColor: theme.colors.border, color: theme.colors.text, backgroundColor: theme.colors.background }]}
+            {...singleLineDoneProps}
           />
 
           {/* Styling note */}
@@ -271,8 +281,10 @@ const LookbookScreen: React.FC = () => {
             multiline
             numberOfLines={4}
             style={[styles.textField, styles.textArea, { borderColor: theme.colors.border, color: theme.colors.text, backgroundColor: theme.colors.background }]}
+            {...keyboardDoneProps}
           />
-        </ScrollView>
+        </KeyboardSafeScrollView>
+        <KeyboardDoneBar />
       </View>
     </Modal>
   );
@@ -281,8 +293,8 @@ const LookbookScreen: React.FC = () => {
 
   return (
     <Screen padded={false}>
-      <ItemPickerModal />
-      <LookFormModal />
+      {itemPickerModal}
+      {lookFormModal}
 
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
@@ -297,6 +309,7 @@ const LookbookScreen: React.FC = () => {
               onBlur={() => setTitleEditing(false)}
               autoFocus
               style={{ fontSize: 17, fontWeight: '600', color: theme.colors.text, minWidth: 180, textAlign: 'center' }}
+              {...singleLineDoneProps}
             />
           ) : (
             <Text variant="h3">{lookbook.title}</Text>

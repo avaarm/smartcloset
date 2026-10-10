@@ -18,6 +18,7 @@ import {
   getFeaturedStylists,
 } from '../services/marketplaceService';
 import { StylistListing } from '../types/stylist';
+import { keyboardListProps } from '../utils/keyboardListProps';
 
 const StylistMarketplaceScreen = ({ navigation }: any) => {
   const [stylists, setStylists] = useState<StylistListing[]>([]);
@@ -172,6 +173,7 @@ const StylistMarketplaceScreen = ({ navigation }: any) => {
         <Text style={styles.sectionTitle}>Featured Stylists</Text>
         <FlatList
           horizontal
+          keyboardShouldPersistTaps="handled"
           data={featuredStylists}
           renderItem={({ item }) => (
             <TouchableOpacity
@@ -211,6 +213,7 @@ const StylistMarketplaceScreen = ({ navigation }: any) => {
             value={searchQuery}
             onChangeText={handleSearch}
             placeholderTextColor={theme.colors.textSecondary}
+            returnKeyType="search"
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => handleSearch('')}>
@@ -310,6 +313,7 @@ const StylistMarketplaceScreen = ({ navigation }: any) => {
         data={stylists}
         renderItem={renderStylistCard}
         keyExtractor={(item) => item.id}
+        {...keyboardListProps}
         ListHeaderComponent={renderFeaturedSection}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>

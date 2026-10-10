@@ -19,6 +19,12 @@ import { WearTrackingService } from '../services/wearTrackingService';
 import { OutfitHistory } from '../types';
 import theme from '../styles/theme';
 import { categoryLabel } from '../utils/clothingOptions';
+import {
+  KeyboardDoneBar,
+  KeyboardSafeView,
+  keyboardDoneProps,
+  singleLineDoneProps,
+} from '../components/KeyboardSafe';
 
 type RouteParams = {
   OutfitDetails: {
@@ -238,7 +244,8 @@ const OutfitDetailsScreen = () => {
         transparent={true}
         onRequestClose={() => setShowWearModal(false)}
       >
-        <View style={styles.modalOverlay}>
+        {/* Lifts the sheet above the keyboard so the notes and Confirm button stay visible */}
+        <KeyboardSafeView style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Mark Outfit as Worn</Text>
@@ -247,7 +254,11 @@ const OutfitDetailsScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+            >
               <View style={styles.modalSection}>
                 <Text style={styles.modalLabel}>Occasion (Optional)</Text>
                 <TextInput
@@ -256,6 +267,7 @@ const OutfitDetailsScreen = () => {
                   value={wearOccasion}
                   onChangeText={setWearOccasion}
                   placeholderTextColor={theme.colors.mediumGray}
+                  {...singleLineDoneProps}
                 />
               </View>
 
@@ -275,6 +287,7 @@ const OutfitDetailsScreen = () => {
                   numberOfLines={4}
                   textAlignVertical="top"
                   placeholderTextColor={theme.colors.mediumGray}
+                  {...keyboardDoneProps}
                 />
               </View>
 
@@ -283,7 +296,8 @@ const OutfitDetailsScreen = () => {
               </TouchableOpacity>
             </ScrollView>
           </View>
-        </View>
+          <KeyboardDoneBar />
+        </KeyboardSafeView>
       </Modal>
     </SafeAreaView>
   );

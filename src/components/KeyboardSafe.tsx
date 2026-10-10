@@ -60,6 +60,33 @@ export const KeyboardDoneBar: React.FC = () => {
 };
 
 /**
+ * Like the Done bar but with its own label and action, for a field where "done"
+ * means "save" (a number pad has no Return key, so this bar is the way to submit).
+ * Point the input at it with inputAccessoryViewID={nativeID}.
+ */
+export const KeyboardActionBar: React.FC<{ nativeID: string; label: string; onPress: () => void }> = ({
+  nativeID,
+  label,
+  onPress,
+}) => {
+  if (Platform.OS !== 'ios') return null;
+  return (
+    <InputAccessoryView nativeID={nativeID}>
+      <View style={styles.bar}>
+        <TouchableOpacity
+          onPress={onPress}
+          hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
+          accessibilityRole="button"
+          accessibilityLabel={label}
+        >
+          <Text style={styles.done}>{label}</Text>
+        </TouchableOpacity>
+      </View>
+    </InputAccessoryView>
+  );
+};
+
+/**
  * A ScrollView for forms. The focused field is scrolled into view above the
  * keyboard, taps on buttons work while the keyboard is up, and dragging the
  * content down closes the keyboard.

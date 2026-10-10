@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   SafeAreaView,
   StatusBar,
@@ -17,6 +16,12 @@ import { RouteProp } from '@react-navigation/native';
 import { createAppointment, getClients } from '../services/stylistService';
 import { Client } from '../types/stylist';
 import theme from '../styles/theme';
+import {
+  KeyboardDoneBar,
+  KeyboardSafeScrollView,
+  keyboardDoneProps,
+  singleLineDoneProps,
+} from '../components/KeyboardSafe';
 
 type CreateAppointmentScreenProps = {
   navigation: NativeStackNavigationProp<any>;
@@ -162,7 +167,7 @@ const CreateAppointmentScreen = ({ navigation, route }: CreateAppointmentScreenP
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content}>
+      <KeyboardSafeScrollView style={styles.content}>
         {/* Client Selection */}
         <View style={styles.section}>
           <Text style={styles.label}>Client *</Text>
@@ -240,6 +245,7 @@ const CreateAppointmentScreen = ({ navigation, route }: CreateAppointmentScreenP
                 onChangeText={setDate}
                 placeholder="YYYY-MM-DD"
                 placeholderTextColor="#9CA3AF"
+                {...singleLineDoneProps}
               />
             </View>
             <View style={styles.inputHalf}>
@@ -250,6 +256,7 @@ const CreateAppointmentScreen = ({ navigation, route }: CreateAppointmentScreenP
                 onChangeText={setStartTime}
                 placeholder="HH:MM"
                 placeholderTextColor="#9CA3AF"
+                {...singleLineDoneProps}
               />
             </View>
           </View>
@@ -312,6 +319,7 @@ const CreateAppointmentScreen = ({ navigation, route }: CreateAppointmentScreenP
               placeholderTextColor="#9CA3AF"
               autoCapitalize="none"
               keyboardType="url"
+              {...singleLineDoneProps}
             />
           </View>
         ) : (
@@ -323,6 +331,7 @@ const CreateAppointmentScreen = ({ navigation, route }: CreateAppointmentScreenP
               onChangeText={setLocation}
               placeholder="Enter location"
               placeholderTextColor="#9CA3AF"
+              {...singleLineDoneProps}
             />
           </View>
         )}
@@ -339,6 +348,7 @@ const CreateAppointmentScreen = ({ navigation, route }: CreateAppointmentScreenP
                 placeholder="0.00"
                 placeholderTextColor="#9CA3AF"
                 keyboardType="decimal-pad"
+                {...keyboardDoneProps}
               />
             </View>
             <View style={styles.switchRowInline}>
@@ -365,6 +375,7 @@ const CreateAppointmentScreen = ({ navigation, route }: CreateAppointmentScreenP
             multiline
             numberOfLines={3}
             textAlignVertical="top"
+            {...keyboardDoneProps}
           />
         </View>
 
@@ -380,11 +391,13 @@ const CreateAppointmentScreen = ({ navigation, route }: CreateAppointmentScreenP
             multiline
             numberOfLines={3}
             textAlignVertical="top"
+            {...keyboardDoneProps}
           />
         </View>
 
         <View style={{ height: 40 }} />
-      </ScrollView>
+      </KeyboardSafeScrollView>
+      <KeyboardDoneBar />
     </SafeAreaView>
   );
 };

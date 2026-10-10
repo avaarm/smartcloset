@@ -4,6 +4,7 @@ import { InputAccessoryView, Keyboard, Platform, TextInput } from 'react-native'
 import renderer, { act } from 'react-test-renderer';
 import {
   KEYBOARD_DONE_ID,
+  KeyboardActionBar,
   KeyboardDoneBar,
   KeyboardSafeScrollView,
   KeyboardSafeView,
@@ -69,5 +70,21 @@ describe('KeyboardSafe', () => {
     });
     const kav = tree.root.findByType(require('react-native').KeyboardAvoidingView);
     expect(kav.props.behavior).toBe('padding');
+  });
+
+  it('an action bar runs its own action instead of just closing the keyboard', async () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => {});
+    const onPress = jest.fn();
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(<KeyboardActionBar nativeID="x-save" label="Save" onPress={onPress} />);
+    });
+    expect(tree.root.findByType(InputAccessoryView).props.nativeID).toBe('x-save');
+    const btn = tree.root.find(n => n.props.accessibilityLabel === 'Save' && typeof n.props.onPress === 'function');
+    await act(async () => {
+      btn.props.onPress();
+    });
+    expect(onPress).toHaveBeenCalledTimes(1);
+    expect(dismiss).not.toHaveBeenCalled();
   });
 });

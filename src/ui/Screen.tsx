@@ -3,13 +3,14 @@
  *
  * Wraps children in a themed SafeAreaView and optional ScrollView + header.
  * New screens should use this instead of re-rolling the SafeAreaView pattern.
+ * A scrollable Screen is keyboard-safe: the field being typed in scrolls above
+ * the keyboard and buttons stay tappable while it is open.
  */
 
 import React from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   ScrollViewProps,
   StatusBar,
   StyleProp,
@@ -19,6 +20,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../styles/ThemeProvider';
+import { KeyboardSafeScrollView } from '../components/KeyboardSafe';
 
 export type ScreenProps = {
   children: React.ReactNode;
@@ -53,18 +55,17 @@ export const Screen: React.FC<ScreenProps> = ({
     <>
       {header}
       {scrollable ? (
-        <ScrollView
+        <KeyboardSafeScrollView
           style={{ flex: 1 }}
           contentContainerStyle={[
             { padding: pad, paddingBottom: pad + 24 },
             contentContainerStyle,
           ]}
           showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
           refreshControl={refreshControl}
         >
           {children}
-        </ScrollView>
+        </KeyboardSafeScrollView>
       ) : (
         <View style={[{ flex: 1, padding: pad }, contentContainerStyle]}>{children}</View>
       )}

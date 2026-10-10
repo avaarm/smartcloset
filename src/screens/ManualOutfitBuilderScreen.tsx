@@ -18,6 +18,7 @@ import { ClothingItem, ClothingCategory, Season } from '../types';
 import { getClothingItems } from '../services/storage';
 import { saveOutfit } from '../services/outfitService';
 import theme from '../styles/theme';
+import { KeyboardSafeView, singleLineDoneProps } from '../components/KeyboardSafe';
 import { CLOTHING_CATEGORIES, SEASONS, categoryLabel, isAllSeasons, toggleSeasonChoice } from '../utils/clothingOptions';
 
 const ManualOutfitBuilderScreen = () => {
@@ -241,7 +242,8 @@ const ManualOutfitBuilderScreen = () => {
         transparent={true}
         onRequestClose={() => setShowSaveModal(false)}
       >
-        <View style={styles.modalOverlay}>
+        {/* Lifts the sheet above the keyboard so the name field and Save button stay visible */}
+        <KeyboardSafeView style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Save Outfit</Text>
@@ -250,7 +252,11 @@ const ManualOutfitBuilderScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+            >
               <View style={styles.modalSection}>
                 <Text style={styles.modalLabel}>Outfit Name *</Text>
                 <TextInput
@@ -259,12 +265,13 @@ const ManualOutfitBuilderScreen = () => {
                   value={outfitName}
                   onChangeText={setOutfitName}
                   placeholderTextColor={theme.colors.mediumGray}
+                  {...singleLineDoneProps}
                 />
               </View>
 
               <View style={styles.modalSection}>
                 <Text style={styles.modalLabel}>Occasion (Optional)</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                   {occasions.map((occasion) => (
                     <TouchableOpacity
                       key={occasion}
@@ -339,7 +346,7 @@ const ManualOutfitBuilderScreen = () => {
               </TouchableOpacity>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardSafeView>
       </Modal>
     </SafeAreaView>
   );

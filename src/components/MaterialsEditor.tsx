@@ -23,6 +23,7 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import type { MaterialComponent, MaterialTier } from '../types';
 import theme from '../styles/theme';
+import { keyboardDoneProps, singleLineDoneProps } from './KeyboardSafe';
 
 type Props = {
   value: MaterialComponent[];
@@ -140,6 +141,7 @@ const MaterialRow: React.FC<{
             onChangeText={text => onUpdate({ name: text })}
             autoCapitalize="none"
             autoCorrect={false}
+            {...singleLineDoneProps}
           />
         </View>
         <View style={{ width: 66 }}>
@@ -148,6 +150,7 @@ const MaterialRow: React.FC<{
             placeholder="%"
             placeholderTextColor={theme.colors.mediumGray}
             keyboardType="number-pad"
+            {...keyboardDoneProps}
             maxLength={3}
             value={row.percentage != null ? String(row.percentage) : ''}
             onChangeText={text => {

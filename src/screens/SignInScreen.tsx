@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   TextInput,
-  KeyboardAvoidingView,
   ScrollView,
-  Platform,
   Image,
   Linking,
 } from 'react-native';
@@ -26,6 +24,7 @@ import {
 } from '../services/authService';
 import { Session } from '@supabase/supabase-js';
 import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../config/legal';
+import { KeyboardDoneBar, KeyboardSafeScrollView, keyboardDoneProps } from '../components/KeyboardSafe';
 
 const GOLD = '#C4975A';
 const GOLD_LIGHT = '#D4A86A';
@@ -50,6 +49,10 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
   const [resetStep, setResetStep] = useState<null | 'email' | 'code'>(null);
   const [resetCode, setResetCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  // Return moves through the fields in order, then submits from the last one.
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const formScrollRef = useRef<ScrollView>(null);
 
   const openReset = () => {
     setResetCode('');
@@ -176,9 +179,9 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
       <View style={styles.root}>
         <StatusBar barStyle="light-content" backgroundColor={BLACK} />
         <SafeAreaView style={styles.safeArea}>
-          <KeyboardAvoidingView
-            style={styles.emailFormContainer}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          <KeyboardSafeScrollView
+            contentContainerStyle={styles.formContent}
+            showsVerticalScrollIndicator={false}
           >
             <TouchableOpacity
               onPress={() => (resetStep === 'code' ? setResetStep('email') : setResetStep(null))}
@@ -203,6 +206,8 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
                 keyboardType="email-address"
                 autoCapitalize="none"
                 editable={resetStep === 'email'}
+                returnKeyType="send"
+                onSubmitEditing={handleSendResetCode}
               />
               {resetStep === 'code' && (
                 <>
@@ -216,6 +221,7 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
                     maxLength={6}
                     autoComplete="one-time-code"
                     textContentType="oneTimeCode"
+                    {...keyboardDoneProps}
                   />
                   <TextInput
                     style={styles.textInput}
@@ -224,6 +230,8 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
                     value={newPassword}
                     onChangeText={setNewPassword}
                     secureTextEntry
+                    returnKeyType="done"
+                    onSubmitEditing={handleResetPassword}
                   />
                 </>
               )}
@@ -251,7 +259,8 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
                 </Text>
               </TouchableOpacity>
             )}
-          </KeyboardAvoidingView>
+          </KeyboardSafeScrollView>
+          <KeyboardDoneBar />
         </SafeAreaView>
       </View>
     );
@@ -262,11 +271,11 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
       <View style={styles.root}>
         <StatusBar barStyle="light-content" backgroundColor={BLACK} />
         <SafeAreaView style={styles.safeArea}>
-          <KeyboardAvoidingView
-            style={styles.emailFormContainer}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          <KeyboardSafeScrollView
+            ref={formScrollRef}
+            contentContainerStyle={styles.formContent}
+            showsVerticalScrollIndicator={false}
           >
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <TouchableOpacity onPress={() => setShowEmailForm(false)} style={styles.backButton} hitSlop={16}>
               <Icon name="arrow-back" size={22} color={CREAM} />
             </TouchableOpacity>
@@ -287,9 +296,13 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
                   value={name}
                   onChangeText={setName}
                   autoCapitalize="words"
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => emailRef.current?.focus()}
                 />
               )}
               <TextInput
+                ref={emailRef}
                 style={styles.textInput}
                 placeholder="Email address"
                 placeholderTextColor={MUTED}
@@ -297,14 +310,23 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                returnKeyType="next"
+                blurOnSubmit={false}
+                onSubmitEditing={() => passwordRef.current?.focus()}
               />
               <TextInput
+                ref={passwordRef}
                 style={styles.textInput}
                 placeholder="Password"
                 placeholderTextColor={MUTED}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
+                returnKeyType="done"
+                // Moving here with Return doesn't change the keyboard's size, so nothing else
+                // would bring this last field (and the button under it) above the keyboard.
+                onFocus={() => formScrollRef.current?.scrollToEnd({ animated: true })}
+                onSubmitEditing={handleEmailSubmit}
               />
               {!isRegistering && (
                 <TouchableOpacity
@@ -345,8 +367,7 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
                 </Text>
               </Text>
             </TouchableOpacity>
-            </ScrollView>
-          </KeyboardAvoidingView>
+          </KeyboardSafeScrollView>
         </SafeAreaView>
       </View>
     );
@@ -554,8 +575,9 @@ const styles = StyleSheet.create({
   },
 
   // Email form
-  emailFormContainer: {
-    flex: 1,
+  // Grows to the screen so a short form stays centred, and scrolls when the keyboard leaves no room.
+  formContent: {
+    flexGrow: 1,
     paddingHorizontal: 28,
     paddingTop: 24,
     paddingBottom: 40,

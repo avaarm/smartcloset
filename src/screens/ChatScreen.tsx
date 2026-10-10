@@ -6,7 +6,6 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
   Platform,
   Alert,
 } from 'react-native';
@@ -16,6 +15,7 @@ import { getMessages, sendMessage, markThreadAsRead } from '../services/messagin
 import { getCurrentClientAccount } from '../services/marketplaceService';
 import { getStylistProfile } from '../services/stylistService';
 import { Message } from '../types/stylist';
+import { KeyboardDoneBar, KeyboardSafeView, keyboardDoneProps } from '../components/KeyboardSafe';
 
 const ChatScreen = ({ route, navigation }: any) => {
   const { threadId, contactName, stylistId, clientId } = route.params;
@@ -191,11 +191,10 @@ const ChatScreen = ({ route, navigation }: any) => {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-    >
+    // Nothing sits above this screen (the stack and tab headers are hidden) and the tab
+    // bar hides while typing, so the keyboard's overlap needs no offset; the old 90
+    // floated the input bar well above the keyboard.
+    <KeyboardSafeView style={styles.container}>
       {/* Messages List */}
       <FlatList
         ref={flatListRef}
@@ -203,6 +202,8 @@ const ChatScreen = ({ route, navigation }: any) => {
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.messagesList}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Icon name="chatbubbles-outline" size={64} color="#ccc" />
@@ -228,6 +229,7 @@ const ChatScreen = ({ route, navigation }: any) => {
             multiline
             maxLength={1000}
             placeholderTextColor={theme.colors.textSecondary}
+            {...keyboardDoneProps}
           />
         </View>
 
@@ -243,7 +245,8 @@ const ChatScreen = ({ route, navigation }: any) => {
           />
         </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+      <KeyboardDoneBar />
+    </KeyboardSafeView>
   );
 };
 

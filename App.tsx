@@ -643,6 +643,9 @@ const App = (): React.JSX.Element => {
 };
 
 const tabScreenOptions = {
+  // Android only: on iOS the form scroll view measures the keyboard before the tab bar hides, so
+  // hiding it leaves the last fields covered. The iOS keyboard simply draws over the tab bar.
+  tabBarHideOnKeyboard: Platform.OS === 'android',
   tabBarActiveTintColor: '#C4975A',
   tabBarInactiveTintColor: '#9CA3AF',
   tabBarStyle: {

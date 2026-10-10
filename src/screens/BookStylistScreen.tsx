@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TextInput,
   TouchableOpacity,
   Alert,
@@ -14,6 +13,12 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { theme } from '../styles/theme';
 import { createBookingRequest } from '../services/marketplaceService';
 import { getCurrentClientAccount, createClientAccount } from '../services/marketplaceService';
+import {
+  KeyboardDoneBar,
+  KeyboardSafeScrollView,
+  keyboardDoneProps,
+  singleLineDoneProps,
+} from '../components/KeyboardSafe';
 
 const BookStylistScreen = ({ route, navigation }: any) => {
   const { stylistId, stylistName, consultationFee } = route.params;
@@ -112,7 +117,7 @@ const BookStylistScreen = ({ route, navigation }: any) => {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <KeyboardSafeScrollView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Book Consultation</Text>
         <Text style={styles.subtitle}>with {stylistName}</Text>
@@ -185,6 +190,7 @@ const BookStylistScreen = ({ route, navigation }: any) => {
             value={clientName}
             onChangeText={setClientName}
             placeholderTextColor={theme.colors.textSecondary}
+            {...singleLineDoneProps}
           />
         </View>
 
@@ -198,6 +204,7 @@ const BookStylistScreen = ({ route, navigation }: any) => {
             keyboardType="email-address"
             autoCapitalize="none"
             placeholderTextColor={theme.colors.textSecondary}
+            {...singleLineDoneProps}
           />
         </View>
 
@@ -210,6 +217,7 @@ const BookStylistScreen = ({ route, navigation }: any) => {
             onChangeText={setClientPhone}
             keyboardType="phone-pad"
             placeholderTextColor={theme.colors.textSecondary}
+            {...keyboardDoneProps}
           />
         </View>
       </View>
@@ -226,6 +234,7 @@ const BookStylistScreen = ({ route, navigation }: any) => {
           numberOfLines={6}
           textAlignVertical="top"
           placeholderTextColor={theme.colors.textSecondary}
+          {...keyboardDoneProps}
         />
       </View>
 
@@ -257,7 +266,8 @@ const BookStylistScreen = ({ route, navigation }: any) => {
       </Text>
 
       <View style={{ height: 40 }} />
-    </ScrollView>
+      <KeyboardDoneBar />
+    </KeyboardSafeScrollView>
   );
 };
 

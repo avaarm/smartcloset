@@ -9,7 +9,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Button, Input, Sheet, Text } from '../ui';
 import { useTheme } from '../styles/ThemeProvider';
@@ -20,6 +20,8 @@ import {
   ReportReason,
 } from '../config/communityGuidelines';
 import { blockUser, reportUser } from '../services/friendService';
+import { KeyboardDoneBar, keyboardDoneProps } from './KeyboardSafe';
+import { KeyboardLift } from './KeyboardLift';
 
 type Step = 'menu' | 'reason' | 'details' | 'reported' | 'block' | 'remove';
 
@@ -179,7 +181,9 @@ export const UserSafetySheet: React.FC<UserSafetySheetProps> = ({
     title = `Report ${userName}`;
     const reasonLabel = REPORT_REASONS.find(r => r.value === reason)?.label;
     body = (
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      // KeyboardLift, not KeyboardAvoidingView: that one measures against its parent, which in
+      // a sheet only as tall as its content is never near the keyboard, so it did nothing.
+      <KeyboardLift>
         <Text variant="label" color="muted" style={{ marginBottom: 8 }}>
           {reasonLabel}
         </Text>
@@ -192,13 +196,15 @@ export const UserSafetySheet: React.FC<UserSafetySheetProps> = ({
           inputStyle={styles.details}
           helper={`${details.length}/${MAX_REPORT_DETAILS}`}
           accessibilityLabel="Report details"
+          {...keyboardDoneProps}
         />
         {errorText}
         <View style={[styles.buttons, { marginTop: 16 }]}>
           <Button label="Back" variant="secondary" onPress={() => goTo('reason')} disabled={busy} style={{ flex: 1 }} />
           <Button label="Submit report" onPress={submitReport} loading={busy} style={{ flex: 1 }} />
         </View>
-      </KeyboardAvoidingView>
+        <KeyboardDoneBar />
+      </KeyboardLift>
     );
   } else if (step === 'reported') {
     title = 'Thanks for letting us know';
