@@ -9,6 +9,7 @@
  */
 
 import type { BodyProfile, BodyType, SkinTone, Undertone } from './profileService';
+import { hexForColorName } from '../utils/colorNames';
 
 // ============================================================================
 // Color palettes per undertone
@@ -246,7 +247,9 @@ export const isColorOnProfile = (profile: BodyProfile, hex: string): boolean => 
 
 /**
  * Map a common color name (e.g. 'red', 'navy', 'cream') to an approximate hex.
- * Used when items only have named colors rather than actual hex values.
+ * Used when items only have named colors rather than actual hex values. Names
+ * missing from the map but in the palette photo analysis names colours from
+ * ("ivory", "taupe", "dark brown") take the palette's hex.
  */
 export const colorNameToHex = (name?: string): string | null => {
   if (!name) return null;
@@ -268,7 +271,7 @@ export const colorNameToHex = (name?: string): string | null => {
     khaki: '#A16207', rust: '#9A3412', chocolate: '#78350F',
     multicolor: '#9CA3AF',
   };
-  return map[n] ?? null;
+  return map[n] ?? hexForColorName(n) ?? null;
 };
 
 // ============================================================================

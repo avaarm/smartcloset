@@ -1,4 +1,4 @@
-import { ClothingItem } from '../types';
+import { ClothingCategory, ClothingItem } from '../types';
 
 // Configuration for different AI services
 const AI_SERVICES = {
@@ -10,7 +10,7 @@ const AI_SERVICES = {
 
 // Types for AI analysis results
 export interface AIAnalysisResult {
-  category: 'tops' | 'bottoms' | 'dresses' | 'outerwear' | 'shoes' | 'accessories';
+  category: ClothingCategory;
   subcategory?: string;
   colors: string[];
   dominantColor: string;

@@ -1,11 +1,11 @@
-import { ClothingItem } from '../types';
+import { ClothingCategory, ClothingItem } from '../types';
 import { env } from '../config/env';
 import { readImageAsBase64 } from '../platform/fileSystem';
 import { callAiProxy } from './aiProxy';
 
 // Types for Google Vision API responses
 export interface GoogleVisionAnalysis {
-  category: 'tops' | 'bottoms' | 'dresses' | 'outerwear' | 'shoes' | 'accessories';
+  category: ClothingCategory;
   subcategory: string;
   colors: string[];
   dominantColor: string;
