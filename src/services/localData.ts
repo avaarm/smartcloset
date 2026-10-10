@@ -17,7 +17,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  *      only on this device, so they must not be thrown away.
  *  (c) Harmless device preferences (theme, backup timestamps) and flags already
  *      keyed by user id (AI consent, product-sharing opt-in, account-type
- *      onboarding). They cannot leak to a different account, so they are kept.
+ *      onboarding, the wishlist budget, which has a key per account and one for
+ *      guests). They cannot leak to a different account, so they are kept.
  *
  * Account deletion does not use this list: it wipes everything.
  */

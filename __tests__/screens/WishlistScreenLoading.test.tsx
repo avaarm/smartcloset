@@ -13,6 +13,10 @@ jest.mock('../../src/services/storage', () => ({
 }));
 jest.mock('../../src/services/profileService', () => ({ getBodyProfile: jest.fn(async () => null) }));
 jest.mock('../../src/screens/WishlistSearchModal', () => () => null);
+// The screen also reads the saved budget, which asks who is signed in: a guest here.
+jest.mock('../../src/config/supabase', () => ({
+  supabase: { auth: { getSession: async () => ({ data: { session: null }, error: null }) } },
+}));
 
 // The screen listens for focus on the navigator; keep the callback so a test can return to the screen.
 const mockFocus: { current: null | (() => void) } = { current: null };

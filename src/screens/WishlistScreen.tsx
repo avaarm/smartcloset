@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, Text, ActivityIndicator, SafeAreaView, StatusBar, Alert, TextInput, Modal } from 'react-native';
+import { View, StyleSheet, FlatList, TouchableOpacity, Pressable, Text, ActivityIndicator, SafeAreaView, StatusBar, Alert, TextInput, Modal, useWindowDimensions } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { ClothingItem as ClothingItemType } from '../types';
 import { getWishlistClothingItems, saveClothingItem, deleteClothingItem, updateClothingItem } from '../services/storage';
 import ClothingItem from '../components/ClothingItem';
-import { CARD_MARGIN, GRID_COLUMNS, GRID_SIDE_PADDING } from '../utils/clothingGrid';
+import { CARD_MARGIN, GRID_COLUMNS, GRID_SIDE_PADDING, gridCardWidth } from '../utils/clothingGrid';
 import Icon from 'react-native-vector-icons/Ionicons';
 import LinearGradient from 'react-native-linear-gradient';
 import theme from '../styles/theme';
@@ -12,8 +12,26 @@ import { sampleClothes } from '../data/sampleClothes';
 import WishlistSearchModal from './WishlistSearchModal';
 import LoadError from '../components/LoadError';
 import { BodyProfile, getBodyProfile } from '../services/profileService';
-import { parseMoney } from '../utils/money';
 import { itemCountLabel } from '../utils/itemCountLabel';
+import { formatMoney, formatMoneyCents } from '../utils/itemValue';
+import { KeyboardActionBar, KeyboardSafeView } from '../components/KeyboardSafe';
+import {
+  budgetStatus,
+  getWishlistBudget,
+  parseBudgetInput,
+  setWishlistBudget,
+  wishlistItemPrice,
+  wishlistTotals,
+} from '../services/wishlistBudget';
+
+// Height of the price line under each card. It is drawn inside the grid cell
+// (see styles.cell), so every cell in a row reserves the same room for it.
+const PRICE_STRIP_HEIGHT = 28;
+// The price line and the sheet's close button are small; this brings them nearer iOS's 44pt touch target.
+const HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 };
+// The price line sits directly under its card, so its touch area must not reach up into the card's Move button.
+const PRICE_HIT_SLOP = { top: 0, bottom: 8, left: 8, right: 8 };
+const BUDGET_SAVE_ACCESSORY_ID = 'smartcloset-budget-save';
 
 const WishlistScreen = () => {
   const navigation = useNavigation();
@@ -22,13 +40,20 @@ const WishlistScreen = () => {
   const [loadFailed, setLoadFailed] = useState(false);
   // Read once here (not per card) for the colour-match hint on each card.
   const [profile, setProfile] = useState<BodyProfile | null>(null);
-  const [budget, setBudget] = useState(0);
+  const [budget, setBudget] = useState<number | null>(null);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [budgetInput, setBudgetInput] = useState('');
+  const [budgetError, setBudgetError] = useState<string | null>(null);
   const [showSearchModal, setShowSearchModal] = useState(false);
+  const { width: windowWidth } = useWindowDimensions();
   // Reloads overlap (focus, then a delete or move right after). Only the latest
   // may write, or a slow earlier answer would put back an item just removed.
   const latestLoad = useRef(0);
+  // Bumped whenever the budget is saved or cleared here, so a reload already in
+  // flight can't put the number that was just replaced back on screen.
+  const budgetVersion = useRef(0);
+  // Return on the keyboard and a tap on Save can arrive together; one save is enough.
+  const savingBudget = useRef(false);
 
   useEffect(() => {
     loadWishlistItems();
@@ -43,14 +68,17 @@ const WishlistScreen = () => {
 
   const loadWishlistItems = async () => {
     const id = ++latestLoad.current;
+    const versionAtStart = budgetVersion.current;
     try {
-      const [wishlistItems, bodyProfile] = await Promise.all([
+      const [wishlistItems, bodyProfile, savedBudget] = await Promise.all([
         getWishlistClothingItems(),
         getBodyProfile().catch(() => null),
+        getWishlistBudget(),
       ]);
       if (id !== latestLoad.current) return;
       setItems(wishlistItems);
       setProfile(bodyProfile);
+      if (budgetVersion.current === versionAtStart) setBudget(savedBudget);
       setLoadFailed(false);
     } catch (error) {
       console.error('Error loading wishlist items:', error);
@@ -133,28 +161,86 @@ const WishlistScreen = () => {
     (navigation as any).navigate('AddClothing', { editItem: item });
   };
 
-  const handleSaveBudget = () => {
-    const amount = parseMoney(budgetInput);
-    if (!isNaN(amount) && amount >= 0) {
-      setBudget(amount);
+  const openBudgetModal = () => {
+    setBudgetInput(budget !== null ? String(budget) : '');
+    setBudgetError(null);
+    setShowBudgetModal(true);
+  };
+
+  const closeBudgetModal = () => setShowBudgetModal(false);
+
+  // Save and clear share this: the modal stays open, with a message, if storage fails.
+  const commitBudget = async (amount: number | null) => {
+    if (savingBudget.current) return;
+    savingBudget.current = true;
+    try {
+      const saved = await setWishlistBudget(amount);
+      budgetVersion.current += 1;
+      setBudget(saved);
       setShowBudgetModal(false);
-      setBudgetInput('');
-    } else {
-      Alert.alert('Invalid Amount', 'Please enter a valid budget amount');
+    } catch (error) {
+      console.error('Error saving wishlist budget:', error);
+      setBudgetError("Couldn't save your budget. Please try again.");
+    } finally {
+      savingBudget.current = false;
     }
   };
 
-  const renderItem = ({ item }: { item: ClothingItemType }) => (
-    <ClothingItem
-      item={item}
-      onPress={() => (navigation as any).navigate('ItemDetails', { item })}
-      onEdit={handleEditItem}
-      onDelete={handleDeleteItem}
-      onMoveToWardrobe={handleMoveToWardrobe}
-      bodyProfile={profile}
-      showActions={true}
-    />
-  );
+  const handleSaveBudget = () => {
+    const parsed = parseBudgetInput(budgetInput);
+    if (!parsed.ok) {
+      setBudgetError(parsed.message);
+      return;
+    }
+    commitBudget(parsed.amount);
+  };
+
+  const cardWidth = gridCardWidth(windowWidth);
+
+  // Prices usually have cents. Show them whenever any item has some, so the line prices
+  // always add up to the total instead of each rounding on its own.
+  const showCents = items.some(i => Math.round(wishlistItemPrice(i) * 100) % 100 !== 0);
+  const money = showCents ? formatMoneyCents : formatMoney;
+  const budgetMoney = budget !== null && Math.round(budget * 100) % 100 !== 0 ? formatMoneyCents : formatMoney;
+
+  const renderItem = ({ item }: { item: ClothingItemType }) => {
+    const price = wishlistItemPrice(item);
+    return (
+      <View style={styles.cell}>
+        <ClothingItem
+          item={item}
+          onPress={() => (navigation as any).navigate('ItemDetails', { item })}
+          onEdit={handleEditItem}
+          onDelete={handleDeleteItem}
+          onMoveToWardrobe={handleMoveToWardrobe}
+          bodyProfile={profile}
+          showActions={true}
+        />
+        <TouchableOpacity
+          style={[styles.priceStrip, { width: cardWidth }]}
+          onPress={() => handleEditItem(item)}
+          hitSlop={PRICE_HIT_SLOP}
+          accessibilityRole="button"
+          accessibilityLabel={price > 0 ? `Edit price of ${item.name}, ${money(price)}` : `Add price for ${item.name}`}
+        >
+          {price > 0 ? (
+            <>
+              <Text style={styles.priceText}>{money(price)}</Text>
+              <Icon name="pencil" size={12} color={theme.colors.mediumGray} />
+            </>
+          ) : (
+            <>
+              <Icon name="add-circle-outline" size={14} color={theme.colors.accent} />
+              <Text style={styles.addPriceText}>Add price</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  const { total, unpriced } = wishlistTotals(items);
+  const status = budget !== null ? budgetStatus(total, budget) : null;
 
   if (loading) {
     return (
@@ -200,21 +286,66 @@ const WishlistScreen = () => {
             showsVerticalScrollIndicator={false}
             ListHeaderComponent={
               <View>
-                <View style={styles.statsContainer}>
-                  <View style={styles.statCard}>
-                    <Icon name="heart" size={24} color={theme.colors.accent} />
-                    <Text style={styles.statNumber}>{items.length}</Text>
-                    <Text style={styles.statLabel}>Items</Text>
+                <View style={styles.moneyWrap}>
+                  <View style={styles.moneyCard}>
+                    <View style={styles.moneyRow}>
+                      <View
+                        style={styles.moneyCell}
+                        accessible
+                        accessibilityLabel={`Wishlist total ${money(total)}${unpriced > 0 ? `, ${unpriced} without a price` : ''}`}
+                      >
+                        <Text style={styles.moneyLabel}>Wishlist total</Text>
+                        <Text style={styles.moneyAmount} numberOfLines={1} adjustsFontSizeToFit>
+                          {money(total)}
+                        </Text>
+                        {unpriced > 0 && <Text style={styles.moneyHint}>{`${unpriced} without a price`}</Text>}
+                      </View>
+                      <View style={styles.moneyDivider} />
+                      <TouchableOpacity
+                        style={styles.moneyCell}
+                        onPress={openBudgetModal}
+                        accessibilityRole="button"
+                        accessibilityLabel={budget !== null ? `Budget ${budgetMoney(budget)}. Edit budget` : 'Budget not set. Set a budget'}
+                      >
+                        <View style={styles.moneyLabelRow}>
+                          <Text style={styles.moneyLabel}>Budget</Text>
+                          <Icon name="pencil" size={11} color={theme.colors.mediumGray} />
+                        </View>
+                        {budget !== null ? (
+                          <Text style={styles.moneyAmount} numberOfLines={1} adjustsFontSizeToFit>
+                            {budgetMoney(budget)}
+                          </Text>
+                        ) : (
+                          <Text style={[styles.moneyAmount, styles.moneyAmountEmpty]}>Not set</Text>
+                        )}
+                        <Text style={styles.moneyHint}>{budget !== null ? 'Tap to edit' : 'Tap to set one'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {status && (
+                      <View style={styles.meter}>
+                        <View
+                          style={styles.meterTrack}
+                          accessibilityRole="progressbar"
+                          accessibilityValue={{ min: 0, max: 100, now: Math.round(status.used * 100) }}
+                        >
+                          <View
+                            style={[
+                              styles.meterFill,
+                              { width: `${Math.round(status.used * 100)}%` },
+                              status.kind === 'over' && styles.meterFillOver,
+                            ]}
+                          />
+                        </View>
+                        <Text style={[styles.meterText, status.kind === 'over' && styles.meterTextOver]}>
+                          {status.kind === 'under'
+                            ? `Under budget by ${formatMoney(status.amount)}`
+                            : status.kind === 'over'
+                              ? `Over budget by ${formatMoney(status.amount)}`
+                              : 'Right on budget'}
+                        </Text>
+                      </View>
+                    )}
                   </View>
-                  <TouchableOpacity
-                    style={styles.statCard}
-                    onPress={() => setShowBudgetModal(true)}
-                  >
-                    <Icon name="wallet" size={24} color={theme.colors.accent} />
-                    <Text style={styles.statNumber}>${budget}</Text>
-                    <Text style={styles.statLabel}>Budget</Text>
-                    <Icon name="pencil" size={14} color={theme.colors.mediumGray} style={{ marginTop: 4 }} />
-                  </TouchableOpacity>
                 </View>
                 {items.length > 0 && (
                   <View style={styles.actionsBar}>
@@ -286,40 +417,77 @@ const WishlistScreen = () => {
         onAdded={loadWishlistItems}
       />
 
-      {/* Budget Modal */}
+      {/* Budget modal. The sheet rides above the keyboard, so the field and the buttons stay visible. */}
       <Modal
         visible={showBudgetModal}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowBudgetModal(false)}
+        onRequestClose={closeBudgetModal}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardSafeView style={styles.modalOverlay}>
+          {/* The X is the control for VoiceOver; tapping the dimmed area is for everyone else. */}
+          <Pressable style={styles.modalBackdrop} onPress={closeBudgetModal} accessible={false} testID="budget-backdrop" />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Set Budget</Text>
-              <TouchableOpacity onPress={() => setShowBudgetModal(false)}>
+              <Text style={styles.modalTitle}>{budget !== null ? 'Edit Budget' : 'Set Budget'}</Text>
+              <TouchableOpacity
+                onPress={closeBudgetModal}
+                hitSlop={HIT_SLOP}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+              >
                 <Icon name="close" size={24} color={theme.colors.text} />
               </TouchableOpacity>
             </View>
             <Text style={styles.modalDescription}>
               Set a budget to track your wishlist spending
             </Text>
-            <View style={styles.inputContainer}>
+            <View style={[styles.inputContainer, !!budgetError && styles.inputContainerError]}>
               <Text style={styles.currencySymbol}>$</Text>
               <TextInput
                 style={styles.input}
                 placeholder="0.00"
                 keyboardType="decimal-pad"
+                returnKeyType="done"
+                onSubmitEditing={handleSaveBudget}
+                inputAccessoryViewID={BUDGET_SAVE_ACCESSORY_ID}
                 value={budgetInput}
-                onChangeText={setBudgetInput}
+                onChangeText={text => {
+                  setBudgetInput(text);
+                  setBudgetError(null);
+                }}
                 placeholderTextColor={theme.colors.mediumGray}
+                autoFocus
+                selectTextOnFocus
+                accessibilityLabel="Budget in dollars"
               />
             </View>
-            <TouchableOpacity style={styles.saveButton} onPress={handleSaveBudget}>
+            {!!budgetError && (
+              <Text style={styles.inputError} accessibilityRole="alert">
+                {budgetError}
+              </Text>
+            )}
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={handleSaveBudget}
+              accessibilityRole="button"
+              accessibilityLabel="Save budget"
+            >
               <Text style={styles.saveButtonText}>Save Budget</Text>
             </TouchableOpacity>
+            {budget !== null && (
+              <TouchableOpacity
+                style={styles.clearButton}
+                onPress={() => commitBudget(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Clear budget"
+              >
+                <Text style={styles.clearButtonText}>Clear budget</Text>
+              </TouchableOpacity>
+            )}
           </View>
-        </View>
+          <KeyboardActionBar nativeID={BUDGET_SAVE_ACCESSORY_ID} label="Save" onPress={handleSaveBudget} />
+        </KeyboardSafeView>
       </Modal>
     </SafeAreaView>
   );
@@ -366,33 +534,82 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  moneyWrap: {
     paddingHorizontal: CARD_MARGIN,
     paddingVertical: 20,
   },
-  statCard: {
+  moneyCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 20,
-    width: '48%',
-    alignItems: 'center',
     ...theme.shadows.subtle,
   },
-  statNumber: {
+  moneyRow: {
+    flexDirection: 'row',
+  },
+  moneyCell: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  moneyDivider: {
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.lightGray,
+    marginHorizontal: 12,
+  },
+  moneyLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  moneyLabel: {
+    fontSize: 11,
+    color: theme.colors.mediumGray,
+    fontWeight: '500',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  moneyAmount: {
     fontSize: 28,
     fontWeight: '300',
     color: theme.colors.text,
     marginTop: 8,
     marginBottom: 4,
   },
-  statLabel: {
-    fontSize: 11,
+  moneyAmountEmpty: {
+    fontSize: 20,
+    lineHeight: 34,
+    color: theme.colors.accent,
+  },
+  moneyHint: {
+    fontSize: 12,
     color: theme.colors.mediumGray,
+  },
+  meter: {
+    marginTop: 16,
+  },
+  meterTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: theme.colors.lightGray,
+    overflow: 'hidden',
+  },
+  meterFill: {
+    height: '100%',
+    borderRadius: 3,
+    backgroundColor: theme.colors.success,
+  },
+  meterFillOver: {
+    backgroundColor: theme.colors.danger,
+  },
+  meterText: {
+    marginTop: 8,
+    fontSize: 13,
     fontWeight: '500',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    textAlign: 'center',
+    color: theme.colors.success,
+  },
+  meterTextOver: {
+    color: theme.colors.danger,
   },
   actionsBar: {
     paddingHorizontal: 20,
@@ -420,6 +637,34 @@ const styles = StyleSheet.create({
   grid: {
     paddingHorizontal: GRID_SIDE_PADDING,
     paddingBottom: 100,
+  },
+  // A row so the card (which stretches to its row) still fills the cell's height.
+  // The cell's bottom padding is the room for the price line, which sits in it
+  // (absolute, so it never changes the card's width) and starts where the card's
+  // own bottom margin does, which makes it hug the card.
+  cell: {
+    flexDirection: 'row',
+    paddingBottom: PRICE_STRIP_HEIGHT - CARD_MARGIN,
+  },
+  priceStrip: {
+    position: 'absolute',
+    bottom: 0,
+    left: CARD_MARGIN,
+    height: PRICE_STRIP_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  priceText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  addPriceText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.accent,
   },
   emptyState: {
     flex: 1,
@@ -481,9 +726,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalOverlay: {
-    flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
+  },
+  // Tapping the dimmed area above the sheet closes it.
+  modalBackdrop: {
+    flex: 1,
   },
   modalContent: {
     backgroundColor: '#FFFFFF',
@@ -515,6 +763,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  inputContainerError: {
+    borderColor: theme.colors.danger,
   },
   currencySymbol: {
     fontSize: 24,
@@ -529,6 +782,12 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     paddingVertical: 16,
   },
+  inputError: {
+    marginTop: -12,
+    marginBottom: 16,
+    fontSize: 13,
+    color: theme.colors.danger,
+  },
   saveButton: {
     backgroundColor: theme.colors.accent,
     borderRadius: 24,
@@ -539,6 +798,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  clearButton: {
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  clearButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.danger,
   },
 });
 
