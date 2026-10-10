@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Platform, ScrollView, ActivityIndicator, Alert, Switch, Pressable, Linking } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Platform, ActivityIndicator, Alert, Switch, Pressable, Linking } from 'react-native';
 import ChipSelect, { ChipMultiSelect } from '../components/ChipSelect';
 import * as ImagePicker from 'react-native-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -35,8 +35,15 @@ import {
 } from '../services/productContributions';
 import MatchPickerSheet, { type PickedMatch } from './MatchPickerSheet';
 import MaterialsEditor from '../components/MaterialsEditor';
+import {
+  KeyboardDoneBar,
+  KeyboardSafeScrollView,
+  keyboardDoneProps,
+  singleLineDoneProps,
+} from '../components/KeyboardSafe';
 import { readImageAsBase64 } from '../platform/fileSystem';
 import { parseMoney } from '../utils/money';
+import { estimateItemValue, type ValueSource } from '../utils/itemValue';
 import {
   CATEGORY_LABELS,
   CLOTHING_CATEGORIES,
@@ -76,6 +83,45 @@ const OCCASION_OPTIONS: { label: string; value: Occasion | 'any' }[] = [
   { label: 'Any occasion', value: 'any' },
   ...OCCASIONS.map(value => ({ label: OCCASION_LABELS[value], value })),
 ];
+
+// Far above any wardrobe item and far below the column's limit, so one stray digit
+// can't wreck the wardrobe total or fail the save.
+const MAX_VALUE = 1_000_000;
+
+const isUsableValue = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+
+/** A typed price as a positive number, or undefined when blank or not a number. */
+const positiveAmount = (raw: string): number | undefined => {
+  const n = parseMoney(raw);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+};
+
+const splitTags = (raw: string): string[] => raw.split(',').map(tag => tag.trim()).filter(Boolean);
+
+/** What is wrong with a value the owner typed, or null when it can be saved. */
+const valueProblem = (raw: string): string | null => {
+  const n = parseMoney(raw);
+  if (!Number.isFinite(n)) return 'Enter an amount, like 120.';
+  if (/-/.test(raw)) return "A value can't be negative.";
+  if (n >= MAX_VALUE) return 'Enter a value under $1,000,000.';
+  return null;
+};
+
+/** The one-line "where this number came from" under the estimated value. */
+const valueHint = (source: ValueSource): string => {
+  switch (source) {
+    case 'paid':
+      return 'Estimated from the price you paid';
+    case 'retail':
+      return 'Estimated from the retail price';
+    case 'match':
+      return 'Estimated from the matched product price';
+    case 'brand':
+      return 'Estimated from the brand and category';
+    default:
+      return 'Estimated from the category. Add a brand or price for a better estimate';
+  }
+};
 
 /** A labelled block of the form; its children are spaced evenly. */
 const FormSection = ({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) => (
@@ -122,6 +168,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   const [retailer, setRetailer] = useState<string>(editItem?.retailer || '');
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [saving, setSaving] = useState(false);
+  // Return on a text field moves to the next one (Name > Brand > Retailer > Color).
   // True once the user has chosen a category themselves (or is editing an item
   // that already has one), so photo analysis never overrides it.
   const categoryTouched = useRef(isEditing);
@@ -144,6 +191,10 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   const [imageHash, setImageHash] = useState<string | null>(null);
   const [visionLabels, setVisionLabels] = useState<string[]>([]);
   const [pickedMatch, setPickedMatch] = useState<PickedMatch | null>(null);
+  // The price fields exactly as picking a match filled them. A price that came
+  // from a product listing is not what the owner paid, so it must not be valued
+  // as "paid" (see the estimate below); editing the field makes it theirs.
+  const [matchFilled, setMatchFilled] = useState<{ cost?: string; retailCost?: string }>({});
   const [matchSheetDismissed, setMatchSheetDismissed] = useState(false);
   // Friendly reason the automatic match search failed (vs. simply finding nothing).
   const [matchError, setMatchError] = useState<string | null>(null);
@@ -151,6 +202,50 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   const [isGuestUser, setIsGuestUser] = useState(false);
   // Identifies the latest photo analysis; results of an older one are dropped.
   const analysisId = useRef(0);
+
+  // ── Estimated value ──
+  // Until the owner types a value it follows the estimate, which is worked out
+  // from the form on every render, so there is nothing to keep in sync. Typing
+  // one makes it theirs ('user') and it is never overwritten; "Reset to estimate"
+  // goes back. An item saved with an estimate shows it unchanged until one of the
+  // things it was worked out from changes, so opening Edit never moves the total.
+  const savedValue = isUsableValue(editItem?.estimatedValue) ? editItem.estimatedValue : undefined;
+  const [valueIsUser, setValueIsUser] = useState<boolean>(savedValue !== undefined && editItem?.valueSource === 'user');
+  const [userValueText, setUserValueText] = useState<string>(valueIsUser ? String(savedValue) : '');
+  // A listed price is the product's, not the owner's: it values the item as a
+  // "matched product price" until the owner types a price of their own.
+  const matchedPrice = pickedMatch ? pickedMatch.retailCost ?? pickedMatch.cost : undefined;
+  const estimateInputs = {
+    name: name.trim(),
+    category,
+    brand: brand.trim(),
+    cost: cost === matchFilled.cost ? undefined : positiveAmount(cost),
+    retailCost: retailCost === matchFilled.retailCost ? undefined : positiveAmount(retailCost),
+    materials,
+    tags: splitTags(tags),
+  };
+  const estimate = estimateItemValue(estimateInputs, { matchedPrice });
+  const estimateKey = JSON.stringify([estimateInputs, matchedPrice ?? null]);
+  const [savedEstimate, setSavedEstimate] = useState<{ value: number; key: string } | null>(
+    savedValue !== undefined && !valueIsUser ? { value: savedValue, key: estimateKey } : null,
+  );
+  const autoValue = savedEstimate?.key === estimateKey ? savedEstimate.value : estimate.value;
+  const valueText = valueIsUser ? userValueText : String(autoValue);
+  const valueError =
+    !isWishlist && valueIsUser
+      ? userValueText.trim()
+        ? valueProblem(userValueText)
+        : 'Enter a value, or reset to the estimate.'
+      : null;
+
+  const onValueChange = (text: string) => {
+    setValueIsUser(true);
+    setUserValueText(text);
+  };
+  const resetValue = () => {
+    setValueIsUser(false);
+    setSavedEstimate(null);
+  };
 
   useEffect(() => {
     getAuthUserId().then(id => setIsGuestUser(!id));
@@ -288,10 +383,16 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
       if (match.color && !color.trim()) {
         setColor(match.color.charAt(0).toUpperCase() + match.color.slice(1));
       }
-      if (match.cost != null && !cost) setCost(String(Math.round(match.cost)));
-      if ((match as any).retailCost != null && !retailCost) {
-        setRetailCost(String(Math.round((match as any).retailCost)));
+      const filled: { cost?: string; retailCost?: string } = {};
+      if (match.cost != null && !cost) {
+        filled.cost = String(Math.round(match.cost));
+        setCost(filled.cost);
       }
+      if ((match as any).retailCost != null && !retailCost) {
+        filled.retailCost = String(Math.round((match as any).retailCost));
+        setRetailCost(filled.retailCost);
+      }
+      setMatchFilled(filled);
       if (match.material) {
         const current = tags.split(',').map((t: string) => t.trim()).filter(Boolean);
         if (!current.some((t: string) => t.toLowerCase() === match.material!.toLowerCase())) {
@@ -320,6 +421,11 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
     setAnalyzing(true);
     setMatchSheetDismissed(false);
     setPickedMatch(null);
+    // A price a picked match filled in is the listing's, not what the owner paid.
+    // Clear it along with the match, or it would turn into a 'paid' price.
+    setCost(prev => (prev && prev === matchFilled.cost ? '' : prev));
+    setRetailCost(prev => (prev && prev === matchFilled.retailCost ? '' : prev));
+    setMatchFilled({});
     setKbMatches([]);
     setLensResults([]);
     setMatchError(null);
@@ -541,6 +647,10 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
     if (cost && isNaN(parseMoney(cost))) {
       newErrors.cost = 'Cost must be a valid number';
     }
+
+    if (valueError) {
+      newErrors.estimatedValue = valueError;
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -567,6 +677,9 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
           tier: m.tier || 'primary',
         }));
 
+      // Cents are the most the column keeps.
+      const finalValue = valueIsUser ? Math.round(parseMoney(userValueText) * 100) / 100 : autoValue;
+
       const itemData: any = {
         id: isEditing ? editItem.id : '',
         name: name.trim(),
@@ -583,13 +696,16 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         cost: cost ? parseMoney(cost) : undefined,
         retailCost: retailCost ? parseMoney(retailCost) : undefined,
         purchaseDate: purchaseDate.toISOString(),
-        tags: tags ? tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag) : [],
+        tags: splitTags(tags),
         notes: notes.trim(),
         favorite,
         retailer: retailer.trim(),
         wearCount: editItem?.wearCount || 0,
         lastWorn: editItem?.lastWorn,
         materials: cleanMaterials.length > 0 ? cleanMaterials : undefined,
+        // A wishlist item is worth its price, so it carries no value of its own.
+        estimatedValue: isWishlist ? undefined : finalValue,
+        valueSource: isWishlist ? undefined : valueIsUser ? 'user' : 'estimate',
       };
 
       if (isEditing) {
@@ -649,6 +765,12 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
 
   const unavailableReason = recognitionResult?.unavailableReason ?? 'other';
 
+  // Something on a wishlist is not owned yet, so "Used" / "New" would mislead:
+  // it has the listed price, and optionally the price before a sale.
+  const priceLabels = isWishlist
+    ? { cost: 'Price', retail: 'Original price' }
+    : { cost: 'Used', retail: 'New' };
+
   // What the photo analysis suggested, worded against what the form shows now.
   const aiRows = buildAiSuggestionRows(recognitionResult, {
     category,
@@ -674,12 +796,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         </Text>
         <View style={styles.headerSpacer} />
       </View>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
-      >
+      <KeyboardSafeScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.section}>
           <Text style={styles.sectionHeader}>Photo</Text>
           <TouchableOpacity style={styles.imageContainer} onPress={showImageOptions} disabled={analyzing}>
@@ -858,8 +975,11 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
                   <Text style={styles.rangeStrong}>${min}–${max}</Text>{' '}
                   (median ${median})
                 </Text>
-                <Pressable onPress={() => setRetailCost(String(median))} style={styles.useButton}>
-                  <Text style={styles.useButtonText}>Use as new</Text>
+                <Pressable
+                  onPress={() => (isWishlist ? setCost(String(median)) : setRetailCost(String(median)))}
+                  style={styles.useButton}
+                >
+                  <Text style={styles.useButtonText}>{isWishlist ? 'Use as price' : 'Use as new'}</Text>
                 </Pressable>
               </View>
             );
@@ -898,7 +1018,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
                       disabled={!!cost}
                       style={[styles.communityCell, cost ? styles.communityCellUsed : null]}
                     >
-                      <Text style={styles.communityCaption}>Used</Text>
+                      <Text style={styles.communityCaption}>{priceLabels.cost}</Text>
                       <Text style={styles.communityAmount}>${avgPaid}</Text>
                       {!cost && <Text style={styles.communityTap}>Tap to use</Text>}
                     </Pressable>
@@ -909,7 +1029,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
                       disabled={!!retailCost}
                       style={[styles.communityCell, retailCost ? styles.communityCellUsed : null]}
                     >
-                      <Text style={styles.communityCaption}>New</Text>
+                      <Text style={styles.communityCaption}>{priceLabels.retail}</Text>
                       <Text style={styles.communityAmount}>${avgRetail}</Text>
                       {!retailCost && <Text style={styles.communityTap}>Tap to use</Text>}
                     </Pressable>
@@ -938,24 +1058,28 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
             placeholder="Item Name"
             value={name}
             onChangeText={setName}
+            {...singleLineDoneProps}
           />
           <TextInput
             style={styles.input}
             placeholder="Brand"
             value={brand}
             onChangeText={setBrand}
+            {...singleLineDoneProps}
           />
           <TextInput
             style={styles.input}
             placeholder="Retailer/Store"
             value={retailer}
             onChangeText={setRetailer}
+            {...singleLineDoneProps}
           />
           <TextInput
             style={styles.input}
             placeholder="Color"
             value={color}
             onChangeText={setColor}
+            {...singleLineDoneProps}
           />
         </FormSection>
 
@@ -972,23 +1096,27 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         <FormSection title="Price">
           <View style={styles.priceFields}>
             <View style={styles.priceField}>
-              <Text style={styles.inputSubLabel}>Used</Text>
+              <Text style={styles.inputSubLabel}>{priceLabels.cost}</Text>
               <TextInput
                 style={styles.input}
+                accessibilityLabel={isWishlist ? 'Price' : 'Used price'}
                 placeholder="$0"
                 value={cost}
                 onChangeText={setCost}
                 keyboardType="decimal-pad"
+                {...keyboardDoneProps}
               />
             </View>
             <View style={styles.priceField}>
-              <Text style={styles.inputSubLabel}>New</Text>
+              <Text style={styles.inputSubLabel}>{priceLabels.retail}</Text>
               <TextInput
                 style={styles.input}
+                accessibilityLabel={isWishlist ? 'Original price' : 'New price'}
                 placeholder="$0"
                 value={retailCost}
                 onChangeText={setRetailCost}
                 keyboardType="decimal-pad"
+                {...keyboardDoneProps}
               />
             </View>
           </View>
@@ -1006,12 +1134,38 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
               <View style={styles.savings}>
                 <Icon name="pricetag" size={12} color="#065F46" />
                 <Text style={styles.savingsText}>
-                  Saved ${savings.toFixed(savings % 1 === 0 ? 0 : 2)} ({percent}% off)
+                  {isWishlist ? 'Save' : 'Saved'} ${savings.toFixed(savings % 1 === 0 ? 0 : 2)} ({percent}% off)
                 </Text>
               </View>
             );
           })()}
         </FormSection>
+
+        {/* A wishlist item is worth its price, so only things you own get a value. */}
+        {!isWishlist && (
+          <FormSection title="Estimated Value" hint="What it's worth today. It adds up in your wardrobe total.">
+            <TextInput
+              style={[styles.input, !!valueError && styles.inputError]}
+              accessibilityLabel="Estimated value"
+              placeholder="$0"
+              value={valueText}
+              onChangeText={onValueChange}
+              keyboardType="decimal-pad"
+              {...keyboardDoneProps}
+            />
+            {!!valueError && <Text style={styles.errorText}>{valueError}</Text>}
+            <View style={styles.valueNote}>
+              <Text style={styles.valueSource}>
+                {valueIsUser ? 'Your value' : savedEstimate?.key === estimateKey ? 'Saved estimate' : valueHint(estimate.source)}
+              </Text>
+              {valueIsUser && (
+                <Pressable onPress={resetValue} hitSlop={8} accessibilityRole="button">
+                  <Text style={styles.valueReset}>Reset to estimate</Text>
+                </Pressable>
+              )}
+            </View>
+          </FormSection>
+        )}
 
         <FormSection title="Purchase Date">
           <TouchableOpacity
@@ -1058,6 +1212,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
             placeholder="Tags (comma separated, e.g., summer, casual, favorite)"
             value={tags}
             onChangeText={setTags}
+            {...singleLineDoneProps}
           />
         </FormSection>
 
@@ -1074,6 +1229,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
             multiline
             numberOfLines={4}
             textAlignVertical="top"
+            {...keyboardDoneProps}
           />
         </FormSection>
 
@@ -1100,6 +1256,12 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
           </View>
         )}
 
+      </KeyboardSafeScrollView>
+
+      {/* Outside the scroll content so Save is always on screen, not at the end of a long
+          form. It sits under the keyboard while typing (the scroll view's bottom is this
+          bar's top, so nothing is cut off); Return, or the Done bar, closes the keyboard. */}
+      <View style={styles.footer}>
         <TouchableOpacity
           style={[styles.saveButton, saving && { opacity: 0.6 }]}
           onPress={handleSave}
@@ -1113,7 +1275,8 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
             </Text>
           )}
         </TouchableOpacity>
-      </ScrollView>
+      </View>
+      <KeyboardDoneBar />
     </SafeAreaView>
   );
 };
@@ -1153,7 +1316,14 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: GUTTER,
     paddingTop: GUTTER,
-    paddingBottom: 32,
+    paddingBottom: 24,
+  },
+  footer: {
+    paddingHorizontal: GUTTER,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5E5',
   },
   fill: {
     width: '100%',
@@ -1434,10 +1604,30 @@ const styles = StyleSheet.create({
   priceField: {
     flex: 1,
   },
+  inputError: {
+    borderColor: '#FF3B30',
+  },
   errorText: {
     fontSize: 12,
     color: '#FF3B30',
     marginLeft: 4,
+  },
+  valueNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACE.field,
+    marginHorizontal: 4,
+  },
+  valueSource: {
+    flex: 1,
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  valueReset: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#9A6F2E',
   },
   savings: {
     flexDirection: 'row',
