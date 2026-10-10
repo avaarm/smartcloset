@@ -32,6 +32,7 @@ import {
 import { useTheme } from '../styles/ThemeProvider';
 import LoadError from '../components/LoadError';
 import { summarizeWardrobe } from '../utils/wardrobeSummary';
+import { formatMoney, totalValue } from '../utils/itemValue';
 import { ClothingItem } from '../types';
 import { getClothingItems } from '../services/storage';
 import { getSavedOutfits } from '../services/outfitService';
@@ -61,7 +62,11 @@ const HomeScreen: React.FC = () => {
 
   const summary = useMemo(() => (wardrobe ? summarizeWardrobe(wardrobe) : null), [wardrobe]);
   const recentItems = summary?.recent ?? [];
-  const wardrobeValue = summary?.value ?? 0;
+  // What the owned items are worth now (wishlist items are not yours yet), not what they cost.
+  const wardrobeValue = useMemo(
+    () => (wardrobe ? totalValue(wardrobe.filter(item => !item.isWishlist)) : 0),
+    [wardrobe],
+  );
   const failedSections = [failed.wardrobe && 'wardrobe', failed.outfits && 'outfits'].filter(
     Boolean,
   ) as string[];
@@ -319,7 +324,7 @@ const HomeScreen: React.FC = () => {
           onPress={() => navigation.navigate('WardrobeInsights')}
           style={{ paddingHorizontal: 20, marginBottom: 16 }}
           accessibilityRole="button"
-          accessibilityLabel={`WardrobeWorth: $${wardrobeValue.toFixed(0)}, view insights`}
+          accessibilityLabel={`WardrobeWorth: ${formatMoney(wardrobeValue)}, view insights`}
         >
           <Card
             style={[styles.worthCard, { backgroundColor: theme.colors.accent }]}
@@ -331,9 +336,7 @@ const HomeScreen: React.FC = () => {
                   ★ WardrobeWorth
                 </Text>
                 <Text variant="h1" style={{ color: '#fff', marginTop: 2 }}>
-                  ${wardrobeValue >= 1000
-                    ? `${(wardrobeValue / 1000).toFixed(1)}k`
-                    : wardrobeValue.toFixed(0)}
+                  {formatMoney(wardrobeValue)}
                 </Text>
                 <Text variant="caption" style={{ color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>
                   Across {summary?.owned ?? 0} item{summary?.owned !== 1 ? 's' : ''}

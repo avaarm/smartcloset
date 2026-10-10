@@ -1,5 +1,6 @@
 import { ClothingItem, WardrobeStats, ClothingCategory, Season } from '../types';
 import { CLOTHING_CATEGORIES, SEASONS } from '../utils/clothingOptions';
+import { totalValue } from '../utils/itemValue';
 
 export class StatsService {
   static calculateWardrobeStats(items: ClothingItem[]): WardrobeStats {
@@ -35,8 +36,9 @@ export class StatsService {
       }
     });
 
-    // Calculate total value
-    const totalValue = wardrobeItems.reduce((sum, item) => sum + (item.cost || 0), 0);
+    // What the wardrobe is worth now: each item's own value, else an estimate.
+    // Cost per wear (getCostPerWear) still uses the price paid.
+    const wardrobeValue = totalValue(wardrobeItems);
 
     // Find most and least worn items
     const itemsWithWearCount = wardrobeItems.filter(item => (item.wearCount || 0) > 0);
@@ -59,7 +61,7 @@ export class StatsService {
       totalItems: wardrobeItems.length,
       itemsByCategory,
       itemsBySeason,
-      totalValue,
+      totalValue: wardrobeValue,
       mostWornItem,
       leastWornItem,
       averageWearCount,

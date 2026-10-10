@@ -53,6 +53,7 @@ const DEVICE_OR_PER_ACCOUNT = [
   '@smartcloset_ai_consent_v1',
   '@smartcloset_share_product_data',
   '@smartcloset_mode_onboarded',
+  '@smartcloset_wishlist_budget', // `:u:<id>` per account, `:guest` for a guest
 ];
 
 // Bookkeeping for the per-person slots: who they currently belong to.
@@ -69,7 +70,13 @@ beforeEach(async () => {
 
 describe('clearPersonalLocalData', () => {
   it('removes exactly the per-person keys and nothing else', async () => {
-    const keptBefore = [...GUEST, ...DEVICE_OR_PER_ACCOUNT, '@smartcloset_ai_consent_v1:user-1'];
+    const keptBefore = [
+      ...GUEST,
+      ...DEVICE_OR_PER_ACCOUNT,
+      '@smartcloset_ai_consent_v1:user-1',
+      '@smartcloset_wishlist_budget:u:user-1',
+      '@smartcloset_wishlist_budget:guest',
+    ];
     await seed([...PERSONAL, ...keptBefore, 'sb-example-auth-token']);
 
     await clearPersonalLocalData();

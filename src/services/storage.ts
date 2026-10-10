@@ -14,6 +14,12 @@ const SAVED_OUTFITS_KEY = '@smartcloset_saved_outfits';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/** A value the database accepts (it rejects negatives), else undefined so the column is left out of the write. */
+const valueForDb = (v: unknown): number | undefined =>
+  typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.round(v * 100) / 100 : undefined;
+
+const valueSourceOf = (v: unknown): ClothingItem['valueSource'] =>
+  v === 'user' || v === 'estimate' ? v : undefined;
 
 export const mapDbToClothingItem = (row: any): ClothingItem => ({
   id: row.id,
@@ -37,6 +43,9 @@ export const mapDbToClothingItem = (row: any): ClothingItem => ({
   favorite: row.favorite ?? false,
   retailer: row.retailer,
   materials: row.materials || undefined,
+  // numeric comes back as a number or a string depending on the driver; null on rows that predate the column.
+  estimatedValue: row.estimated_value != null ? valueForDb(Number(row.estimated_value)) : undefined,
+  valueSource: valueSourceOf(row.value_source),
 });
 
 const mapClothingItemToDb = (item: Partial<ClothingItem>, userId: string) => ({
@@ -60,6 +69,8 @@ const mapClothingItemToDb = (item: Partial<ClothingItem>, userId: string) => ({
   favorite: item.favorite || false,
   retailer: item.retailer,
   materials: item.materials,
+  estimated_value: valueForDb(item.estimatedValue),
+  value_source: valueSourceOf(item.valueSource),
 });
 
 // ─── Guest-mode AsyncStorage fallback ────────────────────────────────────────
@@ -127,10 +138,15 @@ const updateLocalItem = async (
   const existingItems = await getLocalItems();
   const updatedItems = existingItems.map(item => {
     if (item.id !== updatedItem.id) return item;
+    // Like the cloud update: a caller that doesn't carry the value (older
+    // snapshots, other edits) must not wipe it.
+    const kept = {
+      ...updatedItem,
+      estimatedValue: updatedItem.estimatedValue ?? item.estimatedValue,
+      valueSource: updatedItem.valueSource ?? item.valueSource,
+    };
     // Keep the stored wear data unless the caller is the wear tracker itself.
-    return opts.includeWear
-      ? updatedItem
-      : { ...updatedItem, wearCount: item.wearCount, lastWorn: item.lastWorn };
+    return opts.includeWear ? kept : { ...kept, wearCount: item.wearCount, lastWorn: item.lastWorn };
   });
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedItems));
 };
@@ -152,25 +168,41 @@ const isMissingColumnError = (error: any, column: string): boolean =>
   typeof error?.message === 'string' &&
   error.message.includes(`'${column}'`);
 
+/**
+ * Columns added by a migration, grouped by migration. When the live table lacks
+ * one (the migration hasn't been applied to this project yet) the write is
+ * retried without its group, rather than blocking the whole item.
+ */
+const MIGRATION_COLUMNS: string[][] = [['materials'], ['estimated_value', 'value_source']];
+
+const writeWithoutMissingColumns = async (
+  payload: Record<string, any>,
+  write: (p: Record<string, any>) => PromiseLike<{ error: any }>,
+  verb: string,
+): Promise<void> => {
+  let current = payload;
+  for (;;) {
+    const { error } = await write(current);
+    if (!error) return;
+    const group = MIGRATION_COLUMNS.find(columns =>
+      columns.some(column => column in current && isMissingColumnError(error, column)),
+    );
+    if (!group) throw error;
+    console.warn(`[storage] clothing_items.${group.join(', ')} missing (migration not applied) — ${verb} without it`);
+    current = Object.fromEntries(Object.entries(current).filter(([column]) => !group.includes(column)));
+  }
+};
+
 export const saveClothingItem = async (item: ClothingItem): Promise<void> => {
   try {
     const userId = await getAuthUserId();
     if (!userId) return saveLocalItem(item);
 
-    const payload = mapClothingItemToDb(item, userId);
-    const { error } = await supabase.from('clothing_items').insert(payload);
-    if (error) {
-      if (isMissingColumnError(error, 'materials')) {
-        // The 003_materials_composition migration hasn't been applied to this
-        // project yet. Save without it rather than blocking the whole item.
-        console.warn('[storage] clothing_items.materials column missing (migration not applied) — saving without it');
-        const { materials, ...fallbackPayload } = payload;
-        const { error: fallbackError } = await supabase.from('clothing_items').insert(fallbackPayload);
-        if (fallbackError) throw fallbackError;
-        return;
-      }
-      throw error;
-    }
+    await writeWithoutMissingColumns(
+      mapClothingItemToDb(item, userId),
+      p => supabase.from('clothing_items').insert(p),
+      'saving',
+    );
   } catch (error) {
     console.error('Error saving clothing item:', error);
     throw error;
@@ -312,6 +344,13 @@ export const updateClothingItem = async (
       payload.wear_count = updatedItem.wearCount;
       payload.last_worn = updatedItem.lastWorn ?? null;
     }
+    // Only when the caller has a value: the other edit screens hold items from
+    // before it existed, and writing null would wipe it. Going back to the
+    // automatic estimate is a write of the new estimate with source 'estimate'.
+    const estimatedValue = valueForDb(updatedItem.estimatedValue);
+    if (estimatedValue !== undefined) payload.estimated_value = estimatedValue;
+    const valueSource = valueSourceOf(updatedItem.valueSource);
+    if (valueSource !== undefined) payload.value_source = valueSource;
 
     // Remember the photos this row used so ones that were replaced can be removed.
     const { data: before } = await supabase
@@ -321,25 +360,16 @@ export const updateClothingItem = async (
       .eq('user_id', userId)
       .maybeSingle();
 
-    const { error } = await supabase.from('clothing_items').update(payload).eq('id', updatedItem.id);
-    if (!error && before) {
+    await writeWithoutMissingColumns(
+      payload,
+      p => supabase.from('clothing_items').update(p).eq('id', updatedItem.id),
+      'updating',
+    );
+    if (before) {
       const keep = [payload.user_image, payload.retailer_image];
       await removeCloudImages(
         [before.user_image, before.retailer_image].filter(u => u && !keep.includes(u)),
       );
-    }
-    if (error) {
-      if (isMissingColumnError(error, 'materials')) {
-        console.warn('[storage] clothing_items.materials column missing (migration not applied) — updating without it');
-        const { materials, ...fallbackPayload } = payload;
-        const { error: fallbackError } = await supabase
-          .from('clothing_items')
-          .update(fallbackPayload)
-          .eq('id', updatedItem.id);
-        if (fallbackError) throw fallbackError;
-        return;
-      }
-      throw error;
     }
   } catch (error) {
     console.error('Error updating clothing item:', error);

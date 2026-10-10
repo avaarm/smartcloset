@@ -82,3 +82,18 @@ describe('Category Breakdown', () => {
     expect(t.slice(t.indexOf('Category Breakdown'))).not.toContain('Hats');
   });
 });
+
+describe('Wardrobe value', () => {
+  it("is the same total as the Wardrobe and Home screens: each item's own value, not a retail-price sum", async () => {
+    const t = await mount([
+      // The owner set this one: $400, though it was bought for $100 (retail $200).
+      item('bags', { estimatedValue: 400, valueSource: 'user', cost: 100, retailCost: 200 }),
+      // Never priced: valued by the estimate, which a retail sum would have left at $0.
+      item('tops', { estimatedValue: 45, valueSource: 'estimate' }),
+    ]);
+    const kpi = t.slice(t.indexOf('Wardrobe value'), t.indexOf('Wardrobe value') + 60);
+    expect(kpi).toContain('$445');
+    expect(kpi).toContain("what it's worth now");
+    expect(kpi).not.toContain('at retail');
+  });
+});

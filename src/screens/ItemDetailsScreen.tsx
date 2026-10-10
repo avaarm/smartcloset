@@ -11,6 +11,8 @@ import {
   StatusBar,
   Share,
   Alert,
+  TextInput,
+  Platform,
 } from 'react-native';
 import { useRoute, useNavigation, useFocusEffect, RouteProp } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -18,12 +20,153 @@ import LinearGradient from 'react-native-linear-gradient';
 import theme from '../styles/theme';
 import { ClothingItem } from '../types';
 import { categoryLabel } from '../utils/clothingOptions';
+import { estimateItemValue, formatMoney, itemValue, ValueSource } from '../utils/itemValue';
+import { parseMoney } from '../utils/money';
+import { KeyboardDoneBar, keyboardDoneProps } from '../components/KeyboardSafe';
 import { WearTrackingService } from '../services/wearTrackingService';
 import { deleteClothingItem, getClothingItem, updateClothingItem } from '../services/storage';
 
 const { width, height } = Dimensions.get('window');
 
 type ItemDetailsRouteProp = RouteProp<{ ItemDetails: { item: ClothingItem } }, 'ItemDetails'>;
+
+const VALUE_HINT: Record<ValueSource, string> = {
+  paid: 'what you paid',
+  retail: 'the retail price',
+  match: 'the matching product',
+  brand: 'its brand and category',
+  category: 'its category',
+};
+
+const MAX_ITEM_VALUE = 1_000_000;
+
+type ValueFields = Pick<ClothingItem, 'estimatedValue' | 'valueSource'>;
+
+/** What the item is worth now, with an inline editor. Not shown for wishlist items (their value is the listed price). */
+const ItemValueCard: React.FC<{ item: ClothingItem; onChange: (fields: ValueFields) => void }> = ({
+  item,
+  onChange,
+}) => {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const value = itemValue(item);
+  const isUserValue = item.valueSource === 'user' && item.estimatedValue != null;
+
+  const startEditing = () => {
+    setDraft(String(Math.round(value)));
+    setError(null);
+    setEditing(true);
+  };
+
+  const persist = async (fields: Required<ValueFields>) => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await updateClothingItem({ ...item, ...fields });
+      onChange(fields);
+      setEditing(false);
+    } catch {
+      setError('Could not save the value. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const save = () => {
+    const amount = parseMoney(draft);
+    if (!Number.isFinite(amount) || amount > MAX_ITEM_VALUE) {
+      setError('Enter a dollar amount, like 85.');
+      return;
+    }
+    persist({ estimatedValue: Math.round(amount), valueSource: 'user' });
+  };
+
+  // Back to the automatic number; it is stored as an estimate so it is not mistaken for the owner's own.
+  const resetToEstimate = () => persist({ estimatedValue: estimateItemValue(item).value, valueSource: 'estimate' });
+
+  return (
+    <View style={styles.detailsSection}>
+      <Text style={styles.sectionTitle}>Value</Text>
+      <View style={styles.valueCard}>
+        {editing ? (
+          <>
+            <View style={styles.valueInputRow}>
+              <Text style={styles.valuePrefix}>$</Text>
+              <TextInput
+                style={styles.valueInput}
+                value={draft}
+                onChangeText={text => {
+                  setDraft(text);
+                  setError(null);
+                }}
+                keyboardType="decimal-pad"
+                autoFocus
+                selectTextOnFocus
+                placeholder="0"
+                placeholderTextColor={theme.colors.textSubtle}
+                accessibilityLabel="Item value in dollars"
+                onSubmitEditing={save}
+                {...keyboardDoneProps}
+              />
+            </View>
+            {!!error && <Text style={styles.valueError}>{error}</Text>}
+            <View style={styles.valueButtons}>
+              <TouchableOpacity
+                style={styles.valueCancel}
+                onPress={() => setEditing(false)}
+                disabled={saving}
+                accessibilityRole="button"
+              >
+                <Text style={styles.valueCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.valueSave}
+                onPress={save}
+                disabled={saving}
+                accessibilityRole="button"
+              >
+                <Text style={styles.valueSaveText}>{saving ? 'Saving…' : 'Save'}</Text>
+              </TouchableOpacity>
+            </View>
+            {isUserValue && (
+              <TouchableOpacity
+                style={styles.valueReset}
+                onPress={resetToEstimate}
+                disabled={saving}
+                accessibilityRole="button"
+              >
+                <Text style={styles.valueResetText}>Reset to estimate</Text>
+              </TouchableOpacity>
+            )}
+          </>
+        ) : (
+          <View style={styles.valueRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.valueAmount}>{formatMoney(value)}</Text>
+              <Text style={styles.valueTag}>{isUserValue ? 'Your value' : 'Estimated'}</Text>
+              {/* Only say where the number came from when a fresh estimate gives the same number: a stored
+                  estimate may have been worked out from a matched product's price, which isn't saved. */}
+              {!isUserValue && estimateItemValue(item).value === value && (
+                <Text style={styles.valueHint}>From {VALUE_HINT[estimateItemValue(item).source]}</Text>
+              )}
+            </View>
+            <TouchableOpacity
+              style={styles.valueEditButton}
+              onPress={startEditing}
+              accessibilityRole="button"
+              accessibilityLabel="Edit value"
+            >
+              <Text style={styles.valueEditText}>Edit</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+};
 
 const ItemDetailsScreen: React.FC = () => {
   const route = useRoute<ItemDetailsRouteProp>();
@@ -228,8 +371,12 @@ const ItemDetailsScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
+      {/* The same keyboard handling as KeyboardSafeScrollView, which can't be an Animated.ScrollView. */}
       <Animated.ScrollView
         style={styles.scrollView}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
         onScroll={Animated.event(
@@ -298,6 +445,10 @@ const ItemDetailsScreen: React.FC = () => {
               </View>
             )}
           </View>
+          )}
+
+          {!item.isWishlist && (
+            <ItemValueCard item={item} onChange={fields => setItem(prev => ({ ...prev, ...fields }))} />
           )}
 
           {/* Details Section */}
@@ -573,6 +724,7 @@ const ItemDetailsScreen: React.FC = () => {
           )}
         </View>
       </Animated.ScrollView>
+      <KeyboardDoneBar />
     </View>
   );
 };
@@ -864,6 +1016,114 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     color: theme.colors.text,
+  },
+  // Value card
+  valueCard: {
+    backgroundColor: theme.colors.cardBackground,
+    borderRadius: 12,
+    padding: 16,
+    ...theme.shadows.subtle,
+  },
+  valueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  valueAmount: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: theme.colors.text,
+  },
+  valueTag: {
+    fontSize: 12,
+    color: theme.colors.mediumGray,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+  valueHint: {
+    fontSize: 12,
+    color: theme.colors.textSubtle,
+    marginTop: 4,
+  },
+  valueEditButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 18,
+    backgroundColor: theme.colors.mutedBackground,
+  },
+  valueEditText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.accent,
+  },
+  valueInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: theme.colors.accent,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    backgroundColor: theme.colors.background,
+  },
+  valuePrefix: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: theme.colors.text,
+    marginRight: 4,
+  },
+  valueInput: {
+    flex: 1,
+    fontSize: 22,
+    fontWeight: '700',
+    color: theme.colors.text,
+    paddingVertical: 12,
+  },
+  valueError: {
+    fontSize: 13,
+    color: theme.colors.error,
+    marginTop: 8,
+  },
+  valueButtons: {
+    flexDirection: 'row',
+    marginTop: 12,
+  },
+  valueCancel: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginRight: 12,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: theme.colors.accent,
+  },
+  valueCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.accent,
+  },
+  valueSave: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: theme.colors.accent,
+    backgroundColor: theme.colors.accent,
+  },
+  valueSaveText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  valueReset: {
+    alignSelf: 'center',
+    marginTop: 12,
+    padding: 6,
+  },
+  valueResetText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.accent,
   },
   // Materials composition
   materialRow: {

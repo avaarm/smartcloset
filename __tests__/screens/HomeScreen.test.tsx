@@ -185,3 +185,50 @@ describe('HomeScreen load states', () => {
     await act(async () => refresh(three()));
   });
 });
+
+describe('HomeScreen wardrobe worth', () => {
+  const worth = (tree: renderer.ReactTestRenderer) =>
+    tree.root.find(n => /^WardrobeWorth: /.test(n.props.accessibilityLabel ?? '') && !!n.props.onPress).props
+      .accessibilityLabel as string;
+
+  it('adds up what the owned items are worth now, not what they cost', async () => {
+    mockItems.mockResolvedValue([
+      item({ cost: 100 }),
+      item({ cost: 10, estimatedValue: 250, valueSource: 'user' }),
+    ]);
+    mockOutfits.mockResolvedValue([]);
+    const tree = await mount();
+    expect(text(tree)).toContain('$350');
+    expect(worth(tree)).toBe('WardrobeWorth: $350, view insights');
+  });
+
+  it('leaves the wishlist out, whatever it is priced at', async () => {
+    mockItems.mockResolvedValue([
+      item({ estimatedValue: 80, valueSource: 'user' }),
+      item({ isWishlist: true, cost: 862, retailer: '', estimatedValue: 900, valueSource: 'user' }),
+    ]);
+    mockOutfits.mockResolvedValue([]);
+    const tree = await mount();
+    expect(worth(tree)).toBe('WardrobeWorth: $80, view insights');
+    for (const wrong of ['$862', '$900', '$942', '$980']) expect(text(tree)).not.toContain(wrong);
+  });
+
+  it('estimates items that have no value or price yet, so a wardrobe of legacy items is not worth $0', async () => {
+    mockItems.mockResolvedValue([item({ category: 'tops' }), item({ category: 'bags', brand: 'Gucci' })]);
+    mockOutfits.mockResolvedValue([]);
+    expect(worth(await mount())).toBe('WardrobeWorth: $755, view insights');
+  });
+
+  it('shows thousands in full', async () => {
+    mockItems.mockResolvedValue([item({ estimatedValue: 12345, valueSource: 'user' })]);
+    mockOutfits.mockResolvedValue([]);
+    const tree = await mount();
+    expect(text(tree)).toContain('$12,345');
+  });
+
+  it('keeps its label', async () => {
+    mockItems.mockResolvedValue(three());
+    mockOutfits.mockResolvedValue([]);
+    expect(text(await mount())).toContain('WardrobeWorth');
+  });
+});

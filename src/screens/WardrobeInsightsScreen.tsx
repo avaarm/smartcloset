@@ -23,6 +23,7 @@ import { Card, Screen, Text, Badge, EmptyState } from '../ui';
 import { useTheme } from '../styles/ThemeProvider';
 import { ClothingItem, ClothingCategory } from '../types';
 import { getClothingItems } from '../services/storage';
+import { totalValue as sumValue } from '../utils/itemValue';
 import {
   CATEGORY_COLORS,
   CATEGORY_ICONS,
@@ -108,9 +109,13 @@ const WardrobeInsightsScreen: React.FC = () => {
   // Spending = what you actually paid; the cost field is "Used" in the form.
   const totalSpent = items.reduce((sum, i) => sum + (i.cost || 0), 0);
 
-  // Wardrobe value = retail/new price for each item, falling back to cost
-  // when retail wasn't recorded so the number isn't an underestimate.
-  const totalValue = items.reduce(
+  // What the wardrobe is worth today: the same figure as the Wardrobe and Home
+  // screens (each item's own value, estimated when the owner hasn't set one).
+  const currentValue = sumValue(items);
+
+  // Retail/new price for each item, falling back to cost when retail wasn't
+  // recorded. Only the denominator of "% off retail" below.
+  const retailValue = items.reduce(
     (sum, i) => sum + (i.retailCost || i.cost || 0),
     0,
   );
@@ -124,7 +129,7 @@ const WardrobeInsightsScreen: React.FC = () => {
     return sum;
   }, 0);
   const savingsPercent =
-    totalValue > 0 ? Math.round((totalSavings / totalValue) * 100) : 0;
+    retailValue > 0 ? Math.round((totalSavings / retailValue) * 100) : 0;
 
   const itemsWithCost = items.filter(i => i.cost && i.cost > 0);
   const avgItemCost =
@@ -229,8 +234,8 @@ const WardrobeInsightsScreen: React.FC = () => {
         </Card>
         <Card style={s.kpiCard}>
           <Text variant="overline" color="muted">Wardrobe value</Text>
-          <Text variant="h2">{formatCurrency(totalValue)}</Text>
-          <Text variant="caption" color="muted">at retail / new</Text>
+          <Text variant="h2">{formatCurrency(currentValue)}</Text>
+          <Text variant="caption" color="muted">what it's worth now</Text>
         </Card>
       </View>
 
