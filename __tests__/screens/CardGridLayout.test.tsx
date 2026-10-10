@@ -6,9 +6,10 @@ import WardrobeScreen from '../../src/screens/WardrobeScreen';
 import WishlistScreen from '../../src/screens/WishlistScreen';
 import ClothingItem from '../../src/components/ClothingItem';
 import {
-  CARD_MARGIN,
   GRID_COLUMNS,
+  GRID_LAYOUTS,
   GRID_SIDE_PADDING,
+  GridVariant,
   gridCardWidth,
 } from '../../src/utils/clothingGrid';
 import { getOwnedClothingItems, getWishlistClothingItems } from '../../src/services/storage';
@@ -74,32 +75,37 @@ const cards = (tree: renderer.ReactTestRenderer) =>
     .findAll(node => typeof node.type === 'string' && node.props.testID === 'clothing-card')
     .map(node => StyleSheet.flatten(node.props.style) as any);
 
-/** Asserts that one row of cards fills the list's content width without passing it. */
-const expectRowFits = (tree: renderer.ReactTestRenderer, windowWidth: number) => {
+/**
+ * Asserts that one row of cards fills the list's content width without passing it.
+ * Three cards are rendered, so the compact (three-across) row is a full one.
+ */
+const expectRowFits = (tree: renderer.ReactTestRenderer, windowWidth: number, variant: GridVariant = 'default') => {
+  const { columns, sidePadding: expectedPadding, margin } = GRID_LAYOUTS[variant];
   const list = StyleSheet.flatten(tree.root.findByType(FlatList).props.contentContainerStyle) as any;
   const sidePadding = list.paddingHorizontal ?? list.padding;
-  expect(sidePadding).toBe(GRID_SIDE_PADDING);
+  expect(sidePadding).toBe(expectedPadding);
+  expect(tree.root.findByType(FlatList).props.numColumns).toBe(columns);
 
   const styles = cards(tree);
   expect(styles).toHaveLength(3);
-  for (const s of styles) expect(s.margin).toBe(CARD_MARGIN);
+  for (const s of styles) expect(s.margin).toBe(margin);
 
   const available = windowWidth - 2 * sidePadding;
-  const row = styles.slice(0, GRID_COLUMNS).reduce((sum, s) => sum + s.width + 2 * s.margin, 0);
+  const row = styles.slice(0, columns).reduce((sum, s) => sum + s.width + 2 * s.margin, 0);
   expect(row).toBeLessThanOrEqual(available);
-  // ...and uses (almost) all of it: no dead strip beside the second column.
-  expect(available - row).toBeLessThan(GRID_COLUMNS);
+  // ...and uses (almost) all of it: no dead strip beside the last column.
+  expect(available - row).toBeLessThan(columns);
 };
 
 describe('the Wardrobe grid', () => {
-  it.each(WIDTHS)('fits two columns of long-titled cards at %ipt', async width => {
+  it.each(WIDTHS)('fits three columns of compact, long-titled cards at %ipt', async width => {
     setWindowWidth(width);
     (getOwnedClothingItems as jest.Mock).mockResolvedValue(grid());
     let tree!: renderer.ReactTestRenderer;
     await act(async () => {
       tree = renderer.create(<WardrobeScreen navigation={mockNavigation as any} />);
     });
-    expectRowFits(tree, width);
+    expectRowFits(tree, width, 'compact');
   });
 });
 

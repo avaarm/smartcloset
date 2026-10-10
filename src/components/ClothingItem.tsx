@@ -5,11 +5,15 @@ import type { ClothingItem as ClothingItemType } from '../types';
 import theme from '../styles/theme';
 import type { BodyProfile } from '../services/profileService';
 import { getColorMatch } from './clothingColorMatch';
-import { CARD_MARGIN, gridCardWidth } from '../utils/clothingGrid';
+import { COMPACT_DETAILS, GRID_LAYOUTS, gridCardWidth } from '../utils/clothingGrid';
 import { categoryLabel } from '../utils/clothingOptions';
 
 // The label alone is a short line of text; this brings the tap target to iOS's 44pt.
 const MOVE_HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 };
+
+// The compact edit/delete buttons are drawn 26pt; this brings each to a 32pt touch target.
+// The 6pt gap between them is exactly twice the slop, so the two targets meet without overlapping.
+const COMPACT_ACTION_HIT_SLOP = { top: 3, bottom: 3, left: 3, right: 3 };
 
 interface Props {
   item: ClothingItemType;
@@ -21,6 +25,8 @@ interface Props {
   /** Wishlist only: adds a "Move to wardrobe" button under the details. */
   onMoveToWardrobe?: (item: ClothingItemType) => void;
   showActions?: boolean;
+  /** 'compact': a small three-across card for the Wardrobe (square photo, one-line text). */
+  variant?: 'default' | 'compact';
 }
 
 const ClothingItem: React.FC<Props> = ({
@@ -31,7 +37,9 @@ const ClothingItem: React.FC<Props> = ({
   onPress,
   onMoveToWardrobe,
   showActions = false,
+  variant = 'default',
 }) => {
+  const compact = variant === 'compact';
   const [scaleAnim] = useState(new Animated.Value(1));
   const [imageError, setImageError] = useState(false);
   // Read per render, not at module load, so the card follows the real window.
@@ -79,6 +87,23 @@ const ClothingItem: React.FC<Props> = ({
   };
 
   const cardLabel = [item.name, categoryLabel(item.category), item.brand].filter(Boolean).join(', ');
+  const metaLine = [categoryLabel(item.category), item.brand].filter(Boolean).join(' · ');
+  const imageStyle = compact ? styles.imageSquare : styles.image;
+  const colorMatchText = colorMatch === 'match' ? 'Great color for you' : 'Outside your palette';
+  const colorMatchColor = colorMatch === 'match' ? '#2E8B57' : '#E57373';
+
+  const photo = imageError || !(item.userImage || item.retailerImage) ? (
+    <View style={[imageStyle, styles.imagePlaceholder]}>
+      <Icon name="shirt-outline" size={compact ? 28 : 44} color="#C8BBA6" />
+    </View>
+  ) : (
+    <Image
+      source={{ uri: item.userImage || item.retailerImage }}
+      style={imageStyle}
+      resizeMode="cover"
+      onError={() => setImageError(true)}
+    />
+  );
 
   // The card itself is not an accessibility element: VoiceOver can't reach a
   // button nested inside one. The photo and details are the element for the
@@ -89,7 +114,11 @@ const ClothingItem: React.FC<Props> = ({
     <Animated.View
       testID="clothing-card"
       accessible={false}
-      style={[styles.container, { width: gridCardWidth(windowWidth), transform: [{ scale: scaleAnim }] }]}
+      style={[
+        styles.container,
+        compact && styles.containerCompact,
+        { width: gridCardWidth(windowWidth, variant), transform: [{ scale: scaleAnim }] },
+      ]}
     >
       <Pressable
         style={({ pressed }) => [styles.main, pressed && styles.pressed]}
@@ -100,58 +129,71 @@ const ClothingItem: React.FC<Props> = ({
         accessible
         accessibilityRole={onPress ? 'button' : undefined}
         accessibilityLabel={cardLabel}
+        // The compact card shows the match as a bare dot; this is what the dot says.
+        accessibilityValue={compact && colorMatch ? { text: colorMatchText } : undefined}
       >
-        {imageError || !(item.userImage || item.retailerImage) ? (
-          <View style={[styles.image, styles.imagePlaceholder]}>
-            <Icon name="shirt-outline" size={44} color="#C8BBA6" />
+        {compact ? (
+          <View>
+            {photo}
+            {colorMatch ? (
+              <View
+                style={[
+                  styles.colorMatchDotCompact,
+                  // Filled = in your palette, hollow ring = outside it, so the two differ by shape
+                  // as well as colour (red and green look alike to some people).
+                  colorMatch === 'match'
+                    ? { backgroundColor: colorMatchColor }
+                    : { backgroundColor: '#FFFFFF', borderColor: colorMatchColor, borderWidth: 2 },
+                ]}
+              />
+            ) : null}
           </View>
         ) : (
-          <Image
-            source={{ uri: item.userImage || item.retailerImage }}
-            style={styles.image}
-            resizeMode="cover"
-            onError={() => setImageError(true)}
-          />
+          photo
         )}
         {item.season && item.season.length > 0 && (
-          <View style={styles.seasonBadge}>
-            <Icon name="sunny-outline" size={12} color="#FFFFFF" />
+          <View style={[styles.seasonBadge, compact && styles.seasonBadgeCompact]}>
+            <Icon name="sunny-outline" size={compact ? 10 : 12} color="#FFFFFF" />
           </View>
         )}
-        <View style={styles.details}>
-          <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
-          <Text style={styles.category} numberOfLines={1}>{categoryLabel(item.category)}</Text>
-          {item.brand ? <Text style={styles.brand} numberOfLines={1}>{item.brand}</Text> : null}
-          {colorMatch && (
-            <View style={styles.colorMatchRow}>
-              <View style={[
-                styles.colorMatchDot,
-                { backgroundColor: colorMatch === 'match' ? '#2E8B57' : '#E57373' },
-              ]} />
-              <Text style={styles.colorMatchText} numberOfLines={1}>
-                {colorMatch === 'match' ? 'Great color for you' : 'Outside your palette'}
-              </Text>
-            </View>
-          )}
-        </View>
+        {compact ? (
+          <View style={styles.detailsCompact}>
+            <Text style={styles.nameCompact} numberOfLines={1}>{item.name}</Text>
+            <Text style={styles.metaCompact} numberOfLines={1}>{metaLine}</Text>
+          </View>
+        ) : (
+          <View style={styles.details}>
+            <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
+            <Text style={styles.category} numberOfLines={1}>{categoryLabel(item.category)}</Text>
+            {item.brand ? <Text style={styles.brand} numberOfLines={1}>{item.brand}</Text> : null}
+            {colorMatch && (
+              <View style={styles.colorMatchRow}>
+                <View style={[styles.colorMatchDot, { backgroundColor: colorMatchColor }]} />
+                <Text style={styles.colorMatchText} numberOfLines={1}>{colorMatchText}</Text>
+              </View>
+            )}
+          </View>
+        )}
       </Pressable>
       {showActions && (
-        <View style={styles.actionsContainer}>
+        <View style={[styles.actionsContainer, compact && styles.actionsContainerCompact]}>
           <TouchableOpacity
-            style={[styles.actionButton, styles.editButton]}
+            style={[styles.actionButton, compact && styles.actionButtonCompact, styles.editButton]}
             onPress={() => onEdit?.(item)}
+            hitSlop={compact ? COMPACT_ACTION_HIT_SLOP : undefined}
             accessibilityRole="button"
             accessibilityLabel={`Edit ${item.name}`}
           >
-            <Icon name="pencil" size={16} color={theme.colors.cardBackground} />
+            <Icon name="pencil" size={compact ? 13 : 16} color={theme.colors.cardBackground} />
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.actionButton, styles.deleteButton]}
+            style={[styles.actionButton, compact && styles.actionButtonCompact, styles.deleteButton]}
             onPress={handleDelete}
+            hitSlop={compact ? COMPACT_ACTION_HIT_SLOP : undefined}
             accessibilityRole="button"
             accessibilityLabel={`Delete ${item.name}`}
           >
-            <Icon name="trash" size={16} color={theme.colors.cardBackground} />
+            <Icon name="trash" size={compact ? 13 : 16} color={theme.colors.cardBackground} />
           </TouchableOpacity>
         </View>
       )}
@@ -175,11 +217,15 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: theme.colors.cardBackground,
     borderRadius: theme.borderRadius.medium,
-    margin: CARD_MARGIN,
+    margin: GRID_LAYOUTS.default.margin,
     // Fill the grid row's height, so cards side by side end on the same edge
     // however many lines their names and brands take.
     alignSelf: 'stretch',
     ...theme.shadows.card,
+  },
+  containerCompact: {
+    margin: GRID_LAYOUTS.compact.margin,
+    borderRadius: theme.borderRadius.small,
   },
   // Takes the height the card has left, which holds the Move button at the
   // bottom edge of every card in a row.
@@ -198,9 +244,33 @@ const styles = StyleSheet.create({
     borderTopRightRadius: theme.borderRadius.medium,
     backgroundColor: theme.colors.mutedBackground,
   },
+  imageSquare: {
+    width: '100%',
+    aspectRatio: 1,
+    borderTopLeftRadius: theme.borderRadius.small,
+    borderTopRightRadius: theme.borderRadius.small,
+    backgroundColor: theme.colors.mutedBackground,
+  },
   imagePlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  detailsCompact: {
+    padding: COMPACT_DETAILS.padding,
+  },
+  // Explicit line heights: the grid's row-height arithmetic (clothingGrid) counts on them.
+  nameCompact: {
+    fontSize: theme.typography.fontSize.small,
+    lineHeight: COMPACT_DETAILS.nameLine,
+    fontWeight: '600',
+    color: theme.colors.text,
+    letterSpacing: theme.typography.letterSpacing.tight,
+  },
+  metaCompact: {
+    marginTop: COMPACT_DETAILS.gap,
+    fontSize: theme.typography.fontSize.tiny,
+    lineHeight: COMPACT_DETAILS.metaLine,
+    color: theme.colors.mediumGray,
   },
   details: {
     padding: theme.spacing.small,
@@ -232,6 +302,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: theme.spacing.tiny,
   },
+  // 4pt in from the card edge, so the buttons' touch slop stays inside the card.
+  actionsContainerCompact: {
+    top: 4,
+    right: 4,
+    gap: 6,
+  },
   actionButton: {
     width: 32,
     height: 32,
@@ -239,6 +315,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     ...theme.shadows.subtle,
+  },
+  actionButtonCompact: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
   },
   editButton: {
     backgroundColor: theme.colors.accent,
@@ -257,6 +338,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     ...theme.shadows.subtle,
+  },
+  seasonBadgeCompact: {
+    top: 4,
+    left: 4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
+  // Bottom-left of the photo, ringed in white so it reads on any picture.
+  colorMatchDotCompact: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
   },
   colorMatchRow: {
     flexDirection: 'row',

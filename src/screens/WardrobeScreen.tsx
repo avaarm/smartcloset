@@ -21,9 +21,12 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { Badge, EmptyState, Screen, Text } from '../ui';
 import { useTheme } from '../styles/ThemeProvider';
 import ClothingItem from '../components/ClothingItem';
-import { GRID_COLUMNS, GRID_SIDE_PADDING } from '../utils/clothingGrid';
+import WardrobeTotalStrip from '../components/WardrobeTotalStrip';
+import { GRID_LAYOUTS } from '../utils/clothingGrid';
 import { CATEGORY_LABELS, SEASON_LABELS, normalizeSeasons } from '../utils/clothingOptions';
 import { itemCountLabel } from '../utils/itemCountLabel';
+import { keyboardListProps } from '../utils/keyboardListProps';
+import { totalValue } from '../utils/itemValue';
 import LoadError from '../components/LoadError';
 import { useLoadable } from '../hooks/useLoadable';
 import { ClothingItem as ClothingItemType } from '../types';
@@ -39,6 +42,9 @@ type WardrobeScreenProps = {
 type WardrobeData = { items: ClothingItemType[]; profile: BodyProfile | null };
 
 const EMPTY_WARDROBE: WardrobeData = { items: [], profile: null };
+
+// Fixed for the life of the list: a mounted FlatList cannot change its column count.
+const GRID = GRID_LAYOUTS.compact;
 
 // The body profile is read once here (not per card) for the color-match hints.
 const loadWardrobe = async (): Promise<WardrobeData> => {
@@ -107,6 +113,9 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
     setFilters(newFilters);
   };
 
+  // Of the whole wardrobe, not of what a search or filter leaves showing.
+  const wardrobeValue = useMemo(() => totalValue(clothes), [clothes]);
+
   const filteredAndSortedClothes = useMemo(() => {
     let result = [...clothes];
 
@@ -170,6 +179,7 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
         onDelete={handleDelete}
         onPress={handleItemPress}
         showActions={true}
+        variant="compact"
       />
     ),
     [profile, handleEdit, handleDelete, handleItemPress],
@@ -238,6 +248,8 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
         </View>
       </View>
 
+      {hasLoaded ? <WardrobeTotalStrip total={wardrobeValue} count={clothes.length} /> : null}
+
       {/* Search */}
       <View
         style={[
@@ -257,6 +269,8 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
           onChangeText={setSearchQuery}
           autoCapitalize="none"
           autoCorrect={false}
+          returnKeyType="search"
+          blurOnSubmit
           accessibilityLabel="Search wardrobe"
           accessibilityRole="search"
         />
@@ -317,8 +331,9 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
               data={filteredAndSortedClothes}
               renderItem={renderItem}
               keyExtractor={item => item.id}
-              numColumns={GRID_COLUMNS}
-              contentContainerStyle={{ flexGrow: 1, paddingHorizontal: GRID_SIDE_PADDING, paddingBottom: 100 }}
+              {...keyboardListProps}
+              numColumns={GRID.columns}
+              contentContainerStyle={{ flexGrow: 1, paddingHorizontal: GRID.sidePadding, paddingBottom: 100 }}
               showsVerticalScrollIndicator={false}
               refreshControl={
                 <RefreshControl
