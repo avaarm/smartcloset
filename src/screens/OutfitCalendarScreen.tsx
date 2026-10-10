@@ -19,7 +19,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { Card, Screen, Text, EmptyState, Badge } from '../ui';
 import { useTheme } from '../styles/ThemeProvider';
 import { ClothingItem } from '../types';
-import { getClothingItems } from '../services/storage';
+import { getOwnedClothingItems } from '../services/storage';
 import { getSavedOutfits, Outfit } from '../services/outfitService';
 
 // ─── Date helpers ───────────────────────────────────────────────────────────
@@ -62,12 +62,12 @@ const OutfitCalendarScreen: React.FC = () => {
       (async () => {
         setLoading(true);
         try {
-          const [allItems, allOutfits] = await Promise.all([
-            getClothingItems({ all: true }),
+          const [ownedItems, allOutfits] = await Promise.all([
+            getOwnedClothingItems(),
             getSavedOutfits(),
           ]);
           if (active) {
-            setItems(allItems.filter(i => !i.isWishlist));
+            setItems(ownedItems);
             setOutfits(allOutfits);
           }
         } catch (error) {

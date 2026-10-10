@@ -21,13 +21,16 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { Badge, EmptyState, Screen, Text } from '../ui';
 import { useTheme } from '../styles/ThemeProvider';
 import ClothingItem from '../components/ClothingItem';
+import { GRID_COLUMNS, GRID_SIDE_PADDING } from '../utils/clothingGrid';
+import { CATEGORY_LABELS, SEASON_LABELS, normalizeSeasons } from '../utils/clothingOptions';
+import { itemCountLabel } from '../utils/itemCountLabel';
 import LoadError from '../components/LoadError';
 import { useLoadable } from '../hooks/useLoadable';
 import { ClothingItem as ClothingItemType } from '../types';
 import { getOwnedClothingItems, deleteClothingItem } from '../services/storage';
 import { BodyProfile, getBodyProfile } from '../services/profileService';
 import FilterModal, { FilterOptions } from '../components/FilterModal';
-import { ClothingCategory, Season } from '../types';
+import { ClothingCategory } from '../types';
 
 type WardrobeScreenProps = {
   navigation: NativeStackNavigationProp<any, 'WardrobeMain'>;
@@ -126,9 +129,12 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
     }
 
     if (filters.seasons.length > 0) {
-      result = result.filter(item =>
-        item.season?.some((s: Season) => filters.seasons.includes(s)),
-      );
+      // Old data lists ['all'] or nothing; normalizeSeasons reads 'all' as every
+      // season, and an item with no season is year-round (as in outfit generation).
+      result = result.filter(item => {
+        const seasons = normalizeSeasons(item.season);
+        return seasons.length === 0 || seasons.some(s => filters.seasons.includes(s));
+      });
     }
 
     result.sort((a, b) => {
@@ -170,6 +176,7 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
   );
 
   const activeFiltersCount = filters.categories.length + filters.seasons.length;
+  const isNarrowed = activeFiltersCount > 0 || searchQuery.trim().length > 0;
 
   const headerElement = (
     <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
@@ -178,7 +185,7 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
           <Text variant="h2">My Wardrobe</Text>
           {hasLoaded ? (
             <Text variant="caption" color="muted" style={{ marginTop: 2 }}>
-              {filteredAndSortedClothes.length} of {clothes.length} items
+              {itemCountLabel(clothes.length, isNarrowed ? filteredAndSortedClothes.length : undefined)}
             </Text>
           ) : null}
         </View>
@@ -264,10 +271,10 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
       {activeFiltersCount > 0 && (
         <View style={styles.filterStrip}>
           {filters.categories.map(c => (
-            <Badge key={c} label={c} tone="accent" />
+            <Badge key={c} label={CATEGORY_LABELS[c]} tone="accent" />
           ))}
           {filters.seasons.map(s => (
-            <Badge key={s} label={s} tone="neutral" />
+            <Badge key={s} label={SEASON_LABELS[s]} tone="neutral" />
           ))}
           <Pressable
             onPress={() => setFilters({ categories: [], seasons: [], sortBy: 'date', sortOrder: 'desc' })}
@@ -310,8 +317,8 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
               data={filteredAndSortedClothes}
               renderItem={renderItem}
               keyExtractor={item => item.id}
-              numColumns={2}
-              contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 12, paddingBottom: 100 }}
+              numColumns={GRID_COLUMNS}
+              contentContainerStyle={{ flexGrow: 1, paddingHorizontal: GRID_SIDE_PADDING, paddingBottom: 100 }}
               showsVerticalScrollIndicator={false}
               refreshControl={
                 <RefreshControl

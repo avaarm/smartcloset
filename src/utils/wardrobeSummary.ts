@@ -6,7 +6,7 @@ export type WardrobeSummary = {
   wishlist: number;
   /** What the owned items cost the user. */
   value: number;
-  /** Newest-first, for the Home "Recently added" strip. */
+  /** Owned items only, newest-first, for the Home "Recently added" strip. */
   recent: ClothingItem[];
 };
 
@@ -19,6 +19,6 @@ export const summarizeWardrobe = (items: ClothingItem[]): WardrobeSummary => {
     owned: ownedItems.length,
     wishlist: items.length - ownedItems.length,
     value: ownedItems.reduce((sum, item) => sum + (item.cost || 0), 0),
-    recent: [...items].sort((a, b) => added(b) - added(a)).slice(0, RECENT_COUNT),
+    recent: [...ownedItems].sort((a, b) => added(b) - added(a)).slice(0, RECENT_COUNT),
   };
 };

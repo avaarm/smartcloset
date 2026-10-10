@@ -188,7 +188,8 @@ const HomeScreen: React.FC = () => {
   ];
 
   const renderRecentItem = ({ item }: { item: ClothingItem }) => {
-    const uri = item.retailerImage || item.userImage;
+    // The user's own photo first, as on the wardrobe card.
+    const uri = item.userImage || item.retailerImage;
     return (
       <Pressable
         onPress={() => navigation.navigate('ItemDetails', { item })}

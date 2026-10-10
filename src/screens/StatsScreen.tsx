@@ -6,16 +6,25 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { getClothingItems } from '../services/storage';
 import { StatsService } from '../services/statsService';
 import { ClothingItem, WardrobeStats } from '../types';
 import { theme } from '../styles/theme';
 
-const { width } = Dimensions.get('window');
+// The category grid sits in a section padded SECTION_PADDING on each side, with
+// CATEGORY_GAP between its three cards.
+const SECTION_PADDING = 20;
+const CATEGORY_GAP = 12;
+const CATEGORY_COLUMNS = 3;
 
 export const StatsScreen = () => {
+  const { width: windowWidth } = useWindowDimensions();
+  // Floored: a fractional share can push the last card of a row onto the next row.
+  const categoryCardWidth = Math.floor(
+    (windowWidth - 2 * SECTION_PADDING - (CATEGORY_COLUMNS - 1) * CATEGORY_GAP) / CATEGORY_COLUMNS,
+  );
   const [stats, setStats] = useState<WardrobeStats | null>(null);
   const [items, setItems] = useState<ClothingItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,7 +37,8 @@ export const StatsScreen = () => {
     try {
       // Stats need the full wardrobe — opt out of pagination
       const allItems = await getClothingItems({ all: true });
-      setItems(allItems);
+      // The wishlist is only counted (stats.wishlistCount); the lists below are what the user owns.
+      setItems(allItems.filter(item => !item.isWishlist));
       const wardrobeStats = StatsService.calculateWardrobeStats(allItems);
       setStats(wardrobeStats);
     } catch (error) {
@@ -90,9 +100,12 @@ export const StatsScreen = () => {
         <Text style={styles.sectionTitle}>By Category</Text>
         <View style={styles.categoryGrid}>
           {Object.entries(stats.itemsByCategory).map(([category, count]) => (
-            <View key={category} style={styles.categoryCard}>
+            <View key={category} testID="category-card" style={[styles.categoryCard, { width: categoryCardWidth }]}>
               <Text style={styles.categoryCount}>{count}</Text>
-              <Text style={styles.categoryName}>{category}</Text>
+              {/* Long names ("accessories", "activewear") shrink instead of breaking mid-word in a narrow card. */}
+              <Text style={styles.categoryName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+                {category}
+              </Text>
             </View>
           ))}
         </View>
@@ -252,7 +265,7 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
   },
   section: {
-    padding: 20,
+    padding: SECTION_PADDING,
   },
   sectionTitle: {
     fontSize: 22,
@@ -268,11 +281,10 @@ const styles = StyleSheet.create({
   categoryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: CATEGORY_GAP,
     marginTop: 12,
   },
   categoryCard: {
-    width: (width - 56) / 3,
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,

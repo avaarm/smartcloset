@@ -134,6 +134,19 @@ describe('HomeScreen load states', () => {
     expect(t).not.toContain("Couldn't");
   });
 
+  it('lists owned items as recently added, newest first, and never a wishlist item', async () => {
+    mockItems.mockResolvedValue([
+      item({ name: 'Old Tee', dateAdded: '2026-01-01T00:00:00Z' }),
+      item({ name: 'Wished Coat', isWishlist: true, dateAdded: '2026-09-01T00:00:00Z' }),
+      item({ name: 'New Jeans', dateAdded: '2026-03-01T00:00:00Z' }),
+    ]);
+    mockOutfits.mockResolvedValue([]);
+    const t = text(await mount());
+    expect(t).not.toContain('Wished Coat');
+    expect(t.indexOf('New Jeans')).toBeGreaterThan(-1);
+    expect(t.indexOf('New Jeans')).toBeLessThan(t.indexOf('Old Tee'));
+  });
+
   it('a failed refresh on refocus keeps the earlier numbers and offers a refresh retry', async () => {
     mockItems.mockResolvedValueOnce(three());
     mockOutfits.mockResolvedValueOnce([outfit(1), outfit(2)]);

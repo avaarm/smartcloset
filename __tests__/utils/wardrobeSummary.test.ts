@@ -38,6 +38,25 @@ describe('summarizeWardrobe', () => {
     expect(s.recent.map(i => i.id)).not.toContain('undated');
   });
 
+  it('lists owned items only as recent, so wishlist items never push them out of the ten', () => {
+    const wishes = Array.from({ length: 10 }, (_, i) =>
+      item({ id: `w${i}`, isWishlist: true, dateAdded: `2026-06-${String(i + 1).padStart(2, '0')}T00:00:00Z` }),
+    );
+    const owned = [
+      item({ id: 'o1', dateAdded: '2026-01-05T00:00:00Z' }),
+      item({ id: 'o2', dateAdded: '2026-01-09T00:00:00Z' }),
+    ];
+    const s = summarizeWardrobe([...wishes, ...owned]);
+    expect(s.recent.map(i => i.id)).toEqual(['o2', 'o1']);
+    expect(s.wishlist).toBe(10);
+  });
+
+  it('has nothing recent when everything is on the wishlist', () => {
+    const s = summarizeWardrobe([item({ isWishlist: true }), item({ isWishlist: true })]);
+    expect(s.recent).toEqual([]);
+    expect(s.owned).toBe(0);
+  });
+
   it('is all zeros for an empty wardrobe', () => {
     expect(summarizeWardrobe([])).toEqual({ owned: 0, wishlist: 0, value: 0, recent: [] });
   });

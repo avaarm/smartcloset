@@ -114,6 +114,11 @@ describe('updateClothingItem keeps every field the form edits', () => {
     expect(calls.update[0]).toMatchObject({ occasion: 'work', purchase_date: '2026-02-03T00:00:00.000Z' });
   });
 
+  it('writes the date added (moving a wishlist item to the wardrobe resets it)', async () => {
+    await updateClothingItem({ ...baseItem, dateAdded: '2026-10-09T00:00:00.000Z' });
+    expect(calls.update[0].date_added).toBe('2026-10-09T00:00:00.000Z');
+  });
+
   it('sends null for cleared optional fields so they really clear', async () => {
     await updateClothingItem({ ...baseItem });
     expect(calls.update[0]).toMatchObject({

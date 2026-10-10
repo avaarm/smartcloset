@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, Text, ActivityIndicator, SafeAreaView, StatusBar, Image, Alert, TextInput, Modal } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, StyleSheet, FlatList, TouchableOpacity, Text, ActivityIndicator, SafeAreaView, StatusBar, Alert, TextInput, Modal } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { ClothingItem as ClothingItemType } from '../types';
-import { getClothingItems, saveClothingItem, deleteClothingItem, updateClothingItem } from '../services/storage';
+import { getWishlistClothingItems, saveClothingItem, deleteClothingItem, updateClothingItem } from '../services/storage';
 import ClothingItem from '../components/ClothingItem';
+import { CARD_MARGIN, GRID_COLUMNS, GRID_SIDE_PADDING } from '../utils/clothingGrid';
 import Icon from 'react-native-vector-icons/Ionicons';
 import LinearGradient from 'react-native-linear-gradient';
 import theme from '../styles/theme';
@@ -12,6 +13,7 @@ import WishlistSearchModal from './WishlistSearchModal';
 import LoadError from '../components/LoadError';
 import { BodyProfile, getBodyProfile } from '../services/profileService';
 import { parseMoney } from '../utils/money';
+import { itemCountLabel } from '../utils/itemCountLabel';
 
 const WishlistScreen = () => {
   const navigation = useNavigation();
@@ -24,6 +26,9 @@ const WishlistScreen = () => {
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [budgetInput, setBudgetInput] = useState('');
   const [showSearchModal, setShowSearchModal] = useState(false);
+  // Reloads overlap (focus, then a delete or move right after). Only the latest
+  // may write, or a slow earlier answer would put back an item just removed.
+  const latestLoad = useRef(0);
 
   useEffect(() => {
     loadWishlistItems();
@@ -37,20 +42,22 @@ const WishlistScreen = () => {
   }, [navigation]);
 
   const loadWishlistItems = async () => {
+    const id = ++latestLoad.current;
     try {
-      const [allItems, bodyProfile] = await Promise.all([
-        getClothingItems({ all: true }),
+      const [wishlistItems, bodyProfile] = await Promise.all([
+        getWishlistClothingItems(),
         getBodyProfile().catch(() => null),
       ]);
-      setItems(allItems.filter(item => item.isWishlist === true));
+      if (id !== latestLoad.current) return;
+      setItems(wishlistItems);
       setProfile(bodyProfile);
       setLoadFailed(false);
     } catch (error) {
       console.error('Error loading wishlist items:', error);
       // Keep whatever is already on screen; only a first load with nothing to show is an error state.
-      setLoadFailed(true);
+      if (id === latestLoad.current) setLoadFailed(true);
     } finally {
-      setLoading(false);
+      if (id === latestLoad.current) setLoading(false);
     }
   };
 
@@ -98,8 +105,9 @@ const WishlistScreen = () => {
           onPress: async () => {
             try {
               // Update in place: deleting first and re-inserting could lose the item
-              // (and its id/history) if the second step failed.
-              await updateClothingItem({ ...item, isWishlist: false });
+              // (and its id/history) if the second step failed. dateAdded restarts
+              // because the wish date is not when you got it: it shows as recently added.
+              await updateClothingItem({ ...item, isWishlist: false, dateAdded: new Date().toISOString() });
               await loadWishlistItems();
               Alert.alert('Success', 'Item moved to wardrobe!');
             } catch (error) {
@@ -121,7 +129,8 @@ const WishlistScreen = () => {
   };
 
   const handleEditItem = (item: ClothingItemType) => {
-    (navigation as any).navigate('AddClothing', { item });
+    // `editItem` is the param the Wardrobe and Item Details also use; the form reads its flags from it.
+    (navigation as any).navigate('AddClothing', { editItem: item });
   };
 
   const handleSaveBudget = () => {
@@ -141,6 +150,7 @@ const WishlistScreen = () => {
       onPress={() => (navigation as any).navigate('ItemDetails', { item })}
       onEdit={handleEditItem}
       onDelete={handleDeleteItem}
+      onMoveToWardrobe={handleMoveToWardrobe}
       bodyProfile={profile}
       showActions={true}
     />
@@ -161,7 +171,7 @@ const WishlistScreen = () => {
         <View style={styles.headerContent}>
           <View>
             <Text style={styles.headerTitle}>My Wishlist</Text>
-            <Text style={styles.headerSubtitle}>{items.length} items</Text>
+            <Text style={styles.headerSubtitle}>{itemCountLabel(items.length)}</Text>
           </View>
           {__DEV__ && (
             <TouchableOpacity
@@ -185,7 +195,7 @@ const WishlistScreen = () => {
             data={items}
             renderItem={renderItem}
             keyExtractor={item => item.id}
-            numColumns={2}
+            numColumns={GRID_COLUMNS}
             contentContainerStyle={styles.grid}
             showsVerticalScrollIndicator={false}
             ListHeaderComponent={
@@ -208,7 +218,7 @@ const WishlistScreen = () => {
                 </View>
                 {items.length > 0 && (
                   <View style={styles.actionsBar}>
-                    <Text style={styles.actionsText}>Long press items to edit or delete</Text>
+                    <Text style={styles.actionsText}>Tap an item to see its details</Text>
                   </View>
                 )}
               </View>
@@ -327,7 +337,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: theme.spacing.medium,
     paddingBottom: 20,
     borderBottomWidth: 0,
   },
@@ -359,7 +369,7 @@ const styles = StyleSheet.create({
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: CARD_MARGIN,
     paddingVertical: 20,
   },
   statCard: {
@@ -388,7 +398,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     backgroundColor: theme.colors.mutedBackground,
-    marginHorizontal: 20,
+    marginHorizontal: CARD_MARGIN,
     marginBottom: 12,
     borderRadius: 12,
   },
@@ -406,8 +416,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  // Same side padding the card width is computed from; the bottom clears the add button.
   grid: {
-    padding: theme.spacing.small,
+    paddingHorizontal: GRID_SIDE_PADDING,
+    paddingBottom: 100,
   },
   emptyState: {
     flex: 1,

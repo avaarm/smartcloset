@@ -259,6 +259,13 @@ export const getOwnedClothingItems = async (): Promise<ClothingItem[]> =>
   (await getClothingItems({ all: true })).filter(item => !item.isWishlist);
 
 /**
+ * Everything on the wishlist. The exact complement of getOwnedClothingItems
+ * (same truthiness test), so an item is never in both lists or in neither.
+ */
+export const getWishlistClothingItems = async (): Promise<ClothingItem[]> =>
+  (await getClothingItems({ all: true })).filter(item => !!item.isWishlist);
+
+/**
  * Save edits to an existing item.
  *
  * Wear data (wear_count / last_worn) is only written when `includeWear` is set,
@@ -298,6 +305,9 @@ export const updateClothingItem = async (
       materials: updatedItem.materials ?? null,
       updated_at: new Date().toISOString(),
     };
+    // Moving a wishlist item to the wardrobe sets a new date added; without this
+    // the old wish date came back on the next load.
+    if (updatedItem.dateAdded) payload.date_added = updatedItem.dateAdded;
     if (opts.includeWear) {
       payload.wear_count = updatedItem.wearCount;
       payload.last_worn = updatedItem.lastWorn ?? null;

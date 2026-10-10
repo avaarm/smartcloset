@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ClothingItem, Outfit, OutfitHistory } from '../types';
-import { getClothingItems, updateClothingItem, mapDbToClothingItem } from './storage';
+import { getClothingItem, getClothingItems, updateClothingItem, mapDbToClothingItem } from './storage';
 import { supabase } from '../config/supabase';
 import { getAuthUserId } from './authUser';
 
@@ -38,6 +38,38 @@ const deleteLocalHistory = async (historyId: string): Promise<void> => {
   );
 };
 
+// Guest wear is a read-modify-write of the one items key. Run side by side,
+// two items of an outfit read the same snapshot and the later write erases the
+// earlier one's wear, so guest writes take turns.
+let guestWrites: Promise<unknown> = Promise.resolve();
+const inGuestQueue = <T>(task: () => Promise<T>): Promise<T> => {
+  const run = guestWrites.then(task, task);
+  guestWrites = run.catch(() => undefined);
+  return run;
+};
+
+const CONNECTION_ERROR = "Couldn't reach the server — check your connection and try again.";
+
+/** The ids that are items the user owns: wishlist and deleted items are left out. */
+const ownedIds = async (ids: string[]): Promise<string[]> => {
+  const userId = await getAuthUserId();
+  let owned: Set<string>;
+  if (!userId) {
+    const items = await getClothingItems();
+    owned = new Set(items.filter(item => !item.isWishlist).map(item => item.id));
+  } else {
+    // One query for the whole outfit, scoped to the user: a friend's rows are readable under RLS.
+    const { data, error } = await supabase
+      .from('clothing_items')
+      .select('id, is_wishlist')
+      .eq('user_id', userId)
+      .in('id', ids);
+    if (error) throw new Error(CONNECTION_ERROR);
+    owned = new Set((data || []).filter((row: any) => !row.is_wishlist).map((row: any) => row.id));
+  }
+  return ids.filter(id => owned.has(id));
+};
+
 // ─── Service ─────────────────────────────────────────────────────────────────
 
 export class WearTrackingService {
@@ -58,17 +90,20 @@ export class WearTrackingService {
           const rpcMissing = error.code === 'PGRST202'
             || /function .* does not exist/i.test(error.message || '');
           if (!rpcMissing) {
-            throw new Error("Couldn't reach the server — check your connection and try again.");
+            throw new Error(CONNECTION_ERROR);
           }
+          // Scoped to the user: a friend's rows are readable under RLS but are not ours to wear.
           const { data, error: fetchError } = await supabase
             .from('clothing_items')
             .select('*')
             .eq('id', itemId)
+            .eq('user_id', userId)
             .maybeSingle();
           if (fetchError) {
-            throw new Error("Couldn't reach the server — check your connection and try again.");
+            throw new Error(CONNECTION_ERROR);
           }
-          if (!data) throw new Error('Item not found');
+          // A wishlist item isn't owned yet, so it can't be worn.
+          if (!data || data.is_wishlist) throw new Error('Item not found');
           const item = mapDbToClothingItem(data);
           await updateClothingItem({
             ...item,
@@ -77,14 +112,15 @@ export class WearTrackingService {
           }, { includeWear: true });
         }
       } else {
-        const items = await getClothingItems({ all: true });
-        const item = items.find(i => i.id === itemId);
-        if (!item) throw new Error('Item not found');
-        await updateClothingItem({
-          ...item,
-          wearCount: (item.wearCount || 0) + 1,
-          lastWorn: new Date().toISOString(),
-        }, { includeWear: true });
+        await inGuestQueue(async () => {
+          const item = await getClothingItem(itemId);
+          if (!item || item.isWishlist) throw new Error('Item not found');
+          await updateClothingItem({
+            ...item,
+            wearCount: (item.wearCount || 0) + 1,
+            lastWorn: new Date().toISOString(),
+          }, { includeWear: true });
+        });
       }
     } catch (error) {
       console.error('Error marking item as worn:', error);
@@ -102,9 +138,8 @@ export class WearTrackingService {
     previousLastWorn?: string,
   ): Promise<void> {
     try {
-      const items = await getClothingItems({ all: true });
-      const item = items.find(i => i.id === itemId);
-      if (!item) return;
+      const item = await getClothingItem(itemId);
+      if (!item || item.isWishlist) return;
       await updateClothingItem({
         ...item,
         wearCount: Math.max(0, (item.wearCount || 1) - 1),
@@ -117,12 +152,19 @@ export class WearTrackingService {
   }
 
   /**
-   * Mark multiple items as worn (e.g., an outfit)
+   * Mark multiple items as worn (e.g., an outfit).
+   *
+   * Only owned items are worn. A wishlist or deleted item can still sit in an
+   * older saved outfit; it is skipped, for a guest and a signed-in user alike,
+   * and it is checked up front so it can't leave the other items half-applied.
+   * It is an error only when none of the items could be worn.
    */
   static async markItemsWorn(itemIds: string[]): Promise<void> {
     try {
-      const promises = itemIds.map(id => this.markItemWorn(id));
-      await Promise.all(promises);
+      if (itemIds.length === 0) return;
+      const wearable = await ownedIds([...new Set(itemIds)]);
+      if (wearable.length === 0) throw new Error('Item not found');
+      await Promise.all(wearable.map(id => this.markItemWorn(id)));
     } catch (error) {
       console.error('Error marking items as worn:', error);
       throw error;

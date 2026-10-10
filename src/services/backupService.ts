@@ -16,7 +16,10 @@ export interface BackupData {
   items: ClothingItem[];
   outfits: Outfit[];
   metadata: {
+    /** Items the user owns; wishlist entries are counted in wishlistCount instead. */
     totalItems: number;
+    /** Absent in backups made before wishlist entries were counted apart. */
+    wishlistCount?: number;
     totalOutfits: number;
     exportDate: string;
   };
@@ -30,6 +33,8 @@ export const exportData = async (): Promise<BackupData> => {
     // These read the signed-in user's cloud data, or the on-device data for a guest.
     const items: ClothingItem[] = await getClothingItems({ all: true });
     const outfits: Outfit[] = await getSavedOutfits();
+    // The file keeps the wishlist (a restore must bring it back), but it is not part of the closet count.
+    const ownedCount = items.filter(item => !item.isWishlist).length;
 
     const backupData: BackupData = {
       version: BACKUP_VERSION,
@@ -37,7 +42,8 @@ export const exportData = async (): Promise<BackupData> => {
       items,
       outfits,
       metadata: {
-        totalItems: items.length,
+        totalItems: ownedCount,
+        wishlistCount: items.length - ownedCount,
         totalOutfits: outfits.length,
         exportDate: new Date().toLocaleDateString(),
       },
@@ -158,7 +164,7 @@ export const getBackupStats = async (): Promise<{
   }
 
   return {
-    itemsCount: items?.length ?? 0,
+    itemsCount: items?.filter(item => !item.isWishlist).length ?? 0,
     outfitsCount: outfits?.length ?? 0,
     lastBackup,
     storageSize,
