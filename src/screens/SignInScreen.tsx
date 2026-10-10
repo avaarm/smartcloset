@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   TextInput,
   KeyboardAvoidingView,
+  ScrollView,
   Platform,
   Image,
   Linking,
@@ -49,6 +50,12 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
   const [resetStep, setResetStep] = useState<null | 'email' | 'code'>(null);
   const [resetCode, setResetCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
+
+  const openReset = () => {
+    setResetCode('');
+    setNewPassword('');
+    setResetStep('email');
+  };
 
   const handleSendResetCode = async () => {
     if (!email.trim()) {
@@ -150,7 +157,15 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
         }
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Authentication failed');
+      // The most common reason to fail a sign-in is a forgotten password, so offer the reset here.
+      if (!isRegistering && /invalid login credentials/i.test(error?.message || '')) {
+        Alert.alert('Incorrect email or password', 'Check your details and try again, or reset your password.', [
+          { text: 'Try again', style: 'cancel' },
+          { text: 'Reset password', onPress: openReset },
+        ]);
+      } else {
+        Alert.alert('Error', error.message || 'Authentication failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -251,6 +266,7 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
             style={styles.emailFormContainer}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           >
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <TouchableOpacity onPress={() => setShowEmailForm(false)} style={styles.backButton} hitSlop={16}>
               <Icon name="arrow-back" size={22} color={CREAM} />
             </TouchableOpacity>
@@ -290,6 +306,17 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
                 onChangeText={setPassword}
                 secureTextEntry
               />
+              {!isRegistering && (
+                <TouchableOpacity
+                  onPress={openReset}
+                  style={styles.forgotInline}
+                  hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Forgot password"
+                >
+                  <Text style={styles.toggleLink}>Forgot password?</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <TouchableOpacity
@@ -306,15 +333,6 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
               )}
             </TouchableOpacity>
 
-            {!isRegistering && (
-              <TouchableOpacity
-                onPress={() => { setResetCode(''); setNewPassword(''); setResetStep('email'); }}
-                style={styles.toggleContainer}
-              >
-                <Text style={styles.toggleLink}>Forgot password?</Text>
-              </TouchableOpacity>
-            )}
-
             <TouchableOpacity
               onPress={() => setIsRegistering(!isRegistering)}
               style={styles.toggleContainer}
@@ -327,6 +345,7 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
                 </Text>
               </Text>
             </TouchableOpacity>
+            </ScrollView>
           </KeyboardAvoidingView>
         </SafeAreaView>
       </View>
@@ -384,6 +403,16 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onSignInComplete, onGuestCo
               <Text style={styles.footerLink}>  Sign in</Text>
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity
+            onPress={openReset}
+            style={styles.forgotFooter}
+            hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
+            accessibilityRole="button"
+            accessibilityLabel="Forgot password"
+          >
+            <Text style={styles.footerLink}>Forgot password?</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity onPress={onGuestContinue} style={styles.guestButton}>
             <Text style={styles.guestText}>Continue as guest</Text>
@@ -573,6 +602,15 @@ const styles = StyleSheet.create({
   toggleContainer: {
     alignItems: 'center',
     marginTop: 24,
+  },
+  // Right under the password field, where people look for it.
+  forgotInline: {
+    alignSelf: 'flex-end',
+    paddingVertical: 4,
+  },
+  forgotFooter: {
+    alignItems: 'center',
+    marginTop: 10,
   },
   toggleText: {
     fontSize: 14,
