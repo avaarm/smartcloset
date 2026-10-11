@@ -48,9 +48,9 @@ export type PickedMatch = {
   retailer?: string;
   color?: string;
   material?: string;
-  /** What contributors paid on average (for KB matches) or the listed price (for lens matches). */
+  /** The used price: what contributors paid on average (KB matches) or a resale listing's price. */
   cost?: number;
-  /** Retail / MSRP — only set for KB matches with that signal aggregated. */
+  /** The new price: retail / MSRP (KB matches) or a shop's or brand's listing price. */
   retailCost?: number;
   sourceUrl?: string;
   imageUrl?: string;
@@ -384,7 +384,9 @@ const LensCard: React.FC<{
           name: result.title,
           brand: brandGuess,
           retailer: result.source,
-          cost: parsedCost,
+          // A resale listing is a used price; a shop's or brand's listing is the new price.
+          cost: sourceKindOf(result) === 'resale' ? parsedCost : undefined,
+          retailCost: sourceKindOf(result) === 'resale' ? undefined : parsedCost,
           sourceUrl: result.url,
           imageUrl: imageUri || undefined,
           source: 'lens_match',

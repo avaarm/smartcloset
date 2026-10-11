@@ -1,0 +1,370 @@
+{
+ "about": "Real Google Vision labels/objects/pixels and real gpt-4o answers for one photo (red_pinafore_street in the accuracy corpus). \"answers.before\" is what the proxy returned before the prompt was rewritten, \"answers.after\" what it returns now.",
+ "vision": {
+  "labelAnnotations": [
+   {
+    "description": "Overall",
+    "score": 0.945
+   },
+   {
+    "description": "One-piece garment",
+    "score": 0.831
+   },
+   {
+    "description": "Fedora",
+    "score": 0.704
+   },
+   {
+    "description": "Day Dress",
+    "score": 0.642
+   },
+   {
+    "description": "Suspenders",
+    "score": 0.505
+   }
+  ],
+  "localizedObjectAnnotations": [
+   {
+    "name": "Person",
+    "score": 0.88,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.187,
+       "y": 0.201
+      },
+      {
+       "x": 0.574,
+       "y": 0.201
+      },
+      {
+       "x": 0.574,
+       "y": 1
+      },
+      {
+       "x": 0.187,
+       "y": 1
+      }
+     ]
+    }
+   },
+   {
+    "name": "Overall",
+    "score": 0.848,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.256,
+       "y": 0.447
+      },
+      {
+       "x": 0.531,
+       "y": 0.447
+      },
+      {
+       "x": 0.531,
+       "y": 0.992
+      },
+      {
+       "x": 0.256,
+       "y": 0.992
+      }
+     ]
+    }
+   },
+   {
+    "name": "Person",
+    "score": 0.772,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.187,
+       "y": 0.201
+      },
+      {
+       "x": 0.574,
+       "y": 0.201
+      },
+      {
+       "x": 0.574,
+       "y": 1
+      },
+      {
+       "x": 0.187,
+       "y": 1
+      }
+     ]
+    }
+   },
+   {
+    "name": "Sun hat",
+    "score": 0.763,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.277,
+       "y": 0.196
+      },
+      {
+       "x": 0.531,
+       "y": 0.196
+      },
+      {
+       "x": 0.531,
+       "y": 0.395
+      },
+      {
+       "x": 0.277,
+       "y": 0.395
+      }
+     ]
+    }
+   },
+   {
+    "name": "Fedora",
+    "score": 0.752,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.277,
+       "y": 0.196
+      },
+      {
+       "x": 0.531,
+       "y": 0.196
+      },
+      {
+       "x": 0.531,
+       "y": 0.395
+      },
+      {
+       "x": 0.277,
+       "y": 0.395
+      }
+     ]
+    }
+   },
+   {
+    "name": "Parking meter",
+    "score": 0.67,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.022,
+       "y": 0.406
+      },
+      {
+       "x": 0.162,
+       "y": 0.406
+      },
+      {
+       "x": 0.162,
+       "y": 0.992
+      },
+      {
+       "x": 0.022,
+       "y": 0.992
+      }
+     ]
+    }
+   },
+   {
+    "name": "Hat",
+    "score": 0.654,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.277,
+       "y": 0.196
+      },
+      {
+       "x": 0.531,
+       "y": 0.196
+      },
+      {
+       "x": 0.531,
+       "y": 0.395
+      },
+      {
+       "x": 0.277,
+       "y": 0.395
+      }
+     ]
+    }
+   },
+   {
+    "name": "Straw hat",
+    "score": 0.643,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.277,
+       "y": 0.196
+      },
+      {
+       "x": 0.531,
+       "y": 0.196
+      },
+      {
+       "x": 0.531,
+       "y": 0.395
+      },
+      {
+       "x": 0.277,
+       "y": 0.395
+      }
+     ]
+    }
+   },
+   {
+    "name": "Car",
+    "score": 0.501,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.002,
+       "y": 0.247
+      },
+      {
+       "x": 0.234,
+       "y": 0.247
+      },
+      {
+       "x": 0.234,
+       "y": 0.707
+      },
+      {
+       "x": 0.002,
+       "y": 0.707
+      }
+     ]
+    }
+   }
+  ],
+  "imagePropertiesAnnotation": {
+   "dominantColors": {
+    "colors": [
+     {
+      "color": {
+       "red": 164,
+       "green": 21,
+       "blue": 28
+      },
+      "pixelFraction": 0.0216,
+      "score": 0.1402
+     },
+     {
+      "color": {
+       "red": 218,
+       "green": 44,
+       "blue": 57
+      },
+      "pixelFraction": 0.028,
+      "score": 0.1099
+     },
+     {
+      "color": {
+       "red": 159,
+       "green": 106,
+       "blue": 94
+      },
+      "pixelFraction": 0.0206,
+      "score": 0.0594
+     },
+     {
+      "color": {
+       "red": 202,
+       "green": 193,
+       "blue": 187
+      },
+      "pixelFraction": 0.114,
+      "score": 0.0098
+     },
+     {
+      "color": {
+       "red": 23,
+       "green": 15,
+       "blue": 14
+      },
+      "pixelFraction": 0.1333,
+      "score": 0.0053
+     },
+     {
+      "color": {
+       "red": 125,
+       "green": 4,
+       "blue": 12
+      },
+      "pixelFraction": 0.0135,
+      "score": 0.0887
+     },
+     {
+      "color": {
+       "red": 186,
+       "green": 18,
+       "blue": 33
+      },
+      "pixelFraction": 0.0078,
+      "score": 0.077
+     },
+     {
+      "color": {
+       "red": 174,
+       "green": 96,
+       "blue": 91
+      },
+      "pixelFraction": 0.0107,
+      "score": 0.0515
+     },
+     {
+      "color": {
+       "red": 137,
+       "green": 61,
+       "blue": 58
+      },
+      "pixelFraction": 0.0107,
+      "score": 0.046
+     },
+     {
+      "color": {
+       "red": 121,
+       "green": 72,
+       "blue": 60
+      },
+      "pixelFraction": 0.0145,
+      "score": 0.0397
+     }
+    ]
+   }
+  },
+  "webDetection": {
+   "webEntities": [
+    {
+     "description": "Maren Morris",
+     "score": 1.465
+    },
+    {
+     "description": "Girl",
+     "score": 0.499
+    },
+    {
+     "description": "Dailymotion",
+     "score": 0.443
+    },
+    {
+     "description": "Country music",
+     "score": 0.439
+    }
+   ],
+   "bestGuessLabels": [
+    {
+     "label": "girl"
+    }
+   ]
+  }
+ },
+ "answers": {
+  "before": "{\n  \"category\": \"hats\",\n  \"subcategory\": \"fedora\",\n  \"brand\": null,\n  \"colors\": [\"brown\"],\n  \"pattern\": \"solid\",\n  \"material\": \"wool\",\n  \"season\": [\"spring\", \"summer\", \"fall\"],\n  \"occasion\": \"casual\",\n  \"style\": [\"boho\", \"classic\"],\n  \"gender\": \"unisex\",\n  \"description\": \"A brown fedora hat with a decorative band.\",\n  \"confidence\": 0.95\n}",
+  "after": "{\n  \"item\": \"pinafore dress\",\n  \"category\": \"dresses\",\n  \"subcategory\": \"Overalls\",\n  \"brand\": null,\n  \"colors\": [\"red\"],\n  \"pattern\": \"solid\",\n  \"material\": \"cotton\",\n  \"season\": [\"spring\", \"summer\"],\n  \"occasion\": \"casual\",\n  \"style\": [\"boho\", \"casual\"],\n  \"gender\": \"women\",\n  \"description\": \"A red pinafore dress worn over a striped top, suitable for casual outings.\",\n  \"confidence\": 0.85,\n  \"confidences\": {\"category\": 0.9, \"subcategory\": 0.85, \"color\": 0.9},\n  \"other_items\": [\"hat\", \"striped top\"]\n}"
+ }
+}

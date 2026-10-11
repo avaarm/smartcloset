@@ -427,6 +427,17 @@ describe('Reset to estimate', () => {
 });
 
 describe('wishlist', () => {
+  const fieldLabels = () => tree.root.findAllByType(TextInput).map(i => i.props.accessibilityLabel);
+  /** The community-average cell captioned `label` (its caption sits inside a pressable cell). */
+  const communityCell = (label: string) => {
+    for (const caption of textNodes(label)) {
+      let node: any = caption;
+      while (node && typeof node.props.onPress !== 'function') node = node.parent;
+      if (node) return node;
+    }
+    return undefined;
+  };
+
   it('has no estimated value: it is worth its price', async () => {
     await render({ isWishlist: true });
     expect(tree.root.findAllByType(TextInput).find(i => i.props.accessibilityLabel === 'Estimated value')).toBeUndefined();
@@ -434,34 +445,72 @@ describe('wishlist', () => {
     expect(text()).not.toContain('Estimated from');
   });
 
-  it('labels the first price field "Price" and drops the Used / New wording', async () => {
+  it('prices an item two ways, New price then Used price, the same as the owned form', async () => {
     await render({ isWishlist: true });
-    expect(textNodes('Price').length).toBeGreaterThan(0);
-    expect(textNodes('Original price')).toHaveLength(1);
+    expect(textNodes('New price')).toHaveLength(1);
+    expect(textNodes('Used price')).toHaveLength(1);
+    expect(input('New price')).toBeDefined();
+    expect(input('Used price')).toBeDefined();
+    // New sits on the left, Used on the right.
+    expect(fieldLabels().indexOf('New price')).toBeGreaterThanOrEqual(0);
+    expect(fieldLabels().indexOf('New price')).toBeLessThan(fieldLabels().indexOf('Used price'));
+    expect(text()).toContain('What it costs new, and what it costs used (resale).');
+  });
+
+  it('no longer has the one-price wording: no "Price" field, no "Original price", no bare Used / New', async () => {
+    await render({ isWishlist: true });
+    expect(input('Price')).toBeUndefined();
+    expect(input('Original price')).toBeUndefined();
+    expect(textNodes('Original price')).toHaveLength(0);
     expect(textNodes('Used')).toHaveLength(0);
     expect(textNodes('New')).toHaveLength(0);
-    expect(input('Price')).toBeDefined();
-    expect(input('Original price')).toBeDefined();
   });
 
-  it('keeps the owned form\'s Used / New labels', async () => {
+  it('the owned form has the same two fields in the same order, with its own hint', async () => {
     await render();
-    expect(textNodes('Used')).toHaveLength(1);
-    expect(textNodes('New')).toHaveLength(1);
+    expect(textNodes('New price')).toHaveLength(1);
+    expect(textNodes('Used price')).toHaveLength(1);
+    expect(fieldLabels().indexOf('New price')).toBeLessThan(fieldLabels().indexOf('Used price'));
+    expect(text()).toContain('New is the full retail price. Used is what you paid, or what it costs secondhand.');
+    expect(text()).not.toContain('What it costs new, and what it costs used (resale).');
   });
 
-  it('saves the price as cost, with no value of its own', async () => {
+  it('saves New price as retailCost and Used price as cost, with no value of its own', async () => {
     await render({ isWishlist: true });
     await typeName('Dream bag');
-    await typeInto('Price', '862');
+    await typeInto('New price', '4,000');
+    await typeInto('Used price', '3000');
     await pressSave('Save to Wishlist');
     const item = save.mock.calls[0][0];
-    expect(item).toEqual(expect.objectContaining({ isWishlist: true, cost: 862 }));
+    expect(item).toEqual(expect.objectContaining({ isWishlist: true, cost: 3000, retailCost: 4000 }));
     expect(item.estimatedValue).toBeUndefined();
     expect(item.valueSource).toBeUndefined();
   });
 
-  it('words the community average as prices too', async () => {
+  it('saves a New price alone as retailCost only, and a Used price alone as cost only', async () => {
+    await render({ isWishlist: true });
+    await typeName('Dream bag');
+    await typeInto('New price', '862');
+    await pressSave('Save to Wishlist');
+    expect(save.mock.calls[0][0]).toEqual(expect.objectContaining({ isWishlist: true, retailCost: 862, cost: undefined }));
+
+    act(() => tree.unmount());
+    save.mockClear();
+    await render({ isWishlist: true });
+    await typeName('Thrifted coat');
+    await typeInto('Used price', '95.50');
+    await pressSave('Save to Wishlist');
+    expect(save.mock.calls[0][0]).toEqual(expect.objectContaining({ isWishlist: true, cost: 95.5, retailCost: undefined }));
+  });
+
+  it('saves with no price at all', async () => {
+    await render({ isWishlist: true });
+    await typeName('Someday scarf');
+    await pressSave('Save to Wishlist');
+    expect(save.mock.calls[0][0]).toEqual(expect.objectContaining({ isWishlist: true, cost: undefined, retailCost: undefined }));
+  });
+
+  it('words the community average with the same two names, and tapping each fills its own field', async () => {
     analyze.mockResolvedValue({ isReal: true, confidence: {}, category: 'bags', subtype: 'shopper' });
     (lookupKnowledgeBase as jest.Mock).mockResolvedValue([
       { name: 'Andiamo large shopper', category: 'bags', confirmationCount: 3, confidence: 0.9, cost: 120, retailCost: 300 },
@@ -471,21 +520,78 @@ describe('wishlist', () => {
     expect(text()).toContain('Community average');
     expect(textNodes('Used')).toHaveLength(0);
     expect(textNodes('New')).toHaveLength(0);
-    expect(textNodes('Original price').length).toBeGreaterThan(0);
+    expect(textNodes('Original price')).toHaveLength(0);
+    // Each name now appears twice: on the field and on its community cell.
+    expect(textNodes('New price')).toHaveLength(2);
+    expect(textNodes('Used price')).toHaveLength(2);
+
+    await act(async () => communityCell('Used price')!.props.onPress());
+    expect(input('Used price').props.value).toBe('120');
+    expect(input('New price').props.value).toBe('');
+    await act(async () => communityCell('New price')!.props.onPress());
+    expect(input('New price').props.value).toBe('300');
   });
 
-  it('says "Save" rather than "Saved" for a sale on something not bought yet', async () => {
+  it('a picked community match fills both fields on a wishlist item: Used from its cost, New from its retail price', async () => {
+    analyze.mockResolvedValue({ isReal: true, confidence: {}, category: 'bags', subtype: 'shopper' });
+    (lookupKnowledgeBase as jest.Mock).mockResolvedValue([
+      { name: 'Andiamo large shopper', category: 'bags', confirmationCount: 3, confidence: 0.9, cost: 120, retailCost: 300 },
+    ]);
     await render({ isWishlist: true });
-    await typeInto('Price', '80');
-    await typeInto('Original price', '100');
-    expect(sentences()).toContain('Save $20 (20% off)');
-    expect(sentences()).not.toContain('Saved $20 (20% off)');
+    await addPhoto();
+    await press('Andiamo large shopper');
+    expect(input('Used price').props.value).toBe('120');
+    expect(input('New price').props.value).toBe('300');
+  });
 
-    act(() => tree.unmount());
-    await render();
-    await typeInto('Used price', '80');
-    await typeInto('New price', '100');
-    expect(sentences()).toContain('Saved $20 (20% off)');
+  describe('the savings line', () => {
+    const typeBoth = async (isWishlist: boolean, newPrice: string, usedPrice: string) => {
+      await render(isWishlist ? { isWishlist: true } : {});
+      await typeInto('New price', newPrice);
+      await typeInto('Used price', usedPrice);
+    };
+
+    it('on a wishlist says buying used saves, measured against new', async () => {
+      await typeBoth(true, '100', '80');
+      expect(sentences()).toContain('Buying used saves $20 (20% off new)');
+      expect(sentences()).not.toContain('Saved $20 (20% off new)'); // that is the wardrobe's wording
+      expect(sentences()).not.toContain('Save $20 (20% off)'); // and the old one
+    });
+
+    it('on the wardrobe says what was saved, measured against new', async () => {
+      await typeBoth(false, '100', '80');
+      expect(sentences()).toContain('Saved $20 (20% off new)');
+      expect(sentences().some(s => s.startsWith('Buying used'))).toBe(false); // that is the wishlist's wording
+    });
+
+    it('keeps cents in the amount and rounds the percentage', async () => {
+      await typeBoth(true, '200', '150.50');
+      expect(sentences()).toContain('Buying used saves $49.50 (25% off new)');
+    });
+
+    it('works from thousands-separated prices', async () => {
+      await typeBoth(true, '1,000', '800');
+      expect(sentences()).toContain('Buying used saves $200 (20% off new)');
+    });
+
+    it.each([
+      ['used costs the same as new', '100', '100'],
+      ['used costs more than new', '100', '120'],
+      ['there is no used price', '100', ''],
+      ['there is no new price', '', '80'],
+      ['a price is zero', '100', '0'],
+    ])('shows no savings when %s', async (_label, newPrice, usedPrice) => {
+      await typeBoth(true, newPrice, usedPrice);
+      expect(sentences().some(s => /off new\)/.test(s))).toBe(false);
+    });
+
+    it('follows the fields as they are corrected, and goes when a price is cleared', async () => {
+      await typeBoth(true, '100', '80');
+      await typeInto('Used price', '50');
+      expect(sentences()).toContain('Buying used saves $50 (50% off new)');
+      await typeInto('New price', '');
+      expect(sentences().some(s => /off new\)/.test(s))).toBe(false);
+    });
   });
 });
 
@@ -547,6 +653,26 @@ describe('editing an item', () => {
     expect(shown()).toBe(String(expected));
     await pressSave('Update Item');
     expect(update).toHaveBeenCalledWith(expect.objectContaining({ estimatedValue: expected, valueSource: 'estimate' }));
+  });
+
+  it('shows an edited wishlist item\'s two prices in the right fields, and saves both back', async () => {
+    await render({ editItem: savedItem({ isWishlist: true, cost: 3000, retailCost: 4000 }) });
+    expect(input('New price').props.value).toBe('4000');
+    expect(input('Used price').props.value).toBe('3000');
+    await typeInto('Used price', '2,800.50');
+    await pressSave('Update Item');
+    expect(update.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ isWishlist: true, cost: 2800.5, retailCost: 4000 }),
+    );
+  });
+
+  it('lets an edited wishlist item lose one of its prices', async () => {
+    await render({ editItem: savedItem({ isWishlist: true, cost: 3000, retailCost: 4000 }) });
+    await typeInto('Used price', '');
+    await pressSave('Update Item');
+    const item = update.mock.calls[0][0];
+    expect(item.retailCost).toBe(4000);
+    expect(item.cost).toBeUndefined();
   });
 
   it('gives an edited wishlist item no value either', async () => {

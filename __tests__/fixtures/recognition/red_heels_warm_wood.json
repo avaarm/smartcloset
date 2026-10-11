@@ -1,0 +1,430 @@
+{
+ "about": "Real Google Vision labels/objects/pixels and real gpt-4o answers for one photo (red_heels_worn_warm_wood in the accuracy corpus). \"answers.before\" is what the proxy returned before the prompt was rewritten, \"answers.after\" what it returns now.",
+ "vision": {
+  "labelAnnotations": [
+   {
+    "description": "Footwear",
+    "score": 0.982
+   },
+   {
+    "description": "Shoe",
+    "score": 0.98
+   },
+   {
+    "description": "Red",
+    "score": 0.976
+   },
+   {
+    "description": "Fashion",
+    "score": 0.964
+   },
+   {
+    "description": "High-heeled shoe",
+    "score": 0.961
+   },
+   {
+    "description": "Leg",
+    "score": 0.956
+   },
+   {
+    "description": "Tights",
+    "score": 0.942
+   },
+   {
+    "description": "Stocking",
+    "score": 0.941
+   },
+   {
+    "description": "Thigh",
+    "score": 0.94
+   },
+   {
+    "description": "Calf",
+    "score": 0.935
+   },
+   {
+    "description": "Pink",
+    "score": 0.902
+   },
+   {
+    "description": "Foot",
+    "score": 0.875
+   },
+   {
+    "description": "Basic Pump",
+    "score": 0.874
+   },
+   {
+    "description": "Ankle",
+    "score": 0.873
+   },
+   {
+    "description": "Knee",
+    "score": 0.87
+   },
+   {
+    "description": "Court shoe",
+    "score": 0.86
+   },
+   {
+    "description": "Pantyhose",
+    "score": 0.799
+   },
+   {
+    "description": "Sandal",
+    "score": 0.796
+   },
+   {
+    "description": "Dancing Shoe",
+    "score": 0.756
+   },
+   {
+    "description": "Leather",
+    "score": 0.732
+   },
+   {
+    "description": "Dress shoe",
+    "score": 0.699
+   },
+   {
+    "description": "Sock",
+    "score": 0.665
+   },
+   {
+    "description": "Bridal Shoe",
+    "score": 0.638
+   }
+  ],
+  "localizedObjectAnnotations": [
+   {
+    "name": "High heels",
+    "score": 0.794,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.281,
+       "y": 0.719
+      },
+      {
+       "x": 0.516,
+       "y": 0.719
+      },
+      {
+       "x": 0.516,
+       "y": 0.992
+      },
+      {
+       "x": 0.281,
+       "y": 0.992
+      }
+     ]
+    }
+   },
+   {
+    "name": "High heels",
+    "score": 0.779,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.193,
+       "y": 0.342
+      },
+      {
+       "x": 0.482,
+       "y": 0.342
+      },
+      {
+       "x": 0.482,
+       "y": 0.652
+      },
+      {
+       "x": 0.193,
+       "y": 0.652
+      }
+     ]
+    }
+   },
+   {
+    "name": "Sandal",
+    "score": 0.675,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.281,
+       "y": 0.719
+      },
+      {
+       "x": 0.516,
+       "y": 0.719
+      },
+      {
+       "x": 0.516,
+       "y": 0.992
+      },
+      {
+       "x": 0.281,
+       "y": 0.992
+      }
+     ]
+    }
+   },
+   {
+    "name": "Shoe",
+    "score": 0.625,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.281,
+       "y": 0.719
+      },
+      {
+       "x": 0.516,
+       "y": 0.719
+      },
+      {
+       "x": 0.516,
+       "y": 0.992
+      },
+      {
+       "x": 0.281,
+       "y": 0.992
+      }
+     ]
+    }
+   },
+   {
+    "name": "Shoe",
+    "score": 0.607,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.193,
+       "y": 0.342
+      },
+      {
+       "x": 0.482,
+       "y": 0.342
+      },
+      {
+       "x": 0.482,
+       "y": 0.652
+      },
+      {
+       "x": 0.193,
+       "y": 0.652
+      }
+     ]
+    }
+   },
+   {
+    "name": "Person",
+    "score": 0.541,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.23,
+       "y": 0.046
+      },
+      {
+       "x": 1,
+       "y": 0.046
+      },
+      {
+       "x": 1,
+       "y": 1
+      },
+      {
+       "x": 0.23,
+       "y": 1
+      }
+     ]
+    }
+   },
+   {
+    "name": "Footwear",
+    "score": 0.533,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.193,
+       "y": 0.342
+      },
+      {
+       "x": 0.482,
+       "y": 0.342
+      },
+      {
+       "x": 0.482,
+       "y": 0.652
+      },
+      {
+       "x": 0.193,
+       "y": 0.652
+      }
+     ]
+    }
+   },
+   {
+    "name": "Footwear",
+    "score": 0.514,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.281,
+       "y": 0.719
+      },
+      {
+       "x": 0.516,
+       "y": 0.719
+      },
+      {
+       "x": 0.516,
+       "y": 0.992
+      },
+      {
+       "x": 0.281,
+       "y": 0.992
+      }
+     ]
+    }
+   },
+   {
+    "name": "Sandal",
+    "score": 0.508,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.193,
+       "y": 0.342
+      },
+      {
+       "x": 0.482,
+       "y": 0.342
+      },
+      {
+       "x": 0.482,
+       "y": 0.652
+      },
+      {
+       "x": 0.193,
+       "y": 0.652
+      }
+     ]
+    }
+   }
+  ],
+  "imagePropertiesAnnotation": {
+   "dominantColors": {
+    "colors": [
+     {
+      "color": {
+       "red": 79,
+       "green": 41,
+       "blue": 22
+      },
+      "pixelFraction": 0.0447,
+      "score": 0.1832
+     },
+     {
+      "color": {
+       "red": 209,
+       "green": 155,
+       "blue": 76
+      },
+      "pixelFraction": 0.2609,
+      "score": 0.0959
+     },
+     {
+      "color": {
+       "red": 103,
+       "green": 25,
+       "blue": 8
+      },
+      "pixelFraction": 0.0129,
+      "score": 0.0509
+     },
+     {
+      "color": {
+       "red": 225,
+       "green": 185,
+       "blue": 123
+      },
+      "pixelFraction": 0.0476,
+      "score": 0.0231
+     },
+     {
+      "color": {
+       "red": 111,
+       "green": 72,
+       "blue": 52
+      },
+      "pixelFraction": 0.0639,
+      "score": 0.177
+     },
+     {
+      "color": {
+       "red": 55,
+       "green": 17,
+       "blue": 2
+      },
+      "pixelFraction": 0.0226,
+      "score": 0.0795
+     },
+     {
+      "color": {
+       "red": 229,
+       "green": 175,
+       "blue": 93
+      },
+      "pixelFraction": 0.0887,
+      "score": 0.0531
+     },
+     {
+      "color": {
+       "red": 90,
+       "green": 23,
+       "blue": 16
+      },
+      "pixelFraction": 0.0542,
+      "score": 0.044
+     },
+     {
+      "color": {
+       "red": 117,
+       "green": 72,
+       "blue": 34
+      },
+      "pixelFraction": 0.0195,
+      "score": 0.0375
+     },
+     {
+      "color": {
+       "red": 85,
+       "green": 43,
+       "blue": 9
+      },
+      "pixelFraction": 0.0113,
+      "score": 0.0346
+     }
+    ]
+   }
+  },
+  "webDetection": {
+   "webEntities": [
+    {
+     "description": "Pump",
+     "score": 0.276
+    }
+   ],
+   "bestGuessLabels": [
+    {
+     "label": "basic pump"
+    }
+   ]
+  }
+ },
+ "answers": {
+  "before": "{\n  \"category\": \"shoes\",\n  \"subcategory\": \"high heels\",\n  \"brand\": null,\n  \"colors\": [\"red\"],\n  \"pattern\": \"solid\",\n  \"material\": \"suede\",\n  \"season\": [\"fall\", \"winter\"],\n  \"occasion\": \"party\",\n  \"style\": [\"elegant\", \"chic\"],\n  \"gender\": \"women\",\n  \"description\": \"Red suede high heels with a ruffle detail and buckle strap.\",\n  \"confidence\": 0.95\n}",
+  "after": "{\n  \"item\": \"high heels\",\n  \"category\": \"shoes\",\n  \"subcategory\": \"Heels\",\n  \"brand\": null,\n  \"colors\": [\"burgundy\"],\n  \"pattern\": \"solid\",\n  \"material\": \"suede\",\n  \"season\": [\"fall\", \"winter\"],\n  \"occasion\": \"party\",\n  \"style\": [\"elegant\", \"chic\"],\n  \"gender\": \"women\",\n  \"description\": \"Burgundy high heels with a ruffled detail and buckle strap.\",\n  \"confidence\": 0.95,\n  \"confidences\": {\n    \"category\": 0.95,\n    \"subcategory\": 0.95,\n    \"color\": 0.9\n  },\n  \"other_items\": [\"polka dot tights\", \"burgundy skirt\"]\n}"
+ }
+}

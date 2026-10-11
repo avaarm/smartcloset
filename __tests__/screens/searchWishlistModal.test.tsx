@@ -9,6 +9,11 @@ jest.mock('../../src/services/lensSearchService', () => ({
   searchProductsByText: jest.fn(),
   searchByImage: jest.fn(),
 }));
+// The photo analysis is its own suite (wishlistItemBuilder.test.ts); here it is unavailable, as for a guest.
+jest.mock('../../src/services/imageRecognition', () => ({
+  ...jest.requireActual('../../src/services/imageRecognition'),
+  analyzeClothingImage: jest.fn(async () => ({ confidence: {}, isReal: false, unavailableReason: 'signed_out' })),
+}));
 jest.mock('../../src/services/storage', () => ({
   saveClothingItem: jest.fn(async () => undefined),
 }));
@@ -327,7 +332,7 @@ describe('saving a result to the wishlist', () => {
     });
   };
 
-  it('files a bag under bags, with the brand only when the site is the brand', async () => {
+  it('files a bag under bags, naming the brand from the site only when it is the brand and from the title when the title has one', async () => {
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     searchText.mockResolvedValue(
       response([
@@ -345,8 +350,8 @@ describe('saving a result to the wishlist', () => {
 
     const saved = save.mock.calls.map(c => c[0]);
     expect(saved.map(s => s.category)).toEqual(['bags', 'shoes', 'jewelry']);
-    // eBay and Nordstrom sell every brand, so neither is guessed as the brand.
-    expect(saved.map(s => s.brand)).toEqual(['', 'Zara', '']);
+    // eBay and Nordstrom sell every brand, so a shop is never taken for the brand; the title can name it.
+    expect(saved.map(s => s.brand)).toEqual(['Bottega Veneta', 'Zara', '']);
     expect(saved.every(s => s.isWishlist === true)).toBe(true);
     expect(saved[0].retailer).toBe('ebay.com');
     expect(onAdded).toHaveBeenCalledTimes(3);

@@ -39,6 +39,8 @@ import { selectVisibleResults } from '../services/searchRanking';
 import { categoryFromText } from '../utils/clothingCategories';
 import { pickImageFromLibrary } from '../platform/imagePicker';
 import { saveClothingItem } from '../services/storage';
+import { buildWishlistItem } from '../services/wishlistItemBuilder';
+import { categoryLabel } from '../utils/clothingOptions';
 import type { ClothingCategory } from '../types/clothing';
 import theme from '../styles/theme';
 import IncludeResaleToggle from '../components/IncludeResaleToggle';
@@ -70,13 +72,6 @@ export const guessCategory = (title: string): ClothingCategory =>
 // Only a brand's own site says what the brand is. A department store, eBay or a
 // shop we do not know sells other people's brands, so the retailer is never the brand.
 export const guessBrand = (source: string): string | undefined => brandFromHost(source);
-
-const parsePrice = (priceStr?: string): number | undefined => {
-  if (!priceStr) return undefined;
-  const cleaned = priceStr.replace(/[^\d.]/g, '');
-  const n = parseFloat(cleaned);
-  return Number.isFinite(n) && n > 0 ? n : undefined;
-};
 
 // ─── Main component ─────────────────────────────────────────────────────────
 
@@ -183,25 +178,13 @@ const WishlistSearchModal: React.FC<Props> = ({ visible, onClose, onAdded }) => 
     async (r: LensResult) => {
       setAddingId(r.id);
       try {
-        await saveClothingItem({
-          id: `wish_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          name: r.title,
-          category: guessCategory(r.title),
-          retailerImage: r.imageUrl,
-          color: '',
-          season: [],
-          brand: guessBrand(r.source) || '',
-          retailer: r.source,
-          dateAdded: new Date().toISOString(),
-          isWishlist: true,
-          wearCount: 0,
-          cost: parsePrice(r.price),
-          notes: `Found via search. Source: ${r.url}`,
-          tags: [],
-          favorite: false,
-        } as any);
+        // The photo is read first (a few seconds) so the item lands in the right category with
+        // its colour, rather than guessed from the title; the button shows progress meanwhile.
+        const { item } = await buildWishlistItem(r);
+        await saveClothingItem(item);
         onAdded?.();
-        Alert.alert('Added to Wishlist', `"${r.title.substring(0, 50)}" saved.`, [
+        const kind = [categoryLabel(item.category), item.subcategory].filter(Boolean).join(' · ');
+        Alert.alert('Added to Wishlist', `"${r.title.substring(0, 50)}" saved as ${kind}. You can change this from the item.`, [
           { text: 'Keep Searching', style: 'default' },
           { text: 'Done', onPress: handleClose },
         ]);

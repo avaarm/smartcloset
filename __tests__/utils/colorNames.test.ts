@@ -1,7 +1,10 @@
 import {
   CLOTHING_COLORS,
   MULTICOLOR,
+  colorFamily,
+  colorsInFamily,
   distanceToName,
+  familyForRgb,
   hexForColorName,
   hexToRgb,
   isWoodTone,
@@ -181,5 +184,104 @@ describe('normalizeColorName', () => {
 
   it('maps every palette name to itself', () => {
     for (const c of CLOTHING_COLORS) expect(normalizeColorName(c.name)).toBe(c.name);
+  });
+});
+
+describe('names for the colours a model writes next to red and yellow', () => {
+  // [what the model wrote, our name]. The last colour word is the colour; the first only tints it.
+  const table: Array<[string, string]> = [
+    ['orange-red', 'red'],
+    ['orange red', 'red'],
+    ['red-orange', 'orange'],
+    ['tomato red', 'red'],
+    ['brick red', 'rust'],
+    ['cranberry', 'burgundy'],
+    ['raspberry', 'hot pink'],
+    ['ochre', 'mustard'],
+    ['mustard yellow', 'mustard'],
+    ['saffron', 'mustard'],
+    ['canary', 'yellow'],
+    ['yellow-green', 'lime'],
+    ['blue-green', 'teal'],
+    ['dusty pink', 'blush'],
+    ['mahogany', 'dark brown'],
+  ];
+
+  it.each(table)('%j is %s', (written, expected) => {
+    expect(normalizeColorName(written)).toBe(expected);
+  });
+
+  it('keeps naming the first of several colours separated by a slash or "and"', () => {
+    expect(normalizeColorName('red/orange')).toBe('red');
+    expect(normalizeColorName('orange and red')).toBe('orange');
+  });
+});
+
+describe('colour families', () => {
+  it('puts every palette colour in exactly one family', () => {
+    for (const c of CLOTHING_COLORS) expect(colorFamily(c.name)).toBeDefined();
+  });
+
+  it('keeps burgundy, maroon, rust and coral with red, and mustard and gold with yellow', () => {
+    for (const name of ['red', 'burgundy', 'maroon', 'rust', 'terracotta', 'coral']) expect(colorFamily(name)).toBe('red');
+    for (const name of ['yellow', 'mustard', 'gold']) expect(colorFamily(name)).toBe('yellow');
+    expect(colorFamily('orange')).toBe('orange');
+    expect(colorFamily('brown')).toBe('neutral');
+    expect(colorFamily('beige')).toBe('neutral');
+    expect(colorFamily('hot pink')).toBe('pink');
+  });
+
+  it('has no family for what is not a palette colour', () => {
+    expect(colorFamily('multicolor')).toBeUndefined();
+    expect(colorFamily('sparkly unicorn')).toBeUndefined();
+    expect(colorFamily(undefined)).toBeUndefined();
+  });
+
+  it('lists the members of a family', () => {
+    expect(colorsInFamily('yellow').sort()).toEqual(['gold', 'mustard', 'yellow']);
+  });
+
+  it('puts an RGB value in the family of its nearest colour', () => {
+    expect(familyForRgb({ r: 200, g: 30, b: 40 })).toBe('red');
+    expect(familyForRgb({ r: 240, g: 215, b: 60 })).toBe('yellow');
+    expect(familyForRgb({ r: 120, g: 120, b: 124 })).toBe('neutral');
+  });
+});
+
+describe('a red is never named as a yellow, whatever the light did to it', () => {
+  // HSL -> RGB, for sweeping every red hue at every lightness and saturation.
+  const rgbOf = (h: number, s: number, l: number) => {
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    const m = l - c / 2;
+    const [r, g, b] = h < 60 ? [c, x, 0] : [c, 0, x];
+    return { r: Math.round((r + m) * 255), g: Math.round((g + m) * 255), b: Math.round((b + m) * 255) };
+  };
+
+  it('names every vivid red hue (335 to 8 degrees) in the red family or a neutral, never orange, yellow, green or blue', () => {
+    for (let h = 335; h <= 368; h += 2) {
+      for (let s = 0.5; s <= 1; s += 0.1) {
+        for (let l = 0.15; l <= 0.85; l += 0.05) {
+          const name = nameForRgb(rgbOf(h % 360, s, l));
+          expect(['yellow', 'orange', 'green', 'blue']).not.toContain(colorFamily(name));
+        }
+      }
+    }
+  });
+
+  it('never calls a red-orange (up to 20 degrees) yellow, green or blue; at worst it is orange', () => {
+    for (let h = 335; h <= 380; h += 2) {
+      for (let s = 0.4; s <= 1; s += 0.1) {
+        for (let l = 0.15; l <= 0.85; l += 0.05) {
+          expect(['yellow', 'green', 'blue']).not.toContain(colorFamily(nameForRgb(rgbOf(h % 360, s, l))));
+        }
+      }
+    }
+  });
+
+  it('keeps a red lit by a warm lamp (a pull toward orange) red-brown, never mustard, yellow or gold', () => {
+    for (const hex of ['#C8321E', '#D2401F', '#B83A1C', '#A8321E', '#E0502A']) {
+      expect(['mustard', 'yellow', 'gold']).not.toContain(nameOfHex(hex));
+    }
   });
 });

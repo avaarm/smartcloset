@@ -24,10 +24,14 @@ interface FilterModalProps {
   onClose: () => void;
   onApplyFilters: (filters: FilterOptions) => void;
   currentFilters: FilterOptions;
+  /** The types ("Tote", "Ankle boots") that items in the wardrobe actually have; the Type section lists these. */
+  availableTypes?: string[];
 }
 
 export interface FilterOptions {
   categories: ClothingCategory[];
+  /** Specific kinds to show, as saved on the items ("Tote"); empty is all. */
+  types?: string[];
   seasons: Season[];
   sortBy: 'name' | 'date' | 'category' | 'brand';
   sortOrder: 'asc' | 'desc';
@@ -38,6 +42,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
   onClose,
   onApplyFilters,
   currentFilters,
+  availableTypes = [],
 }) => {
   const defaultFilters: FilterOptions = {
     categories: [],
@@ -84,6 +89,11 @@ const FilterModal: React.FC<FilterModalProps> = ({
     setFilters({ ...filters, seasons: newSeasons });
   };
 
+  const toggleType = (type: string) => {
+    const current = filters?.types || [];
+    setFilters({ ...filters, types: current.includes(type) ? current.filter(t => t !== type) : [...current, type] });
+  };
+
   const handleApply = () => {
     onApplyFilters(filters);
     onClose();
@@ -92,6 +102,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
   const handleReset = () => {
     const resetFilters: FilterOptions = {
       categories: [],
+      types: [],
       seasons: [],
       sortBy: 'date',
       sortOrder: 'desc',
@@ -105,6 +116,8 @@ const FilterModal: React.FC<FilterModalProps> = ({
   const clearSeasons = () => setFilters({ ...filters, seasons: [] });
   const allCategories = (filters?.categories || []).length === 0;
   const allSeasons = (filters?.seasons || []).length === 0;
+  const clearTypes = () => setFilters({ ...filters, types: [] });
+  const allTypes = (filters?.types || []).length === 0;
 
   const translateY = slideAnim.interpolate({
     inputRange: [0, 1],
@@ -270,6 +283,39 @@ const FilterModal: React.FC<FilterModalProps> = ({
                 ))}
               </View>
             </View>
+
+            {/* Types Section: only the kinds the wardrobe actually holds */}
+            {availableTypes.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Type</Text>
+                <View style={styles.chipsContainer}>
+                  <TouchableOpacity
+                    style={[styles.chip, allTypes && styles.chipActive]}
+                    onPress={clearTypes}
+                    accessibilityRole="button"
+                    accessibilityLabel="All types"
+                    accessibilityState={{ selected: allTypes }}
+                  >
+                    <Text style={[styles.chipText, allTypes && styles.chipTextActive]}>All</Text>
+                  </TouchableOpacity>
+                  {availableTypes.map(type => {
+                    const on = !!filters?.types?.includes(type);
+                    return (
+                      <TouchableOpacity
+                        key={type}
+                        style={[styles.chip, on && styles.chipActive]}
+                        onPress={() => toggleType(type)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Type ${type}`}
+                        accessibilityState={{ selected: on }}
+                      >
+                        <Text style={[styles.chipText, on && styles.chipTextActive]}>{type}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
 
             {/* Seasons Section */}
             <View style={styles.section}>

@@ -169,14 +169,67 @@ describe('refineCategory', () => {
     ['tops', 'bikini top', 'swimwear'],
     ['tops', 'sports bra', 'activewear'],
     ['tops', 'sweater', 'tops'],
+    // Nonsense from one side or the other, and not neighbouring garments: the category stands.
     ['outerwear', 'sock', 'outerwear'],
     [undefined, 'sneaker', 'shoes'],
     [undefined, undefined, undefined],
     ['shoes', 'unobtainium', 'shoes'],
+    // The edges between neighbouring garment categories, where the model files an item in the next bucket along.
+    ['outerwear', 'knit sweater', 'tops'],
+    ['outerwear', 'hoodie', 'tops'],
+    ['outerwear', 'cardigan', 'tops'],
+    ['tops', 'denim jacket', 'outerwear'],
+    ['tops', 'wrap dress', 'dresses'],
+    ['bottoms', 'jumpsuit', 'dresses'],
+    ['dresses', 'trench coat', 'outerwear'],
+    // Activewear and swimwear are defined by purpose: "athletic shorts" stay activewear.
+    ['activewear', 'athletic shorts', 'activewear'],
+    ['activewear', 'track jacket', 'activewear'],
+    ['swimwear', 'swim trunks', 'swimwear'],
+    ['swimwear', 'board shorts', 'swimwear'],
+    // A hint that only names a group ("bag") is not an item: the category stands.
+    ['tops', 'bag', 'tops'],
   ];
 
   it.each(table)('%s + %s = %s', (category, subtype, expected) => {
     expect(refineCategory(category, subtype)).toBe(expected);
+  });
+
+  it('weighs the item the model first named along with its sub-category', () => {
+    // item and sub-category agree against the category: they win.
+    expect(refineCategory('outerwear', 'sweater', 'knit sweater')).toBe('tops');
+    // item and sub-category disagree: the model is unsure and its own category stands when it matches either.
+    expect(refineCategory('bags', 'sneaker', 'tote bag')).toBe('bags');
+    // ... and when it matches neither, the sub-category (the more specific field) decides.
+    expect(refineCategory('hats', 'sweater', 'jacket')).toBe('hats');
+    expect(refineCategory('tops', 'jacket', 'dress')).toBe('outerwear');
+    // With no sub-category the item decides.
+    expect(refineCategory('outerwear', undefined, 'crew-neck sweater')).toBe('tops');
+    expect(refineCategory(undefined, undefined, 'tote bag')).toBe('bags');
+  });
+});
+
+describe('words Vision uses for what people wear', () => {
+  it.each([
+    ['Overall', 'dresses'],
+    ['Pinafore', 'dresses'],
+    ['Cloak', 'outerwear'],
+    ['Gilet', 'outerwear'],
+    ['Jumper', 'tops'],
+    ['High-heeled shoe', 'shoes'],
+    ['Riding boot', 'shoes'],
+    ['Court shoe', 'shoes'],
+    ['Rucksack', 'bags'],
+    ['Baggage', 'bags'],
+    ['Neckerchief', 'accessories'],
+    ['Umbrella', 'accessories'],
+  ])('%s is %s', (label, expected) => {
+    expect(categoryFromText(label)).toBe(expected);
+  });
+
+  it('reads the singular and the plural of overalls alike', () => {
+    expect(categoryFromText('Overall')).toBe('dresses');
+    expect(categoryFromText('Overalls')).toBe('dresses');
   });
 });
 

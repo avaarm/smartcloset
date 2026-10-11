@@ -344,3 +344,27 @@ describe('the compact card, for VoiceOver', () => {
     expect(onPress).toHaveBeenCalledWith(expect.objectContaining({ name: 'Wool Coat' }));
   });
 });
+
+describe('the card names the kind of item', () => {
+  const lines = (tree: renderer.ReactTestRenderer) => texts(tree).map(t => React.Children.toArray(t.props.children).join(''));
+
+  it('shows the type instead of the category when the item has one', async () => {
+    const tree = await mount({ category: 'bags', subcategory: 'Crossbody', brand: 'Coach' });
+    expect(lines(tree)).toContain('Crossbody · Coach');
+    expect(lines(tree).join(' ')).not.toContain('Bags');
+  });
+
+  it('falls back to the category for an item with no type', async () => {
+    const tree = await mount({ category: 'bags', brand: 'Coach' });
+    expect(lines(tree)).toContain('Bags · Coach');
+  });
+
+  it('shows the type on the default card too', async () => {
+    setWindowWidth(375);
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(<ClothingItem item={item({ category: 'shoes', subcategory: 'Ankle boots' })} showActions />);
+    });
+    expect(lines(tree)).toContain('Ankle boots');
+  });
+});

@@ -146,6 +146,9 @@ describe('tan suede boots on a hardwood floor', () => {
   it('keeps the specific material and type, and names the item naturally', () => {
     expect(result.material).toBe('suede');
     expect(result.subtype).toBe('knee-high boots');
+    // The type is the label the item form offers, and is only as sure as the category.
+    expect(result.type).toBe('Knee-high boots');
+    expect(result.confidence.type).toBeLessThanOrEqual(result.confidence.category as number);
     expect(generateNameFromRecognition(result)).toBe('Tan Suede Knee-High Boots');
   });
 

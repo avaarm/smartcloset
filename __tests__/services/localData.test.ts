@@ -22,6 +22,7 @@ const GUEST = [
   '@smartcloset_outfit_history',
   '@smartcloset_initialized_v6',
   '@smartcloset_demo_seeded_v4',
+  '@smartcloset_sample_photos_fix_v1',
   '@smartcloset_initialized',
   '@smartcloset_user_profile',
   '@smartcloset_stylist_profile',

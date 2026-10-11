@@ -64,6 +64,8 @@ export interface ClothingItemBase {
   name: string;
   /** Category of the clothing item */
   category: ClothingCategory;
+  /** The specific kind inside the category ("Tote", "Ankle boots", "Belt") */
+  subcategory?: string;
   /** Brand name (optional) */
   brand?: string;
   /** URL of the item's image (optional) */

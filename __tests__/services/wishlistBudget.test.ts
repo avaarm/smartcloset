@@ -1,14 +1,15 @@
 // @ts-ignore — resolved by react-native-dotenv babel plugin
 import { SUPABASE_URL } from '@env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as wishlistBudget from '../../src/services/wishlistBudget';
 import {
-  budgetStatus,
   getWishlistBudget,
   isValidBudget,
   parseBudgetInput,
   setWishlistBudget,
-  wishlistItemPrice,
+  wishlistNewPrice,
   wishlistTotals,
+  wishlistUsedPrice,
 } from '../../src/services/wishlistBudget';
 
 // Where auth-js keeps the saved login, which authUser reads when the network is down.
@@ -174,45 +175,135 @@ describe('parseBudgetInput', () => {
   });
 });
 
-describe('wishlist prices and totals', () => {
-  it('an item costs its listed price, else its retail price, else nothing', () => {
-    expect(wishlistItemPrice({ cost: 862 })).toBe(862);
-    expect(wishlistItemPrice({ cost: 80, retailCost: 120 })).toBe(80);
-    expect(wishlistItemPrice({ retailCost: 120 })).toBe(120);
-    expect(wishlistItemPrice({ cost: 0, retailCost: 120 })).toBe(120);
-    expect(wishlistItemPrice({})).toBe(0);
-    expect(wishlistItemPrice({ cost: 0, retailCost: 0 })).toBe(0);
-    expect(wishlistItemPrice({ cost: NaN, retailCost: -3 })).toBe(0);
+// A price as it sits on an item: New is the full retail price (retailCost), Used is the
+// resale price (cost). Built in one place so a test never mixes the two up by accident.
+const priced = (usedCost?: number, newCost?: number) => ({ cost: usedCost, retailCost: newCost });
+
+describe('wishlistNewPrice and wishlistUsedPrice', () => {
+  it('New reads the retail price and Used reads the resale price, each from its own field', () => {
+    expect(wishlistNewPrice(priced(3000, 4000))).toBe(4000);
+    expect(wishlistUsedPrice(priced(3000, 4000))).toBe(3000);
+    expect(wishlistNewPrice(priced(undefined, 120.5))).toBe(120.5);
+    expect(wishlistUsedPrice(priced(862.25))).toBe(862.25);
   });
 
-  it('sums the prices and counts the items with none, which add nothing', () => {
-    expect(wishlistTotals([])).toEqual({ total: 0, unpriced: 0 });
-    expect(wishlistTotals([{ cost: 862 }, {}, { retailCost: 100 }, { cost: 0 }])).toEqual({ total: 962, unpriced: 2 });
+  it('neither one stands in for the other: a missing price is 0, never the other price', () => {
+    // The old rule fell back from the listed price to the retail price. That is gone.
+    expect(wishlistNewPrice(priced(862))).toBe(0);
+    expect(wishlistUsedPrice(priced(undefined, 120))).toBe(0);
+    expect(wishlistNewPrice(priced(0, 120))).toBe(120);
+    expect(wishlistUsedPrice(priced(80, 0))).toBe(80);
   });
 
-  it('adds cents without floating-point drift', () => {
-    expect(wishlistTotals([{ cost: 0.1 }, { cost: 0.2 }, { cost: 19.99 }]).total).toBe(20.29);
+  it.each([
+    ['a missing price', undefined],
+    ['zero', 0],
+    ['a negative price', -3],
+    ['NaN', NaN],
+    ['Infinity', Infinity],
+    ['-Infinity', -Infinity],
+    ['text that looks like a number', '80' as unknown as number],
+    ['null', null as unknown as number],
+  ])('%s is not a price, so it reads as 0', (_label, bad) => {
+    expect(wishlistNewPrice({ retailCost: bad })).toBe(0);
+    expect(wishlistUsedPrice({ cost: bad })).toBe(0);
+  });
+
+  it('keeps the cents of a real price', () => {
+    expect(wishlistNewPrice({ retailCost: 0.01 })).toBe(0.01);
+    expect(wishlistUsedPrice({ cost: 19.99 })).toBe(19.99);
   });
 });
 
-describe('budgetStatus', () => {
-  it('is under budget with room left, and how much of the bar is used', () => {
-    expect(budgetStatus(862, 1000)).toEqual({ kind: 'under', amount: 138, used: 0.862 });
-    expect(budgetStatus(0, 1000)).toEqual({ kind: 'under', amount: 1000, used: 0 });
+describe('wishlistTotals', () => {
+  const none = { newTotal: 0, usedTotal: 0, withoutNew: 0, withoutUsed: 0, unpriced: 0 };
+
+  it('an empty wishlist totals nothing, and nothing is missing a price', () => {
+    expect(wishlistTotals([])).toEqual(none);
   });
 
-  it('is over budget by the excess, with the bar capped at full', () => {
-    expect(budgetStatus(1500, 1000)).toEqual({ kind: 'over', amount: 500, used: 1 });
+  it('adds up the New prices and the Used prices separately', () => {
+    const totals = wishlistTotals([priced(3000, 4000), priced(3500, 4000), priced(862, 1200)]);
+    expect(totals).toEqual({ newTotal: 9200, usedTotal: 7362, withoutNew: 0, withoutUsed: 0, unpriced: 0 });
   });
 
-  it('is on budget when the two match', () => {
-    expect(budgetStatus(1000, 1000)).toEqual({ kind: 'on', amount: 0, used: 1 });
+  it('an item with only a Used price adds to the Used total, and is missing a New price', () => {
+    expect(wishlistTotals([priced(862)])).toEqual({ ...none, usedTotal: 862, withoutNew: 1 });
   });
 
-  it('judges in whole dollars, as the numbers are shown, so the words never contradict them', () => {
-    // Both read "$862" on screen.
-    expect(budgetStatus(862.2, 862.4).kind).toBe('on');
-    expect(budgetStatus(862.4, 862.2).kind).toBe('on');
-    expect(budgetStatus(862.6, 862).kind).toBe('over');
+  it('an item with only a New price adds to the New total, and is missing a Used price', () => {
+    expect(wishlistTotals([priced(undefined, 240)])).toEqual({ ...none, newTotal: 240, withoutUsed: 1 });
+  });
+
+  it('an item with neither price adds nothing, and is missing both (it is also counted as unpriced)', () => {
+    expect(wishlistTotals([{}])).toEqual({ ...none, withoutNew: 1, withoutUsed: 1, unpriced: 1 });
+  });
+
+  it('counts each kind of gap on its own across a mixed list', () => {
+    const totals = wishlistTotals([
+      priced(862), //            used only
+      priced(undefined, 240), // new only
+      priced(3000, 4000), //     both
+      {}, //                     neither
+      priced(undefined, undefined), // neither, spelled out
+    ]);
+    expect(totals).toEqual({
+      newTotal: 4240,
+      usedTotal: 3862,
+      withoutNew: 3, // used-only, neither, neither
+      withoutUsed: 3, // new-only, neither, neither
+      unpriced: 2,
+    });
+    // An item missing one price is never "unpriced": that needs both gone.
+    expect(totals.unpriced).toBeLessThan(Math.min(totals.withoutNew, totals.withoutUsed));
+  });
+
+  it('treats zero, negative, NaN and Infinity prices as missing, not as money', () => {
+    const totals = wishlistTotals([
+      priced(0, 0),
+      priced(-50, -80),
+      priced(NaN, NaN),
+      priced(Infinity, -Infinity),
+      priced(100, 150),
+    ]);
+    expect(totals).toEqual({ newTotal: 150, usedTotal: 100, withoutNew: 4, withoutUsed: 4, unpriced: 4 });
+  });
+
+  it('does not let the Used price leak into the New total or the other way round', () => {
+    expect(wishlistTotals([priced(500)]).newTotal).toBe(0);
+    expect(wishlistTotals([priced(undefined, 500)]).usedTotal).toBe(0);
+  });
+
+  it('adds cents without floating-point drift, in both totals', () => {
+    const totals = wishlistTotals([priced(0.1, 0.1), priced(0.2, 0.2), priced(19.99, 19.99)]);
+    expect(totals.usedTotal).toBe(20.29);
+    expect(totals.newTotal).toBe(20.29);
+  });
+
+  it('keeps a long list of small prices exact', () => {
+    // Added as plain floats, a hundred 10-cent prices come to 9.99999999999998.
+    const dimes = Array.from({ length: 100 }, () => priced(0.1, 0.1));
+    expect(wishlistTotals(dimes)).toEqual({ ...none, newTotal: 10, usedTotal: 10 });
+  });
+
+  it('does not change the list it was given', () => {
+    const list = [priced(3000, 4000), {}];
+    const before = JSON.stringify(list);
+    wishlistTotals(list);
+    expect(JSON.stringify(list)).toBe(before);
+  });
+});
+
+describe('the budget is not compared with the wishlist', () => {
+  // A wishlist is meant to be bigger than the budget, so nothing judges it against the budget.
+  it('no longer offers a status for a total against a budget, or a single wishlist price', () => {
+    expect(wishlistBudget).not.toHaveProperty('budgetStatus');
+    expect(wishlistBudget).not.toHaveProperty('wishlistItemPrice');
+  });
+
+  it('the totals carry the two sums and the gaps, with no combined total and nothing about a budget', () => {
+    expect(Object.keys(wishlistTotals([priced(10, 20)])).sort()).toEqual(
+      ['newTotal', 'unpriced', 'usedTotal', 'withoutNew', 'withoutUsed'].sort(),
+    );
   });
 });

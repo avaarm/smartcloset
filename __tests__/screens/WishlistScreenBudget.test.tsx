@@ -1,8 +1,12 @@
 /**
- * The Wishlist money header (total of the wishlist's prices, an editable budget
- * that is kept), the budget sheet's keyboard behaviour, and the price line on
- * each card. The budget service and AsyncStorage are real; only the item list,
- * navigation and the signed-in account are stubbed.
+ * The Wishlist money header (a New total and a Used total, and a budget that is kept
+ * and only shown next to them), the budget sheet's keyboard behaviour, and the
+ * price line on each card. The budget service and AsyncStorage are real; only the
+ * item list, navigation and the signed-in account are stubbed.
+ *
+ * Every wishlist item can carry two prices: New (retailCost, the full retail price)
+ * and Used (cost, the resale price). A wishlist is meant to be bigger than the
+ * budget, so nothing here compares the two: there is no bar and no "under / over".
  */
 import 'react-native';
 import React from 'react';
@@ -59,9 +63,12 @@ const wish = (id: string, name: string, extra: Partial<ClothingItem> = {}): Clot
   ...extra,
 });
 
-// One priced item and two without, like the owner's list: a boot at 862 and two search finds with no price.
-const BOOTS = wish('w1', 'Knee-High Boots', { cost: 862 });
-const SCARF = wish('w2', 'Silk Scarf');
+// A short list with every state a price can be in: a boot priced both ways, a scarf with only
+// a New price, and a bag with no price yet.
+//   New total  = 1200 + 180        = 1,380  (the bag has no New price)
+//   Used total = 862               =   862  (the scarf and the bag have no Used price)
+const BOOTS = wish('w1', 'Knee-High Boots', { cost: 862, retailCost: 1200 });
+const SCARF = wish('w2', 'Silk Scarf', { retailCost: 180 });
 const BAG = wish('w3', 'Straw Tote', { category: 'bags' });
 
 const mount = async () => {
@@ -93,6 +100,18 @@ const saveTyped = async (tree: renderer.ReactTestRenderer, value: string) => {
   await press(tree, 'Save budget');
 };
 const budgetKey = '@smartcloset_wishlist_budget:guest';
+const labelled = (tree: renderer.ReactTestRenderer, label: string) =>
+  tree.root.findAll(n => n.props.accessibilityLabel === label);
+/** Anything that draws a bar or reads like a verdict on the budget. */
+const budgetVerdicts = (tree: renderer.ReactTestRenderer) => ({
+  words: text(tree).match(/under budget|over budget|on budget|of (?:your|the) budget/gi) ?? [],
+  bars: tree.root.findAll(n => n.props.accessibilityRole === 'progressbar' || n.props.accessibilityValue?.now !== undefined),
+});
+const deferred = () => {
+  let resolve!: (items: ClothingItem[]) => void;
+  const promise = new Promise<ClothingItem[]>(res => (resolve = res));
+  return { promise, resolve };
+};
 
 beforeEach(async () => {
   await AsyncStorage.clear();
@@ -105,56 +124,175 @@ beforeEach(async () => {
 afterEach(() => jest.restoreAllMocks());
 
 describe('the money header', () => {
-  it('shows the total of the wishlist prices, and how many items have none', async () => {
-    const t = text(await mount());
-    expect(t).toMatch(/Wishlist total\s+\$862\s+2 without a price/);
+  it('shows a New total and a Used total, each with how many items lack that price', async () => {
+    const tree = await mount();
+    const t = text(tree);
+    expect(t).toMatch(/New total\s+\$1,380\s+1 without a new price/);
+    expect(t).toMatch(/Used total\s+\$862\s+2 without a used price/);
+    expect(t.indexOf('New total')).toBeLessThan(t.indexOf('Used total'));
+    expect(labelled(tree, 'New total $1,380, 1 without a new price').length).toBeGreaterThan(0);
+    expect(labelled(tree, 'Used total $862, 2 without a used price').length).toBeGreaterThan(0);
   });
 
-  it('counts an item priced only by its New (retail) price, and an item with a listed price once', async () => {
+  it('is gone: there is no single "Wishlist total" any more', async () => {
+    const t = text(await mount());
+    expect(t).not.toContain('Wishlist total');
+    expect(t).not.toMatch(/without a price\b/);
+  });
+
+  it('adds each price to its own total: New is the retail price, Used is the resale price', async () => {
     mockGet.mockResolvedValue([
-      wish('a', 'Listed', { cost: 100, retailCost: 150 }),
-      wish('b', 'Retail only', { retailCost: 40 }),
-      wish('c', 'No price', { cost: 0 }),
+      wish('a', 'Both', { cost: 100, retailCost: 150 }),
+      wish('b', 'New only', { retailCost: 40 }),
+      wish('c', 'Used only', { cost: 25 }),
+      wish('d', 'Used only too', { cost: 5 }),
+      wish('e', 'Zero', { cost: 0, retailCost: 0 }),
     ]);
     const t = text(await mount());
-    expect(t).toMatch(/Wishlist total\s+\$140\s+1 without a price/);
+    expect(t).toMatch(/New total\s+\$190\s+3 without a new price/); // 150 + 40; missing: the two used-only and the zero
+    expect(t).toMatch(/Used total\s+\$130\s+2 without a used price/); // 100 + 25 + 5; missing: new-only and the zero
   });
 
-  it('adds up cents and shows whole dollars with thousands separators', async () => {
-    mockGet.mockResolvedValue([wish('a', 'Coat', { cost: 1234.5 }), wish('b', 'Shoes', { cost: 999.75 })]);
-    expect(text(await mount())).toMatch(/Wishlist total\s+\$2,234\b/);
-  });
-
-  it('leaves out the "without a price" line when every item has a price', async () => {
-    mockGet.mockResolvedValue([BOOTS, wish('a', 'Coat', { cost: 38 })]);
+  it('never fills one total from the other price', async () => {
+    mockGet.mockResolvedValue([wish('a', 'Used only', { cost: 500 })]);
     const t = text(await mount());
-    expect(t).toMatch(/Wishlist total\s+\$900/);
-    expect(t).not.toContain('without a price');
+    expect(t).toMatch(/New total\s+\$0\s+1 without a new price/);
+    expect(t).toMatch(/Used total\s+\$500\b/);
+
+    mockGet.mockResolvedValue([wish('a', 'New only', { retailCost: 500 })]);
+    const t2 = text(await mount());
+    expect(t2).toMatch(/New total\s+\$500\b/);
+    expect(t2).toMatch(/Used total\s+\$0\s+1 without a used price/);
   });
 
-  it('with an empty wishlist shows $0 and no unpriced line', async () => {
+  it('counts an item with neither price in both hints', async () => {
+    mockGet.mockResolvedValue([wish('a', 'Bare')]);
+    const t = text(await mount());
+    expect(t).toMatch(/New total\s+\$0\s+1 without a new price/);
+    expect(t).toMatch(/Used total\s+\$0\s+1 without a used price/);
+  });
+
+  it('treats a zero, negative or NaN price as no price', async () => {
+    mockGet.mockResolvedValue([
+      wish('a', 'Free', { cost: 0, retailCost: 0 }),
+      wish('b', 'Negative', { cost: -20, retailCost: -30 }),
+      wish('c', 'Broken', { cost: NaN, retailCost: NaN }),
+      wish('d', 'Real', { cost: 40, retailCost: 60 }),
+    ]);
+    const t = text(await mount());
+    expect(t).toMatch(/New total\s+\$60\s+3 without a new price/);
+    expect(t).toMatch(/Used total\s+\$40\s+3 without a used price/);
+  });
+
+  it('leaves out both hints when every item has both prices', async () => {
+    mockGet.mockResolvedValue([BOOTS, wish('a', 'Coat', { cost: 38, retailCost: 60 })]);
+    const t = text(await mount());
+    expect(t).toMatch(/New total\s+\$1,260\b/); // 1200 + 60
+    expect(t).toMatch(/Used total\s+\$900\b/); // 862 + 38
+    expect(t).not.toContain('without a');
+  });
+
+  it('shows only the hint for the price that is actually missing', async () => {
+    mockGet.mockResolvedValue([wish('a', 'Coat', { cost: 38, retailCost: 60 }), wish('b', 'Hat', { retailCost: 20 })]);
+    const t = text(await mount());
+    expect(t).toMatch(/Used total\s+\$38\s+1 without a used price/);
+    expect(t).not.toContain('without a new price');
+  });
+
+  it('with an empty wishlist shows $0 for both and no hints', async () => {
     mockGet.mockResolvedValue([]);
-    const t = text(await mount());
-    expect(t).toMatch(/Wishlist total\s+\$0/);
-    expect(t).not.toContain('without a price');
+    const tree = await mount();
+    const t = text(tree);
+    expect(t).toMatch(/New total\s+\$0/);
+    expect(t).toMatch(/Used total\s+\$0/);
+    expect(t).not.toContain('without a');
     expect(t).toContain('Your wishlist is empty');
+    // The spoken label has no "0 without" either.
+    expect(labelled(tree, 'New total $0').length).toBeGreaterThan(0);
+    expect(labelled(tree, 'Used total $0').length).toBeGreaterThan(0);
   });
 
   it('still loads the wishlist when the saved budget cannot be read', async () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.spyOn(AsyncStorage, 'getItem').mockRejectedValueOnce(new Error('disk'));
-    const t = text(await mount());
+    const tree = await mount();
+    const t = text(tree);
     expect(t).toContain('Knee-High Boots');
-    expect(t).toMatch(/Wishlist total\s+\$862/);
+    expect(t).toMatch(/New total\s+\$1,380/);
+    expect(t).toMatch(/Used total\s+\$862/);
     expect(t).toMatch(/Budget\s+Not set/);
+    expect(pressable(tree, 'Budget not set. Set a budget')).toBeDefined(); // and it can be set again
   });
 
+  it.each(['', 'abc', '-40', '0', 'NaN'])('reads a damaged saved budget (%p) as not set', async raw => {
+    await AsyncStorage.setItem(budgetKey, raw);
+    const tree = await mount();
+    expect(text(tree)).toMatch(/Budget\s+Not set/);
+    expect(pressable(tree, 'Budget not set. Set a budget')).toBeDefined();
+    expect(text(tree)).toMatch(/New total\s+\$1,380/);
+  });
+});
+
+describe('the budget row', () => {
   it('shows the budget as not set, with a way in, until one is saved', async () => {
     const tree = await mount();
-    expect(text(tree)).toMatch(/Budget\s+Not set\s+Tap to set one/);
-    expect(text(tree)).not.toContain('Under budget');
-    expect(text(tree)).not.toContain('Over budget');
-    expect(pressable(tree, 'Budget not set. Set a budget')).toBeDefined();
+    expect(text(tree)).toMatch(/Budget\s+Not set/);
+    expect(text(tree)).not.toContain('Tap to set one');
+    expect(pressable(tree, 'Budget not set. Set a budget').props.accessibilityRole).toBe('button');
+    const { words, bars } = budgetVerdicts(tree);
+    expect(words).toEqual([]);
+    expect(bars).toEqual([]);
+  });
+
+  it('sits under the two totals, as a plain row, once a budget is saved', async () => {
+    await AsyncStorage.setItem(budgetKey, '3000');
+    const tree = await mount();
+    const t = text(tree);
+    expect(t).toMatch(/Budget\s+\$3,000/);
+    expect(t).not.toContain('Tap to edit');
+    expect(t.indexOf('Used total')).toBeLessThan(t.indexOf('Budget'));
+    expect(pressable(tree, 'Budget $3,000. Edit budget').props.accessibilityRole).toBe('button');
+    expect(pressable(tree, 'Budget not set. Set a budget')).toBeUndefined();
+  });
+
+  it('shows the cents of a budget that has them, and whole dollars otherwise', async () => {
+    await AsyncStorage.setItem(budgetKey, '1200.5');
+    const tree = await mount();
+    expect(text(tree)).toMatch(/Budget\s+\$1,200\.50/);
+    expect(pressable(tree, 'Budget $1,200.50. Edit budget')).toBeDefined();
+    expect(text(tree)).not.toContain('$1,200.00');
+  });
+
+  // A wishlist is meant to be bigger than the budget. Nothing says whether it is, or by how much.
+  it.each([
+    ['far below both totals', '100', '$100'],
+    ['below the New total but above the Used total', '1000', '$1,000'],
+    ['equal to the Used total', '862', '$862'],
+    ['equal to the New total', '1380', '$1,380'],
+    ['far above both totals', '50000', '$50,000'],
+  ])('a budget %s says nothing about the totals: no bar, no under / over / right-on words', async (_label, typed, shown) => {
+    const tree = await mount();
+    await openSheet(tree);
+    await saveTyped(tree, typed);
+
+    expect(text(tree)).toMatch(new RegExp(`Budget\\s+\\${shown}(?!\\d)`));
+    const { words, bars } = budgetVerdicts(tree);
+    expect(words).toEqual([]);
+    expect(bars).toEqual([]);
+    // The totals are exactly what they were: the budget does not touch them.
+    expect(text(tree)).toMatch(/New total\s+\$1,380\s+1 without a new price/);
+    expect(text(tree)).toMatch(/Used total\s+\$862\s+2 without a used price/);
+  });
+
+  it('shows no verdict when a saved budget is loaded on opening, over or under', async () => {
+    for (const saved of ['500', '1380', '9000']) {
+      await AsyncStorage.setItem(budgetKey, saved);
+      const tree = await mount();
+      const { words, bars } = budgetVerdicts(tree);
+      expect(words).toEqual([]);
+      expect(bars).toEqual([]);
+      await act(async () => tree.unmount());
+    }
   });
 });
 
@@ -169,43 +307,48 @@ describe('editing the budget', () => {
     expect(pressable(tree, 'Clear budget')).toBeUndefined(); // nothing to clear yet
   });
 
-  it('saves what was typed (thousands separator and all), closes, and shows how far under budget', async () => {
+  it('saves what was typed (thousands separator and all), closes, and shows it in the budget row', async () => {
     const tree = await mount();
     await openSheet(tree);
     await saveTyped(tree, '1,200');
 
     expect(sheetOpen(tree)).toBe(false);
     const t = text(tree);
-    expect(t).toMatch(/Budget\s+\$1,200\s+Tap to edit/);
-    expect(t).toContain('Under budget by $338'); // 1,200 - 862
+    expect(t).toMatch(/Budget\s+\$1,200/);
+    expect(pressable(tree, 'Budget $1,200. Edit budget')).toBeDefined();
+    expect(t).not.toMatch(/under budget|over budget|on budget/i);
     expect(await AsyncStorage.getItem(budgetKey)).toBe('1200');
   });
 
-  it('shows over budget with the amount past it, in the warning colour, with the bar full', async () => {
+  it('keeps cents in a saved budget', async () => {
+    const tree = await mount();
+    await openSheet(tree);
+    await saveTyped(tree, '1,200.50');
+    expect(text(tree)).toMatch(/Budget\s+\$1,200\.50/);
+    expect(await AsyncStorage.getItem(budgetKey)).toBe('1200.5');
+  });
+
+  it('saves a budget below both totals without a warning, a coloured message or a bar', async () => {
     const tree = await mount();
     await openSheet(tree);
     await saveTyped(tree, '500');
 
-    expect(text(tree)).toContain('Over budget by $362');
-    const bar = tree.root.find(n => n.props.accessibilityRole === 'progressbar');
-    expect(bar.props.accessibilityValue).toEqual({ min: 0, max: 100, now: 100 });
-    const label = tree.root.findAll(n => typeof n.type !== 'string' && flatten(n.props.children) === 'Over budget by $362')[0];
-    expect(label).toBeDefined();
+    expect(text(tree)).toMatch(/Budget\s+\$500/);
+    const { words, bars } = budgetVerdicts(tree);
+    expect(words).toEqual([]);
+    expect(bars).toEqual([]);
+    expect(tree.root.findAll(n => n.props.accessibilityRole === 'alert')).toHaveLength(0);
+    expect(text(tree)).toMatch(/New total\s+\$1,380/); // the totals did not move
+    expect(text(tree)).toMatch(/Used total\s+\$862/);
   });
 
-  it('says "Right on budget" when the total matches', async () => {
+  it('saves a budget above both totals the same way', async () => {
     const tree = await mount();
     await openSheet(tree);
-    await saveTyped(tree, '862');
-    expect(text(tree)).toContain('Right on budget');
-  });
-
-  it('fills the bar by the share of the budget used', async () => {
-    const tree = await mount();
-    await openSheet(tree);
-    await saveTyped(tree, '1724');
-    const bar = tree.root.find(n => n.props.accessibilityRole === 'progressbar');
-    expect(bar.props.accessibilityValue.now).toBe(50);
+    await saveTyped(tree, '5000');
+    expect(text(tree)).toMatch(/Budget\s+\$5,000/);
+    expect(budgetVerdicts(tree).words).toEqual([]);
+    expect(budgetVerdicts(tree).bars).toEqual([]);
   });
 
   it('is pre-filled with the current budget when it is opened again, and can be changed', async () => {
@@ -229,7 +372,7 @@ describe('editing the budget', () => {
 
     const second = await mount();
     expect(text(second)).toMatch(/Budget\s+\$750/);
-    expect(text(second)).toContain('Over budget by $112');
+    expect(budgetVerdicts(second).words).toEqual([]);
   });
 
   it('shows the saved budget again when focus returns to the screen', async () => {
@@ -287,7 +430,8 @@ describe('editing the budget', () => {
 
     expect(sheetOpen(tree)).toBe(false);
     expect(text(tree)).toMatch(/Budget\s+Not set/);
-    expect(text(tree)).not.toContain('Under budget');
+    expect(pressable(tree, 'Budget not set. Set a budget')).toBeDefined();
+    expect(budgetVerdicts(tree).words).toEqual([]);
     expect(await AsyncStorage.getItem(budgetKey)).toBeNull();
   });
 
@@ -308,7 +452,70 @@ describe('editing the budget', () => {
 
     await act(async () => release([BOOTS]));
     expect(text(tree)).toMatch(/Budget\s+\$2,000/);
-    expect(text(tree)).toMatch(/Wishlist total\s+\$862/); // the items still update
+    // The items still update: only the boots are left, so both totals are theirs and nothing is missing.
+    expect(text(tree)).not.toContain('Silk Scarf');
+    expect(text(tree)).toMatch(/New total\s+\$1,200\b/);
+    expect(text(tree)).toMatch(/Used total\s+\$862\b/);
+    expect(text(tree)).not.toContain('without a');
+  });
+
+  it('a reload that was already under way does not bring a cleared budget back', async () => {
+    await AsyncStorage.setItem(budgetKey, '1200');
+    const tree = await mount();
+
+    // The reload reads the saved 1200 straight away but waits on the slow item list...
+    const slow = deferred();
+    mockGet.mockReturnValueOnce(slow.promise);
+    await act(async () => {
+      mockFocus.current!();
+    });
+    // ...and the budget is cleared while it waits.
+    await openSheet(tree);
+    await press(tree, 'Clear budget');
+    expect(text(tree)).toMatch(/Budget\s+Not set/);
+
+    await act(async () => slow.resolve([BOOTS, SCARF]));
+    expect(text(tree)).toMatch(/Budget\s+Not set/);
+    expect(text(tree)).not.toContain('Straw Tote'); // the items still update
+    expect(await AsyncStorage.getItem(budgetKey)).toBeNull();
+  });
+});
+
+describe('the totals when reloads overlap', () => {
+  it('an older, slower reload that answers last does not put the old totals back', async () => {
+    const tree = await mount();
+    expect(text(tree)).toMatch(/New total\s+\$1,380/);
+
+    const slow = deferred();
+    mockGet.mockReturnValueOnce(slow.promise);
+    await act(async () => {
+      mockFocus.current!();
+    });
+    // Meanwhile the bag is priced and a newer reload answers first.
+    mockGet.mockResolvedValueOnce([BOOTS, SCARF, { ...BAG, cost: 90, retailCost: 150 }]);
+    await act(async () => {
+      mockFocus.current!();
+    });
+    expect(text(tree)).toMatch(/New total\s+\$1,530\b/); // 1200 + 180 + 150
+    expect(text(tree)).toMatch(/Used total\s+\$952\b/); // 862 + 90
+
+    // The slow answer still has the bag unpriced: it must not be shown.
+    await act(async () => slow.resolve([BOOTS, SCARF, BAG]));
+    expect(text(tree)).toMatch(/New total\s+\$1,530\b/);
+    expect(text(tree)).toMatch(/Used total\s+\$952\b/);
+    expect(text(tree)).not.toContain('1 without a new price');
+    expect(pressable(tree, 'Add prices for Straw Tote')).toBeUndefined();
+  });
+
+  it('keeps the totals on screen when a reload fails', async () => {
+    const tree = await mount();
+    mockGet.mockRejectedValueOnce(new Error('offline'));
+    await act(async () => {
+      mockFocus.current!();
+    });
+    expect(text(tree)).toMatch(/New total\s+\$1,380/);
+    expect(text(tree)).toMatch(/Used total\s+\$862/);
+    expect(text(tree)).toContain('Knee-High Boots');
   });
 });
 
@@ -436,74 +643,191 @@ describe('the budget sheet and the keyboard', () => {
 });
 
 describe('the price under each card', () => {
-  it('shows the price of a priced item and "Add price" for one without', async () => {
+  const BOTH = 'Edit prices of Knee-High Boots: New $1,200  ·  Used $862';
+
+  it('shows New and Used on one line, only the one an item has, and "Add prices" for one with neither', async () => {
+    mockGet.mockResolvedValue([BOOTS, SCARF, BAG, wish('w4', 'Thrifted Coat', { cost: 95 })]);
     const tree = await mount();
-    expect(pressable(tree, 'Edit price of Knee-High Boots, $862')).toBeDefined();
-    expect(pressable(tree, 'Add price for Silk Scarf')).toBeDefined();
-    expect(pressable(tree, 'Add price for Straw Tote')).toBeDefined();
-    expect(text(tree)).toContain('$862');
-    expect(text(tree).match(/Add price/g)).toHaveLength(2);
+    expect(pressable(tree, BOTH)).toBeDefined();
+    expect(pressable(tree, 'Edit prices of Silk Scarf: New $180')).toBeDefined();
+    expect(pressable(tree, 'Edit prices of Thrifted Coat: Used $95')).toBeDefined();
+    expect(pressable(tree, 'Add prices for Straw Tote')).toBeDefined();
+
+    const t = text(tree);
+    expect(t).toContain('New $1,200  ·  Used $862');
+    expect(t).toContain('New $180');
+    expect(t).toContain('Used $95');
+    expect(t.match(/Add prices/g)).toHaveLength(1);
+    // A price an item does not have is not drawn, and no stray separator is left behind.
+    expect(t).not.toContain('New $180  ·');
+    expect(t).not.toContain('·  Used $95');
   });
 
-  it('shows a retail-only price too', async () => {
-    mockGet.mockResolvedValue([wish('a', 'Wool Coat', { retailCost: 320 })]);
+  it('the old one-price wording is gone', async () => {
     const tree = await mount();
-    expect(pressable(tree, 'Edit price of Wool Coat, $320')).toBeDefined();
-    expect(text(tree)).not.toContain('Add price');
+    expect(pressable(tree, 'Edit price of Knee-High Boots, $862')).toBeUndefined();
+    expect(pressable(tree, 'Add price for Straw Tote')).toBeUndefined();
+    expect(text(tree)).not.toMatch(/Add price(?!s)/);
   });
 
-  it.each(['Edit price of Knee-High Boots, $862', 'Add price for Silk Scarf'])(
-    '%s opens the edit screen for that item',
-    async label => {
-      const tree = await mount();
-      await press(tree, label);
-      expect(mockNavigation.navigate).toHaveBeenCalledWith('AddClothing', {
-        editItem: expect.objectContaining({ isWishlist: true, name: label.includes('Boots') ? 'Knee-High Boots' : 'Silk Scarf' }),
-      });
-    },
-  );
-
-  it('the total follows an edit: back from the edit screen, a new price is counted and "without a price" goes down', async () => {
+  it('puts New before Used, and shows a zero, negative or NaN price as no price at all', async () => {
+    mockGet.mockResolvedValue([
+      wish('a', 'Free', { cost: 0, retailCost: 0 }),
+      wish('b', 'Negative', { cost: -20, retailCost: -30 }),
+      wish('c', 'Broken', { cost: NaN }),
+      wish('d', 'Half', { cost: 0, retailCost: 75 }),
+    ]);
     const tree = await mount();
-    expect(text(tree)).toMatch(/\$862\s+2 without a price/);
+    for (const name of ['Free', 'Negative', 'Broken']) expect(pressable(tree, `Add prices for ${name}`)).toBeDefined();
+    expect(pressable(tree, 'Edit prices of Half: New $75')).toBeDefined();
+    expect(text(tree)).not.toMatch(/Used \$0|New \$0|\$-/);
+  });
 
-    // The owner prices the scarf and the bag in the edit form and comes back.
-    mockGet.mockResolvedValueOnce([BOOTS, { ...SCARF, cost: 180 }, { ...BAG, retailCost: 60 }]);
-    await act(async () => mockFocus.current!());
-    expect(text(tree)).toMatch(/Wishlist total\s+\$1,102\b/);
-    expect(text(tree)).not.toContain('without a price');
-    expect(pressable(tree, 'Edit price of Silk Scarf, $180')).toBeDefined();
+  it.each([
+    [BOTH, 'Knee-High Boots'],
+    ['Edit prices of Silk Scarf: New $180', 'Silk Scarf'],
+    ['Add prices for Straw Tote', 'Straw Tote'],
+  ])('%s opens the edit screen for that item', async (label, name) => {
+    const tree = await mount();
+    await press(tree, label);
+    expect(mockNavigation.navigate).toHaveBeenCalledTimes(1);
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('AddClothing', {
+      editItem: expect.objectContaining({ isWishlist: true, name }),
+    });
+  });
 
-    // Lowering a price lowers the total.
-    mockGet.mockResolvedValueOnce([{ ...BOOTS, cost: 800 }, { ...SCARF, cost: 180 }, { ...BAG, retailCost: 60 }]);
+  it('hands the edit screen the item with both of its prices, so the form can show them', async () => {
+    const tree = await mount();
+    await press(tree, BOTH);
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('AddClothing', {
+      editItem: expect.objectContaining({ id: 'w1', cost: 862, retailCost: 1200 }),
+    });
+  });
+
+  it('the totals follow an edit: back from the edit screen, new prices are counted and the hints go down', async () => {
+    const tree = await mount();
+    expect(text(tree)).toMatch(/New total\s+\$1,380\s+1 without a new price/);
+    expect(text(tree)).toMatch(/Used total\s+\$862\s+2 without a used price/);
+
+    // The owner gives the scarf a used price and the bag both prices in the edit form, and comes back.
+    mockGet.mockResolvedValueOnce([BOOTS, { ...SCARF, cost: 120 }, { ...BAG, cost: 60, retailCost: 90 }]);
     await act(async () => mockFocus.current!());
-    expect(text(tree)).toMatch(/Wishlist total\s+\$1,040\b/);
+    expect(text(tree)).toMatch(/New total\s+\$1,470\b/); // 1200 + 180 + 90
+    expect(text(tree)).toMatch(/Used total\s+\$1,042\b/); // 862 + 120 + 60
+    expect(text(tree)).not.toContain('without a');
+    expect(pressable(tree, 'Edit prices of Silk Scarf: New $180  ·  Used $120')).toBeDefined();
+    expect(pressable(tree, 'Edit prices of Straw Tote: New $90  ·  Used $60')).toBeDefined();
+
+    // Lowering prices lowers the totals.
+    mockGet.mockResolvedValueOnce([
+      { ...BOOTS, cost: 800, retailCost: 1100 },
+      { ...SCARF, cost: 120 },
+      { ...BAG, cost: 60, retailCost: 90 },
+    ]);
+    await act(async () => mockFocus.current!());
+    expect(text(tree)).toMatch(/New total\s+\$1,370\b/); // 1100 + 180 + 90
+    expect(text(tree)).toMatch(/Used total\s+\$980\b/); // 800 + 120 + 60
+
+    // Clearing a price takes it out of its total only, and the hint comes back.
+    mockGet.mockResolvedValueOnce([
+      { ...BOOTS, cost: undefined, retailCost: 1100 },
+      { ...SCARF, cost: 120 },
+      { ...BAG, cost: 60, retailCost: 90 },
+    ]);
+    await act(async () => mockFocus.current!());
+    expect(text(tree)).toMatch(/New total\s+\$1,370\b/);
+    expect(text(tree)).toMatch(/Used total\s+\$180\s+1 without a used price/);
+    expect(pressable(tree, 'Edit prices of Knee-High Boots: New $1,100')).toBeDefined();
   });
 });
 
 describe('prices with cents', () => {
-  it('shows cents on every price and in the total, so the lines add up to the total', async () => {
+  it('shows cents on every price and in both totals, so the lines add up to the totals', async () => {
+    mockGet.mockResolvedValue([
+      wish('a', 'Coat', { retailCost: 1234.5, cost: 999.75 }),
+      wish('b', 'Shoes', { retailCost: 999.75, cost: 100 }),
+    ]);
+    const tree = await mount();
+    expect(pressable(tree, 'Edit prices of Coat: New $1,234.50  ·  Used $999.75')).toBeDefined();
+    expect(pressable(tree, 'Edit prices of Shoes: New $999.75  ·  Used $100.00')).toBeDefined();
+    expect(text(tree)).toMatch(/New total\s+\$2,234\.25\b/); // 1234.50 + 999.75
+    expect(text(tree)).toMatch(/Used total\s+\$1,099\.75\b/); // 999.75 + 100.00
+  });
+
+  it('cents on a Used price alone put cents on the New prices too', async () => {
+    mockGet.mockResolvedValue([wish('a', 'Bag', { retailCost: 4000, cost: 3000.5 })]);
+    const tree = await mount();
+    expect(pressable(tree, 'Edit prices of Bag: New $4,000.00  ·  Used $3,000.50')).toBeDefined();
+    expect(text(tree)).toMatch(/New total\s+\$4,000\.00\b/);
+    expect(text(tree)).toMatch(/Used total\s+\$3,000\.50\b/);
+  });
+
+  it('cents on a New price alone put cents on the Used prices too', async () => {
+    mockGet.mockResolvedValue([wish('a', 'Bag', { retailCost: 12.99, cost: 8 })]);
+    const tree = await mount();
+    expect(pressable(tree, 'Edit prices of Bag: New $12.99  ·  Used $8.00')).toBeDefined();
+    expect(text(tree)).toMatch(/Used total\s+\$8\.00\b/);
+  });
+
+  it('cents on one item show on a priced item that has none, and on a total that has nothing yet', async () => {
     mockGet.mockResolvedValue([
       wish('a', 'Boot A', { cost: 12.4 }),
       wish('b', 'Boot B', { cost: 12.4 }),
       wish('c', 'Boot C', { cost: 12.4 }),
     ]);
     const tree = await mount();
-    expect(pressable(tree, 'Edit price of Boot A, $12.40')).toBeDefined();
-    expect(text(tree)).toMatch(/Wishlist total\s+\$37\.20\b/);
+    expect(pressable(tree, 'Edit prices of Boot A: Used $12.40')).toBeDefined();
+    expect(text(tree)).toMatch(/Used total\s+\$37\.20\b/); // not 37.199999...
+    expect(text(tree)).toMatch(/New total\s+\$0\.00\s+3 without a new price/);
+  });
+
+  it('adds cents exactly in both totals', async () => {
+    mockGet.mockResolvedValue([
+      wish('a', 'One', { cost: 0.1, retailCost: 0.1 }),
+      wish('b', 'Two', { cost: 0.2, retailCost: 0.2 }),
+    ]);
+    const t = text(await mount());
+    expect(t).toMatch(/New total\s+\$0\.30\b/);
+    expect(t).toMatch(/Used total\s+\$0\.30\b/);
   });
 
   it('keeps whole dollars when no price has cents', async () => {
     const tree = await mount();
     expect(text(tree)).not.toContain('.00');
+    expect(pressable(tree, 'Edit prices of Knee-High Boots: New $1,200  ·  Used $862')).toBeDefined();
+  });
+
+  it('goes back to whole dollars when the price with cents is gone', async () => {
+    mockGet.mockResolvedValue([wish('a', 'Bag', { retailCost: 4000, cost: 3000.5 })]);
+    const tree = await mount();
+    expect(text(tree)).toContain('.50');
+    mockGet.mockResolvedValueOnce([wish('a', 'Bag', { retailCost: 4000, cost: 3000 })]);
+    await act(async () => mockFocus.current!());
+    expect(text(tree)).not.toContain('.50');
+    expect(text(tree)).toMatch(/Used total\s+\$3,000(?![.\d])/);
   });
 });
 
 describe('the price line and the card above it', () => {
-  it("does not reach up into the card's Move to wardrobe button", async () => {
+  it.each([
+    ['with prices', 'Edit prices of Knee-High Boots: New $1,200  ·  Used $862'],
+    ['with none', 'Add prices for Straw Tote'],
+  ])("(%s) does not reach up into the card's Move to wardrobe button", async (_state, label) => {
     const tree = await mount();
-    const price = pressable(tree, 'Edit price of Knee-High Boots, $862');
+    const price = pressable(tree, label);
+    expect(price.props.hitSlop.top).toBe(0);
+    // It is still a comfortable target on the other three sides.
+    for (const side of ['bottom', 'left', 'right']) expect(price.props.hitSlop[side]).toBeGreaterThan(0);
+    expect(price.props.accessibilityRole).toBe('button');
+  });
+
+  it("is a different control from the card's Move button, which keeps its own action", async () => {
+    const tree = await mount();
+    const move = pressable(tree, 'Move Knee-High Boots to your wardrobe');
+    const price = pressable(tree, 'Edit prices of Knee-High Boots: New $1,200  ·  Used $862');
+    expect(move).toBeDefined();
+    expect(price).not.toBe(move);
+    expect(price.props.onPress).not.toBe(move.props.onPress);
     expect(price.props.hitSlop.top).toBe(0);
   });
 });
-

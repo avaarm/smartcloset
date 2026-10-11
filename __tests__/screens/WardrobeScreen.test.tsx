@@ -281,3 +281,65 @@ describe('WardrobeScreen active filter badges', () => {
     ]);
   });
 });
+
+describe('WardrobeScreen item type', () => {
+  const names = ['Mini Crossbody', 'Big Tote', 'Chelsea', 'Plain Tee', 'Old Bag'];
+  const shown = (tree: renderer.ReactTestRenderer) => names.filter(name => text(tree).includes(name));
+
+  beforeEach(() => {
+    mockGetItems.mockResolvedValue([
+      item('Mini Crossbody', { category: 'bags', subcategory: 'Crossbody' }),
+      item('Big Tote', { category: 'bags', subcategory: 'Tote' }),
+      item('Chelsea', { category: 'shoes', subcategory: 'Boots' }),
+      item('Plain Tee'),
+      item('Old Bag', { category: 'bags' }),
+    ]);
+  });
+
+  it('a type filter shows only the items of that type, and several types add up', async () => {
+    const tree = await mount();
+    await applyFilters(tree, { types: ['Tote'] });
+    expect(shown(tree)).toEqual(['Big Tote']);
+
+    await applyFilters(tree, { types: ['Tote', 'Boots'] });
+    expect(shown(tree)).toEqual(['Big Tote', 'Chelsea']);
+  });
+
+  it('matches a type ignoring case, and leaves out items that have none', async () => {
+    const tree = await mount();
+    await applyFilters(tree, { types: ['crossbody'] });
+    expect(shown(tree)).toEqual(['Mini Crossbody']);
+  });
+
+  it('combines with the category filter', async () => {
+    const tree = await mount();
+    await applyFilters(tree, { categories: ['shoes'], types: ['Tote'] });
+    expect(shown(tree)).toEqual([]);
+  });
+
+  it('hands the filter only the types the wardrobe has, once each, in order', async () => {
+    mockGetItems.mockResolvedValue([
+      item('A', { subcategory: 'Tote' }),
+      item('B', { subcategory: 'tote' }),
+      item('C', { subcategory: ' Boots ' }),
+      item('D', { subcategory: '' }),
+      item('E'),
+    ]);
+    const tree = await mount();
+    expect(tree.root.findByType(FilterModal).props.availableTypes).toEqual(['Boots', 'Tote']);
+  });
+
+  it('counts a type filter as an active filter', async () => {
+    const tree = await mount();
+    await applyFilters(tree, { types: ['Tote'] });
+    expect(text(tree)).toMatch(/1\s+of\s+5\s+items/);
+  });
+
+  it('is found by the search box', async () => {
+    const tree = await mount();
+    await search(tree, 'crossbody');
+    expect(shown(tree)).toEqual(['Mini Crossbody']);
+    await search(tree, 'boots');
+    expect(shown(tree)).toEqual(['Chelsea']);
+  });
+});

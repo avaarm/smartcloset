@@ -229,7 +229,7 @@ describe('fuseRecognition', () => {
     expect(r?.subtype).toBeUndefined();
   });
 
-  it('falls back to a colour word among Vision\'s labels when no colour was measured', () => {
+  it('offers a colour word among Vision\'s labels when no colour was measured, but not as one to fill in', () => {
     const vision = analyzeVision({
       labelAnnotations: [{ description: 'Handbag', score: 0.9 }, { description: 'Burgundy', score: 0.8 }],
     });
@@ -237,7 +237,22 @@ describe('fuseRecognition', () => {
 
     expect(r?.color).toBe('burgundy');
     expect(r?.colors?.[0]).toMatchObject({ name: 'burgundy', hex: '#6D1F32' });
-    expect(r?.confidence.color).toBe(0.5);
+    // A colour label on its own is as likely the wall or the floor as the item: under the 0.5 the form needs.
+    expect(r?.confidence.color).toBeLessThan(0.5);
+  });
+
+  it('trusts a vivid colour label that a pixel cluster of the same hue backs', () => {
+    const vision = analyzeVision({
+      labelAnnotations: [{ description: 'Handbag', score: 0.9 }, { description: 'Red', score: 0.97 }],
+      imagePropertiesAnnotation: {
+        dominantColors: { colors: [{ color: { red: 60, green: 60, blue: 60 }, pixelFraction: 0.4 }, { color: { red: 110, green: 20, blue: 30 }, pixelFraction: 0.06 }] },
+      },
+    });
+    const r = fuseRecognition(vision, null);
+
+    // The label names it; the maroon cluster is only the shaded side of the same red.
+    expect(r?.color).toBe('red');
+    expect(r?.confidence.color).toBeGreaterThanOrEqual(0.5);
   });
 
   it('does not trust a colour label when a floor is in the frame (it may be the floor\'s)', () => {

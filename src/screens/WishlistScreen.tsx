@@ -16,12 +16,12 @@ import { itemCountLabel } from '../utils/itemCountLabel';
 import { formatMoney, formatMoneyCents } from '../utils/itemValue';
 import { KeyboardActionBar, KeyboardSafeView } from '../components/KeyboardSafe';
 import {
-  budgetStatus,
   getWishlistBudget,
   parseBudgetInput,
   setWishlistBudget,
-  wishlistItemPrice,
+  wishlistNewPrice,
   wishlistTotals,
+  wishlistUsedPrice,
 } from '../services/wishlistBudget';
 
 // Height of the price line under each card. It is drawn inside the grid cell
@@ -199,12 +199,18 @@ const WishlistScreen = () => {
 
   // Prices usually have cents. Show them whenever any item has some, so the line prices
   // always add up to the total instead of each rounding on its own.
-  const showCents = items.some(i => Math.round(wishlistItemPrice(i) * 100) % 100 !== 0);
+  const showCents = items.some(
+    i => Math.round(wishlistNewPrice(i) * 100) % 100 !== 0 || Math.round(wishlistUsedPrice(i) * 100) % 100 !== 0,
+  );
   const money = showCents ? formatMoneyCents : formatMoney;
   const budgetMoney = budget !== null && Math.round(budget * 100) % 100 !== 0 ? formatMoneyCents : formatMoney;
 
   const renderItem = ({ item }: { item: ClothingItemType }) => {
-    const price = wishlistItemPrice(item);
+    const newPrice = wishlistNewPrice(item);
+    const usedPrice = wishlistUsedPrice(item);
+    const priceLine = [newPrice > 0 && `New ${money(newPrice)}`, usedPrice > 0 && `Used ${money(usedPrice)}`]
+      .filter(Boolean)
+      .join('  ·  ');
     return (
       <View style={styles.cell}>
         <ClothingItem
@@ -221,17 +227,19 @@ const WishlistScreen = () => {
           onPress={() => handleEditItem(item)}
           hitSlop={PRICE_HIT_SLOP}
           accessibilityRole="button"
-          accessibilityLabel={price > 0 ? `Edit price of ${item.name}, ${money(price)}` : `Add price for ${item.name}`}
+          accessibilityLabel={priceLine ? `Edit prices of ${item.name}: ${priceLine}` : `Add prices for ${item.name}`}
         >
-          {price > 0 ? (
+          {priceLine ? (
             <>
-              <Text style={styles.priceText}>{money(price)}</Text>
+              <Text style={styles.priceText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+                {priceLine}
+              </Text>
               <Icon name="pencil" size={12} color={theme.colors.mediumGray} />
             </>
           ) : (
             <>
               <Icon name="add-circle-outline" size={14} color={theme.colors.accent} />
-              <Text style={styles.addPriceText}>Add price</Text>
+              <Text style={styles.addPriceText}>Add prices</Text>
             </>
           )}
         </TouchableOpacity>
@@ -239,8 +247,7 @@ const WishlistScreen = () => {
     );
   };
 
-  const { total, unpriced } = wishlistTotals(items);
-  const status = budget !== null ? budgetStatus(total, budget) : null;
+  const totals = wishlistTotals(items);
 
   if (loading) {
     return (
@@ -292,59 +299,44 @@ const WishlistScreen = () => {
                       <View
                         style={styles.moneyCell}
                         accessible
-                        accessibilityLabel={`Wishlist total ${money(total)}${unpriced > 0 ? `, ${unpriced} without a price` : ''}`}
+                        accessibilityLabel={`New total ${money(totals.newTotal)}${totals.withoutNew > 0 ? `, ${totals.withoutNew} without a new price` : ''}`}
                       >
-                        <Text style={styles.moneyLabel}>Wishlist total</Text>
+                        <Text style={styles.moneyLabel}>New total</Text>
                         <Text style={styles.moneyAmount} numberOfLines={1} adjustsFontSizeToFit>
-                          {money(total)}
+                          {money(totals.newTotal)}
                         </Text>
-                        {unpriced > 0 && <Text style={styles.moneyHint}>{`${unpriced} without a price`}</Text>}
+                        {totals.withoutNew > 0 && items.length > 0 && (
+                          <Text style={styles.moneyHint}>{`${totals.withoutNew} without a new price`}</Text>
+                        )}
                       </View>
                       <View style={styles.moneyDivider} />
-                      <TouchableOpacity
+                      <View
                         style={styles.moneyCell}
-                        onPress={openBudgetModal}
-                        accessibilityRole="button"
-                        accessibilityLabel={budget !== null ? `Budget ${budgetMoney(budget)}. Edit budget` : 'Budget not set. Set a budget'}
+                        accessible
+                        accessibilityLabel={`Used total ${money(totals.usedTotal)}${totals.withoutUsed > 0 ? `, ${totals.withoutUsed} without a used price` : ''}`}
                       >
-                        <View style={styles.moneyLabelRow}>
-                          <Text style={styles.moneyLabel}>Budget</Text>
-                          <Icon name="pencil" size={11} color={theme.colors.mediumGray} />
-                        </View>
-                        {budget !== null ? (
-                          <Text style={styles.moneyAmount} numberOfLines={1} adjustsFontSizeToFit>
-                            {budgetMoney(budget)}
-                          </Text>
-                        ) : (
-                          <Text style={[styles.moneyAmount, styles.moneyAmountEmpty]}>Not set</Text>
-                        )}
-                        <Text style={styles.moneyHint}>{budget !== null ? 'Tap to edit' : 'Tap to set one'}</Text>
-                      </TouchableOpacity>
-                    </View>
-                    {status && (
-                      <View style={styles.meter}>
-                        <View
-                          style={styles.meterTrack}
-                          accessibilityRole="progressbar"
-                          accessibilityValue={{ min: 0, max: 100, now: Math.round(status.used * 100) }}
-                        >
-                          <View
-                            style={[
-                              styles.meterFill,
-                              { width: `${Math.round(status.used * 100)}%` },
-                              status.kind === 'over' && styles.meterFillOver,
-                            ]}
-                          />
-                        </View>
-                        <Text style={[styles.meterText, status.kind === 'over' && styles.meterTextOver]}>
-                          {status.kind === 'under'
-                            ? `Under budget by ${formatMoney(status.amount)}`
-                            : status.kind === 'over'
-                              ? `Over budget by ${formatMoney(status.amount)}`
-                              : 'Right on budget'}
+                        <Text style={styles.moneyLabel}>Used total</Text>
+                        <Text style={styles.moneyAmount} numberOfLines={1} adjustsFontSizeToFit>
+                          {money(totals.usedTotal)}
                         </Text>
+                        {totals.withoutUsed > 0 && items.length > 0 && (
+                          <Text style={styles.moneyHint}>{`${totals.withoutUsed} without a used price`}</Text>
+                        )}
                       </View>
-                    )}
+                    </View>
+                    {/* The budget is just a number to keep in view. A wishlist is meant to be bigger than it, so nothing here compares the two. */}
+                    <TouchableOpacity
+                      style={styles.budgetRow}
+                      onPress={openBudgetModal}
+                      accessibilityRole="button"
+                      accessibilityLabel={budget !== null ? `Budget ${budgetMoney(budget)}. Edit budget` : 'Budget not set. Set a budget'}
+                    >
+                      <Text style={styles.budgetLabel}>Budget</Text>
+                      <Text style={[styles.budgetAmount, budget === null && styles.budgetAmountEmpty]}>
+                        {budget !== null ? budgetMoney(budget) : 'Not set'}
+                      </Text>
+                      <Icon name="pencil" size={12} color={theme.colors.mediumGray} />
+                    </TouchableOpacity>
                   </View>
                 </View>
                 {items.length > 0 && (
@@ -556,11 +548,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.lightGray,
     marginHorizontal: 12,
   },
-  moneyLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
   moneyLabel: {
     fontSize: 11,
     color: theme.colors.mediumGray,
@@ -575,41 +562,34 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 4,
   },
-  moneyAmountEmpty: {
-    fontSize: 20,
-    lineHeight: 34,
-    color: theme.colors.accent,
-  },
   moneyHint: {
     fontSize: 12,
     color: theme.colors.mediumGray,
   },
-  meter: {
+  budgetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.lightGray,
   },
-  meterTrack: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: theme.colors.lightGray,
-    overflow: 'hidden',
-  },
-  meterFill: {
-    height: '100%',
-    borderRadius: 3,
-    backgroundColor: theme.colors.success,
-  },
-  meterFillOver: {
-    backgroundColor: theme.colors.danger,
-  },
-  meterText: {
-    marginTop: 8,
-    fontSize: 13,
+  budgetLabel: {
+    fontSize: 11,
+    color: theme.colors.mediumGray,
     fontWeight: '500',
-    textAlign: 'center',
-    color: theme.colors.success,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
-  meterTextOver: {
-    color: theme.colors.danger,
+  budgetAmount: {
+    fontSize: 17,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  budgetAmountEmpty: {
+    color: theme.colors.accent,
   },
   actionsBar: {
     paddingHorizontal: 20,
@@ -655,9 +635,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+    paddingHorizontal: 6,
+    overflow: 'hidden',
   },
+  // flexShrink lets a long line (two prices with thousands) shrink to the card instead of spilling into the next one.
   priceText: {
-    fontSize: 15,
+    flexShrink: 1,
+    fontSize: 14,
     fontWeight: '600',
     color: theme.colors.text,
   },

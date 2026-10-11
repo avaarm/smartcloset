@@ -61,11 +61,12 @@ const base = (extra: Partial<ClothingItem>): ClothingItem => ({
 });
 
 // The wishlist coat is the newest thing in the store and the dearest, and it has
-// been given a wear, so any screen that forgets to filter shows it.
+// been given a wear, so any screen that forgets to filter shows it. It has both a Used
+// price (cost 900) and a New price (retailCost 1,500).
 const MIXED = [
   base({ id: 'o1', name: 'Owned Blazer', cost: 100, dateAdded: '2026-02-01T00:00:00Z', lastWorn: NOW, wearCount: 3 }),
   base({ id: 'o2', name: 'Owned Jeans', category: 'bottoms', cost: 50, dateAdded: '2026-03-01T00:00:00Z' }),
-  base({ id: 'w1', name: 'Wish Coat', category: 'outerwear', cost: 900, isWishlist: true, dateAdded: '2026-09-01T00:00:00Z', lastWorn: NOW, wearCount: 9 }),
+  base({ id: 'w1', name: 'Wish Coat', category: 'outerwear', cost: 900, retailCost: 1500, isWishlist: true, dateAdded: '2026-09-01T00:00:00Z', lastWorn: NOW, wearCount: 9 }),
 ];
 
 const seedGuestStore = async (items: ClothingItem[] = MIXED) => {
@@ -143,9 +144,20 @@ describe('Wardrobe and Wishlist with owned and wishlist items together', () => {
     expect(wishlist).toContain('Wish Coat');
     expect(wishlist).not.toContain('Owned Blazer');
     expect(wishlist).not.toContain('Owned Jeans');
-    // The wishlist total is the coat alone; the 150 of owned pieces is not part of it.
-    expect(wishlist).toMatch(/Wishlist total\s+\$900\b/);
-    expect(wishlist).not.toContain('$1,050');
+    // Both wishlist totals are the coat alone; the 150 paid for the owned pieces is not part of either.
+    expect(wishlist).toMatch(/New total\s+\$1,500\b/);
+    expect(wishlist).toMatch(/Used total\s+\$900\b/);
+    expect(wishlist).not.toContain('without a');
+    expect(wishlist).not.toContain('$1,050'); // 900 + 150
+    expect(wishlist).not.toContain('$1,650'); // 1,500 + 150
+  });
+
+  it('a wishlist item with only one price leaves the other total at $0 and says so', async () => {
+    await seedGuestStore([MIXED[0], MIXED[1], { ...MIXED[2], retailCost: undefined }]);
+    const wishlist = text(await mount(<WishlistScreen />));
+    expect(wishlist).toMatch(/New total\s+\$0\s+1 without a new price/);
+    expect(wishlist).toMatch(/Used total\s+\$900\b/);
+    expect(wishlist).not.toContain('without a used price');
   });
 
   it('the wardrobe search never reaches into the wishlist', async () => {
@@ -178,11 +190,14 @@ describe('Wardrobe and Wishlist with owned and wishlist items together', () => {
     const after = await stored();
     expect(after.map(i => i.id)).toEqual(before.map(i => i.id));
     const moved = after.find(i => i.id === 'w1')!;
-    expect(moved).toMatchObject({ isWishlist: false, wearCount: 9, name: 'Wish Coat', lastWorn: NOW });
+    // Both of its prices come along unchanged.
+    expect(moved).toMatchObject({ isWishlist: false, wearCount: 9, name: 'Wish Coat', lastWorn: NOW, cost: 900, retailCost: 1500 });
     // The wish date is not the date you got it: it counts as added now.
     expect(Date.parse(moved.dateAdded!)).toBeGreaterThanOrEqual(startedAt);
     expect(text(tree)).not.toContain('Wish Coat'); // gone from the wishlist...
-    expect(text(tree)).toMatch(/Wishlist total\s+\$0\b/); // ...and from its total
+    expect(text(tree)).toMatch(/New total\s+\$0\b/); // ...and from both of its totals
+    expect(text(tree)).toMatch(/Used total\s+\$0\b/);
+    expect(text(tree)).not.toContain('without a');
     const wardrobe = text(await mount(<WardrobeScreen navigation={mockNavigation as any} />));
     expect(wardrobe).toContain('Wish Coat'); // ...and now owned
     expect(wardrobe).toMatch(/3\s+items/);

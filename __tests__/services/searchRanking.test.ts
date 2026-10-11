@@ -204,8 +204,16 @@ describe('titles', () => {
   it('decodes entities and removes gallery counters and the trailing site name', () => {
     expect(
       cleanResultTitle('Bottega Veneta - Women - Andiamo Large shopper bag - Brown - Picture 4 of 6', 'ebay.com'),
-    ).toBe('Bottega Veneta - Women - Andiamo Large shopper bag - Brown');
+    ).toBe('Bottega Veneta - Andiamo Large shopper bag - Brown');
     expect(cleanResultTitle('Suede boots | eBay', 'ebay.com')).toBe('Suede boots');
+    // the storefront's country and language, and a bare "Image 8" counter, are site furniture too
+    expect(
+      cleanResultTitle("Women's Small Andiamo in Lava red Bottega Veneta Thailand EN - Image 8", 'bottegaveneta.com'),
+    ).toBe("Women's Small Andiamo in Lava red Bottega Veneta");
+    expect(
+      cleanResultTitle('*VIRTUAL TRUNK SHOW* Oscar de la Renta Embroidered Cocktail Dress', 'example.com'),
+    ).toBe('Oscar de la Renta Embroidered Cocktail Dress');
+    expect(cleanResultTitle('Zara Linen Shirt - United States', 'zara.com')).toBe('Zara Linen Shirt');
     expect(cleanResultTitle('Suede boots - Zara United States', 'zara.com')).toBe('Suede boots');
     expect(cleanResultTitle('Women&#39;s boots &amp; booties', 'zara.com')).toBe("Women's boots & booties");
     expect(cleanResultTitle('', 'zara.com')).toBe('zara.com');

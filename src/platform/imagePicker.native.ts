@@ -27,6 +27,9 @@ export const pickImageFromLibrary = async (): Promise<PickedImage | null> => {
   const result = await launchImageLibrary({
     mediaType: 'photo',
     quality: 0.85 as unknown as PhotoQuality, // 0.85 is valid at runtime; the lib's type lists only tenths
+    // The photo goes to the AI search, which reads no more than about 1600 px of it; smaller uploads sooner.
+    maxWidth: 1600,
+    maxHeight: 1600,
     selectionLimit: 1,
     includeBase64: false,
     includeExtra: false,

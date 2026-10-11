@@ -1,0 +1,214 @@
+{
+ "about": "Real Google Vision labels/objects/pixels and real gpt-4o answers for one photo (w_navy_red_messenger_worn in the accuracy corpus). \"answers.before\" is what the proxy returned before the prompt was rewritten, \"answers.after\" what it returns now.",
+ "vision": {
+  "labelAnnotations": [],
+  "localizedObjectAnnotations": [
+   {
+    "name": "Person",
+    "score": 0.741,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.234,
+       "y": 0.006
+      },
+      {
+       "x": 0.676,
+       "y": 0.006
+      },
+      {
+       "x": 0.676,
+       "y": 0.953
+      },
+      {
+       "x": 0.234,
+       "y": 0.953
+      }
+     ]
+    }
+   },
+   {
+    "name": "Bag",
+    "score": 0.541,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.136,
+       "y": 0.179
+      },
+      {
+       "x": 0.578,
+       "y": 0.179
+      },
+      {
+       "x": 0.578,
+       "y": 0.934
+      },
+      {
+       "x": 0.136,
+       "y": 0.934
+      }
+     ]
+    }
+   },
+   {
+    "name": "Top",
+    "score": 0.523,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.264,
+       "y": 0.005
+      },
+      {
+       "x": 0.68,
+       "y": 0.005
+      },
+      {
+       "x": 0.68,
+       "y": 0.898
+      },
+      {
+       "x": 0.264,
+       "y": 0.898
+      }
+     ]
+    }
+   }
+  ],
+  "imagePropertiesAnnotation": {
+   "dominantColors": {
+    "colors": [
+     {
+      "color": {
+       "red": 240,
+       "green": 42,
+       "blue": 73
+      },
+      "pixelFraction": 0.017,
+      "score": 0.2095
+     },
+     {
+      "color": {
+       "red": 50,
+       "green": 87,
+       "blue": 116
+      },
+      "pixelFraction": 0.061,
+      "score": 0.0883
+     },
+     {
+      "color": {
+       "red": 136,
+       "green": 163,
+       "blue": 187
+      },
+      "pixelFraction": 0.0485,
+      "score": 0.0746
+     },
+     {
+      "color": {
+       "red": 157,
+       "green": 26,
+       "blue": 54
+      },
+      "pixelFraction": 0.0027,
+      "score": 0.0143
+     },
+     {
+      "color": {
+       "red": 96,
+       "green": 6,
+       "blue": 22
+      },
+      "pixelFraction": 0.0026,
+      "score": 0.0114
+     },
+     {
+      "color": {
+       "red": 46,
+       "green": 13,
+       "blue": 21
+      },
+      "pixelFraction": 0.007,
+      "score": 0.0082
+     },
+     {
+      "color": {
+       "red": 225,
+       "green": 237,
+       "blue": 245
+      },
+      "pixelFraction": 0.0028,
+      "score": 0.0023
+     },
+     {
+      "color": {
+       "red": 225,
+       "green": 188,
+       "blue": 170
+      },
+      "pixelFraction": 0.0039,
+      "score": 0.0017
+     },
+     {
+      "color": {
+       "red": 252,
+       "green": 26,
+       "blue": 70
+      },
+      "pixelFraction": 0.0061,
+      "score": 0.0859
+     },
+     {
+      "color": {
+       "red": 252,
+       "green": 78,
+       "blue": 95
+      },
+      "pixelFraction": 0.0037,
+      "score": 0.0771
+     }
+    ]
+   }
+  },
+  "webDetection": {
+   "webEntities": [
+    {
+     "description": "Handbag",
+     "score": 0.74
+    },
+    {
+     "description": "Backpack",
+     "score": 0.708
+    },
+    {
+     "description": "Outdoor Products",
+     "score": 0.705
+    },
+    {
+     "description": "Herschel",
+     "score": 0.65
+    },
+    {
+     "description": "Bag",
+     "score": 0.518
+    },
+    {
+     "description": "Clothing",
+     "score": 0.516
+    }
+   ],
+   "bestGuessLabels": [
+    {
+     "label": "\u30a2\u30a6\u30c8\u30c9\u30a2 \u30d6\u30e9\u30f3\u30c9 \u30d0\u30c3\u30af",
+     "languageCode": "ja"
+    }
+   ]
+  }
+ },
+ "answers": {
+  "before": "{\n  \"category\": \"bags\",\n  \"subcategory\": \"messenger bag\",\n  \"brand\": \"Herschel\",\n  \"colors\": [\"blue\", \"red\"],\n  \"pattern\": \"solid\",\n  \"material\": \"canvas\",\n  \"season\": [\"spring\", \"summer\", \"fall\"],\n  \"occasion\": \"casual\",\n  \"style\": [\"casual\", \"streetwear\"],\n  \"gender\": \"unisex\",\n  \"description\": \"A blue and red Herschel messenger bag made of canvas, suitable for casual use.\",\n  \"confidence\": 0.95\n}",
+  "after": "{\n  \"item\": \"messenger bag\",\n  \"category\": \"bags\",\n  \"subcategory\": \"Crossbody\",\n  \"brand\": \"Herschel\",\n  \"colors\": [\"blue\", \"red\"],\n  \"pattern\": \"solid\",\n  \"material\": \"canvas\",\n  \"season\": [\"spring\", \"summer\", \"fall\"],\n  \"occasion\": \"casual\",\n  \"style\": [\"classic\", \"preppy\"],\n  \"gender\": \"unisex\",\n  \"description\": \"A blue and red canvas messenger bag with a Herschel logo, suitable for casual use.\",\n  \"confidence\": 0.95,\n  \"confidences\": {\n    \"category\": 0.95,\n    \"subcategory\": 0.9,\n    \"color\": 0.95\n  },\n  \"other_items\": [\"shirt\", \"pants\"]\n}"
+ }
+}

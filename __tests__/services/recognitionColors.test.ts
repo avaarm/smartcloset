@@ -227,3 +227,152 @@ describe('readPixelColors', () => {
     expect(readPixelColors({})).toEqual([]);
   });
 });
+
+// ─── Colour words among Vision's labels, and what whole-frame pixels can honestly say ──────────────────
+
+const frame = (over: Omit<Partial<ColorEvidence>, 'scene'> & { scene?: Partial<ColorScene> } = {}): ColorEvidence => ({
+  pixels: [],
+  aiColors: [],
+  aiConfidence: 0.9,
+  ...over,
+  scene: { woodSurface: false, coverage: 0.4, hasSubject: true, ...over.scene },
+});
+
+describe('without the model: a colour word among the labels', () => {
+  // Red heels on a wall: the frame is mostly wall, with a little red.
+  const wallAndHeels = [px('#D9D4CF', 0.6), px('#2A2523', 0.1), px('#8A1A22', 0.02)];
+
+  it('is confident when a pixel cluster of the same hue backs it, and the label names the colour', () => {
+    const r = resolveItemColors(frame({ pixels: wallAndHeels, labelColors: [{ name: 'red', score: 0.98 }] }));
+
+    // The cluster is a dark red (maroon); the label's own word is the colour, and it is the answer.
+    expect(r.color).toBe('red');
+    expect(r.confidence).toBeCloseTo(0.62, 2);
+  });
+
+  it('is only offered, not confident, when no pixels back it', () => {
+    const r = resolveItemColors(frame({ pixels: [px('#D9D4CF', 0.6), px('#2A2523', 0.1)], labelColors: [{ name: 'red', score: 0.98 }] }));
+
+    expect(r.color).toBe('red');
+    expect(r.confidence).toBeLessThan(0.5);
+  });
+
+  it('is ignored when the label is not sure enough', () => {
+    const r = resolveItemColors(frame({ pixels: wallAndHeels, labelColors: [{ name: 'red', score: 0.7 }] }));
+
+    expect(r.confidence ?? 0).toBeLessThan(0.5);
+  });
+
+  it('is ignored when a floor or table is in the frame, since the red may be the floor', () => {
+    const r = resolveItemColors(
+      frame({ pixels: wallAndHeels, labelColors: [{ name: 'red', score: 0.98 }], scene: { woodSurface: true } }),
+    );
+
+    expect(r.confidence ?? 0).toBeLessThan(0.5);
+  });
+
+  it('lets a burgundy cluster back a "Pink" label (Vision calls many deep reds pink) and name the colour', () => {
+    const r = resolveItemColors(
+      frame({ pixels: [px('#F2F2F2', 0.5), px('#6D1F32', 0.11)], labelColors: [{ name: 'pink', score: 0.91 }] }),
+    );
+
+    expect(r.color).toBe('burgundy');
+    expect(r.confidence).toBeGreaterThanOrEqual(0.5);
+  });
+
+  it('does not let pink pixels back a "Red" label (skin, a blush tone)', () => {
+    const r = resolveItemColors(frame({ pixels: [px('#2B2B2B', 0.4), px('#E0457B', 0.05)], labelColors: [{ name: 'red', score: 0.98 }] }));
+
+    expect(r.color).toBe('red');
+    expect(r.confidence).toBeLessThan(0.5);
+  });
+
+  it('keeps only shades of that hue as swatches: the warm floor behind red heels is not a colour of them', () => {
+    const r = resolveItemColors(
+      frame({
+        pixels: [px('#D8B24A', 0.26), px('#8A1A22', 0.05), px('#C9A57B', 0.05)],
+        labelColors: [{ name: 'red', score: 0.98 }],
+      }),
+    );
+
+    expect(r.color).toBe('red');
+    for (const swatch of r.colors) expect(['red', 'maroon', 'burgundy']).toContain(swatch.name);
+  });
+});
+
+describe('without the model: pixels alone', () => {
+  it('never make a neutral colour confident, however much of the frame the item fills (as often the wall or the bed)', () => {
+    const r = resolveItemColors(frame({ pixels: [px('#D3D3D5', 0.7)], scene: { coverage: 0.95 } }));
+
+    expect(r.color).toBe('light gray');
+    expect(r.confidence).toBeLessThan(0.5);
+  });
+
+  it('make a vivid colour confident only when the item fills most of the frame', () => {
+    const vivid = [px('#C41E2D', 0.5)];
+
+    expect(resolveItemColors(frame({ pixels: vivid, scene: { coverage: 0.9 } })).confidence).toBeGreaterThanOrEqual(0.5);
+    expect(resolveItemColors(frame({ pixels: vivid, scene: { coverage: 0.3 } })).confidence).toBeLessThan(0.5);
+  });
+
+  it('prefer a vivid cluster to a neutral one of about the same size: a wall is more often grey than red', () => {
+    const r = resolveItemColors(frame({ pixels: [px('#9A9A9A', 0.2), px('#C41E2D', 0.17)], scene: { coverage: 0.3 } }));
+
+    expect(r.color).toBe('red');
+  });
+});
+
+describe('with the model: more witnesses', () => {
+  const pixels = [px('#F2F2F2', 0.5), px('#8A1A22', 0.1)];
+
+  it('a colour label of the same hue backs the model as pixels do', () => {
+    const base = resolveItemColors(frame({ pixels: [], aiColors: ['red'], aiConfidence: 0.8 }));
+    const backed = resolveItemColors(frame({ pixels: [], aiColors: ['red'], aiConfidence: 0.8, labelColors: [{ name: 'pink', score: 0.9 }] }));
+    const sameHue = resolveItemColors(frame({ pixels: [], aiColors: ['red'], aiConfidence: 0.8, labelColors: [{ name: 'red', score: 0.9 }] }));
+
+    expect(base.confidence).toBeCloseTo(0.68, 2);
+    expect(sameHue.confidence as number).toBeGreaterThan(base.confidence as number);
+    // Pink is another hue family than red: no boost, and no pixels to back the model either, so it is made less sure.
+    expect(backed.confidence as number).toBeLessThan(base.confidence as number);
+  });
+
+  it('a vivid label of another hue, with nothing backing the model, makes its colour less sure', () => {
+    const yellow = resolveItemColors(frame({ pixels: [], aiColors: ['yellow'], aiConfidence: 0.9, labelColors: [{ name: 'red', score: 0.97 }] }));
+    const alone = resolveItemColors(frame({ pixels: [], aiColors: ['yellow'], aiConfidence: 0.9 }));
+
+    expect(yellow.color).toBe('yellow');
+    expect(yellow.confidence as number).toBeCloseTo((alone.confidence as number) * 0.75, 2);
+  });
+
+  it('a neutral model colour is not doubted for an accent colour the labels mention', () => {
+    const black = resolveItemColors(frame({ pixels: [], aiColors: ['black'], aiConfidence: 0.9, labelColors: [{ name: 'red', score: 0.97 }] }));
+
+    expect(black.confidence).toBeCloseTo(0.765, 2);
+  });
+
+  it('pixels that back the model cancel a contradicting label', () => {
+    const r = resolveItemColors(frame({ pixels, aiColors: ['maroon'], aiConfidence: 0.9, labelColors: [{ name: 'orange', score: 0.95 }] }));
+
+    expect(r.confidence as number).toBeGreaterThan(0.85);
+  });
+
+  it('the model\'s own colour confidence holds the confidence down when it is the lower of the two', () => {
+    const sure = resolveItemColors(frame({ pixels: [], aiColors: ['brown'], aiConfidence: 0.9, aiColorConfidence: 0.9 }));
+    const unsure = resolveItemColors(frame({ pixels: [], aiColors: ['brown'], aiConfidence: 0.9, aiColorConfidence: 0.5 }));
+    const higher = resolveItemColors(frame({ pixels: [], aiColors: ['brown'], aiConfidence: 0.6, aiColorConfidence: 0.95 }));
+
+    expect(unsure.confidence).toBeCloseTo(0.425, 2);
+    expect(sure.confidence as number).toBeGreaterThan(unsure.confidence as number);
+    // It never raises the overall confidence.
+    expect(higher.confidence).toBeCloseTo(0.51, 2);
+  });
+
+  it('a colour the listing title names backs the model; one of another hue makes it less sure', () => {
+    const base = resolveItemColors(frame({ pixels: [], aiColors: ['red'], aiConfidence: 0.8 })).confidence as number;
+    const agree = resolveItemColors(frame({ pixels: [], aiColors: ['red'], aiConfidence: 0.8, titleColors: ['burgundy'] })).confidence as number;
+    const clash = resolveItemColors(frame({ pixels: [], aiColors: ['red'], aiConfidence: 0.8, titleColors: ['green'] })).confidence as number;
+
+    expect(agree).toBeGreaterThan(base);
+    expect(clash).toBeLessThan(base);
+  });
+});

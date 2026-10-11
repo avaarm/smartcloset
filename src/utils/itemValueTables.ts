@@ -77,6 +77,8 @@ export const BRAND_TIERS: Record<BrandTier, string[]> = {
     'Longchamp', 'Mulberry', 'Furla', 'Stuart Weitzman', 'Alexander Wang', 'Zimmermann', 'Proenza Schouler',
     'Jil Sander', 'Marni', 'Kenzo', 'Lanvin', 'Etro', 'Missoni', 'Pinko', 'Self-Portrait', 'Cult Gaia',
     'Staud', 'Jacquemus', 'Mansur Gavriel', 'Rebecca Minkoff', 'Anya Hindmarch', 'Aquazzura',
+    'Oscar de la Renta', 'Dries Van Noten', 'Carolina Herrera', 'Monique Lhuillier', 'Zac Posen', 'Roland Mouret',
+    'Erdem', 'Simone Rocha', 'Khaite', 'Toteme', 'Jason Wu', 'Brandon Maxwell',
   ],
   premium: [
     'Ralph Lauren', 'Polo Ralph Lauren', 'Polo', 'Tommy Hilfiger', 'Calvin Klein', 'Lacoste', 'Fred Perry',

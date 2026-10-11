@@ -409,7 +409,7 @@ const ItemDetailsScreen: React.FC = () => {
             <View style={styles.titleRow}>
               <View style={styles.titleContainer}>
                 <Text style={styles.itemName}>{item.name}</Text>
-                <Text style={styles.itemCategory}>{categoryLabel(item.category)}</Text>
+                <Text style={styles.itemCategory}>{[categoryLabel(item.category), item.subcategory?.trim()].filter(Boolean).join(' · ')}</Text>
               </View>
               <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
                 <Icon name="pencil" size={20} color={theme.colors.accent} />
@@ -472,23 +472,23 @@ const ItemDetailsScreen: React.FC = () => {
               )}
           </View>
 
-          {/* Pricing Section — Used vs New + Savings */}
+          {/* Pricing Section — New vs Used + Savings */}
           {!!(item.cost || item.retailCost) && (
             <View style={styles.detailsSection}>
               <Text style={styles.sectionTitle}>Pricing</Text>
               <View style={styles.priceRow}>
-                <View style={styles.priceCol}>
-                  <Text style={styles.priceLabel}>Used</Text>
-                  <Text style={styles.priceValue}>
-                    {item.cost ? `$${item.cost.toFixed(item.cost % 1 === 0 ? 0 : 2)}` : '—'}
-                  </Text>
-                </View>
                 <View style={styles.priceCol}>
                   <Text style={styles.priceLabel}>New</Text>
                   <Text style={styles.priceValue}>
                     {item.retailCost
                       ? `$${item.retailCost.toFixed(item.retailCost % 1 === 0 ? 0 : 2)}`
                       : '—'}
+                  </Text>
+                </View>
+                <View style={styles.priceCol}>
+                  <Text style={styles.priceLabel}>Used</Text>
+                  <Text style={styles.priceValue}>
+                    {item.cost ? `$${item.cost.toFixed(item.cost % 1 === 0 ? 0 : 2)}` : '—'}
                   </Text>
                 </View>
                 <View style={styles.priceCol}>

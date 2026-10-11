@@ -102,18 +102,25 @@ const dbRow = (extra: Record<string, any>) => ({
   ...extra,
 });
 
+// Each wish is priced differently, as a wishlist really is. Used is the cost column (resale),
+// New is the retail_cost column (full retail).
+//   Cassette Boots  Used 862 only        Padded Bag  no price       Wool Trousers  New 240 only
+//   Intrecciato Tote  New 4,000 and Used 3,000
 const seedRows = () => [
-  // The owner's wishlist: a priced boot with a blank retailer, and a bag saved from a shop's site.
+  // The owner's wishlist: a boot with a Used price and a blank retailer, a bag saved from a shop's site
+  // with no price yet, trousers with only a New price, and a tote priced both ways.
   dbRow({ name: 'Bottega Veneta Cassette Boots', category: 'shoes', is_wishlist: true, cost: '862.00', retailer: '' }),
   dbRow({ name: 'Padded Cassette Bag', category: 'bags', is_wishlist: true, retailer: 'bottegaveneta.com' }),
   dbRow({ name: 'Wool Trousers', category: 'bottoms', is_wishlist: true, retail_cost: '240.00' }),
-  // Owned: one with a similar name to a wish, one from before the flag had a default, one free.
-  dbRow({ name: 'Brown Knee-High Boots', category: 'shoes', is_wishlist: false, cost: '120.00' }),
+  dbRow({ name: 'Intrecciato Tote', category: 'bags', is_wishlist: true, cost: '3000.00', retail_cost: '4000.00' }),
+  // Owned: one with a similar name to a wish (and a retail price of its own), one from before the
+  // flag had a default, one free. None of their prices may reach either wishlist total.
+  dbRow({ name: 'Brown Knee-High Boots', category: 'shoes', is_wishlist: false, cost: '120.00', retail_cost: '300.00' }),
   dbRow({ name: 'White Tee', is_wishlist: null, cost: '25.00' }),
   dbRow({ name: 'Linen Shirt', is_wishlist: false, cost: '0.00' }),
 ];
 
-const WISH_NAMES = ['Bottega Veneta Cassette Boots', 'Padded Cassette Bag', 'Wool Trousers'];
+const WISH_NAMES = ['Bottega Veneta Cassette Boots', 'Padded Cassette Bag', 'Wool Trousers', 'Intrecciato Tote'];
 const OWNED_NAMES = ['Brown Knee-High Boots', 'White Tee', 'Linen Shirt'];
 
 beforeEach(async () => {
@@ -128,12 +135,13 @@ beforeEach(async () => {
 afterEach(() => jest.restoreAllMocks());
 
 describe('database rows as the app reads them', () => {
-  it('keeps the wishlist flag, the numeric price and the blank retailer', () => {
-    const [boots, bag, trousers, ownedBoots, tee, shirt] = seedRows().map(mapDbToClothingItem);
-    expect(boots).toMatchObject({ isWishlist: true, category: 'shoes', cost: 862, retailer: '' });
-    expect(bag).toMatchObject({ isWishlist: true, retailer: 'bottegaveneta.com', cost: undefined });
+  it('keeps the wishlist flag, both numeric prices (cost = Used, retail_cost = New) and the blank retailer', () => {
+    const [boots, bag, trousers, tote, ownedBoots, tee, shirt] = seedRows().map(mapDbToClothingItem);
+    expect(boots).toMatchObject({ isWishlist: true, category: 'shoes', cost: 862, retailCost: undefined, retailer: '' });
+    expect(bag).toMatchObject({ isWishlist: true, retailer: 'bottegaveneta.com', cost: undefined, retailCost: undefined });
     expect(trousers).toMatchObject({ isWishlist: true, cost: undefined, retailCost: 240 });
-    expect(ownedBoots).toMatchObject({ isWishlist: false, cost: 120 });
+    expect(tote).toMatchObject({ isWishlist: true, cost: 3000, retailCost: 4000 });
+    expect(ownedBoots).toMatchObject({ isWishlist: false, cost: 120, retailCost: 300 });
     expect(tee.isWishlist).toBe(false); // NULL in the table reads as owned
     expect(shirt).toMatchObject({ isWishlist: false, cost: 0 });
   });
@@ -154,12 +162,20 @@ describe('database rows as the app reads them', () => {
     expect(owned.filter(o => wishlist.some(w => w.id === o.id))).toEqual([]);
   });
 
-  it('the wishlist total adds the wishlist prices only, never an owned item', async () => {
+  it('the wishlist totals add the wishlist prices only, never an owned item', async () => {
     mockSession = { user: { id: 'me' } };
     mockRows = seedRows();
     const wishlist = await getWishlistClothingItems();
-    // 862 listed + 240 retail-only + the bag with no price; the owned 120 + 25 stay out.
-    expect(wishlistTotals(wishlist)).toEqual({ total: 1102, unpriced: 1 });
+    // New: 240 (trousers) + 4,000 (tote) = 4,240. The boots and the bag have no New price.
+    // Used: 862 (boots) + 3,000 (tote) = 3,862. The bag and the trousers have no Used price.
+    // The owned 120 (retail 300) and 25 stay out of both.
+    expect(wishlistTotals(wishlist)).toEqual({
+      newTotal: 4240,
+      usedTotal: 3862,
+      withoutNew: 2,
+      withoutUsed: 2,
+      unpriced: 1,
+    });
   });
 });
 
@@ -169,35 +185,87 @@ describe('the Wishlist screen on those rows, signed in', () => {
     mockRows = seedRows();
   });
 
-  it('lists the three wishes, none of the owned pieces, and totals only the wishes', async () => {
+  it('lists the four wishes, none of the owned pieces, and totals only the wishes, New and Used', async () => {
     const t = text(await mount());
     for (const name of WISH_NAMES) expect(t).toContain(name);
     for (const name of OWNED_NAMES) expect(t).not.toContain(name);
-    expect(t).toMatch(/Wishlist total\s+\$1,102\s+1 without a price/);
-    expect(t).toContain('3 items');
+    expect(t).toMatch(/New total\s+\$4,240\s+2 without a new price/);
+    expect(t).toMatch(/Used total\s+\$3,862\s+2 without a used price/);
+    // Not the totals with the owned prices leaked in: 4,240 + 300 retail, 3,862 + 120 + 25 paid.
+    expect(t).not.toContain('$4,540');
+    expect(t).not.toContain('$4,007');
+    expect(t).not.toContain('$3,982');
+    expect(t).toContain('4 items');
   });
 
-  it('moving a wish to the wardrobe takes it off the wishlist and out of the total, and into the owned list', async () => {
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  it('draws each card\'s price line from its own two columns', async () => {
     const tree = await mount();
+    expect(pressable(tree, 'Edit prices of Bottega Veneta Cassette Boots: Used $862')).toBeDefined();
+    expect(pressable(tree, 'Add prices for Padded Cassette Bag')).toBeDefined();
+    expect(pressable(tree, 'Edit prices of Wool Trousers: New $240')).toBeDefined();
+    expect(pressable(tree, 'Edit prices of Intrecciato Tote: New $4,000  ·  Used $3,000')).toBeDefined();
+  });
 
-    await act(async () => pressable(tree, 'Move Bottega Veneta Cassette Boots to your wardrobe').props.onPress());
-    const confirm = (alert.mock.calls[0][2] as any[]).find(b => b.text === 'Move');
+  it('shows the budget row and no comparison of it with the totals', async () => {
+    await AsyncStorage.setItem('@smartcloset_wishlist_budget:u:me', '3000');
+    const tree = await mount();
+    const t = text(tree);
+    expect(t).toMatch(/Budget\s+\$3,000/);
+    expect(t).not.toMatch(/under budget|over budget|on budget/i);
+    expect(tree.root.findAll(n => n.props.accessibilityRole === 'progressbar')).toHaveLength(0);
+    expect(t).toMatch(/New total\s+\$4,240/); // well past the budget, and shown as it is
+  });
+
+  const moveToWardrobe = async (tree: renderer.ReactTestRenderer, name: string) => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    await act(async () => pressable(tree, `Move ${name} to your wardrobe`).props.onPress());
+    const confirm = (alert.mock.calls[alert.mock.calls.length - 1][2] as any[]).find(b => b.text === 'Move');
     await act(async () => {
       await confirm.onPress();
     });
+  };
+
+  it('moving a wish with only a Used price to the wardrobe takes it out of the Used total alone', async () => {
+    const tree = await mount();
+    await moveToWardrobe(tree, 'Bottega Veneta Cassette Boots');
 
     const t = text(tree);
     expect(t).not.toContain('Bottega Veneta Cassette Boots');
-    expect(t).toMatch(/Wishlist total\s+\$240\s+1 without a price/);
-    expect(t).toContain('2 items');
+    // New is untouched (the boots had no New price, so one fewer item lacks it); Used drops by 862.
+    expect(t).toMatch(/New total\s+\$4,240\s+1 without a new price/);
+    expect(t).toMatch(/Used total\s+\$3,000\s+2 without a used price/);
+    expect(t).toContain('3 items');
     expect((await getOwnedClothingItems()).map(i => i.name)).toContain('Bottega Veneta Cassette Boots');
     expect((await getWishlistClothingItems()).map(i => i.name)).not.toContain('Bottega Veneta Cassette Boots');
+  });
+
+  it('moving a wish priced both ways takes it out of both totals, and keeps both prices on the owned item', async () => {
+    const tree = await mount();
+    await moveToWardrobe(tree, 'Intrecciato Tote');
+
+    const t = text(tree);
+    expect(t).not.toContain('Intrecciato Tote');
+    expect(t).toMatch(/New total\s+\$240\s+2 without a new price/);
+    expect(t).toMatch(/Used total\s+\$862\s+2 without a used price/);
+    const owned = (await getOwnedClothingItems()).find(i => i.name === 'Intrecciato Tote');
+    expect(owned).toMatchObject({ isWishlist: false, cost: 3000, retailCost: 4000 });
+  });
+
+  it('moving every wish out leaves an empty wishlist with both totals at $0 and no hints', async () => {
+    const tree = await mount();
+    for (const name of WISH_NAMES) await moveToWardrobe(tree, name);
+    const t = text(tree);
+    expect(t).toContain('Your wishlist is empty');
+    expect(t).toMatch(/New total\s+\$0\b/);
+    expect(t).toMatch(/Used total\s+\$0\b/);
+    expect(t).not.toContain('without a');
+    expect((await getOwnedClothingItems()).map(i => i.name)).toEqual(expect.arrayContaining(WISH_NAMES));
   });
 });
 
 describe('a guest: the on-device store', () => {
-  // The payload the wishlist search saves for a result (WishlistSearchModal), and an owned piece.
+  // A wish as it sits in the on-device store after the wishlist search added it (New price from the
+  // brand's own site, Used price from a resale listing), and an owned piece with prices of its own.
   const searchResult = (extra: Record<string, any> = {}) =>
     ({
       id: 'wish_1760000000000_ab12cd',
@@ -212,6 +280,7 @@ describe('a guest: the on-device store', () => {
       isWishlist: true,
       wearCount: 0,
       cost: 862,
+      retailCost: 1450,
       notes: 'Found via search. Source: https://www.bottegaveneta.com/p/1',
       tags: [],
       favorite: false,
@@ -226,6 +295,7 @@ describe('a guest: the on-device store', () => {
       retailer: '',
       isWishlist: false,
       cost: 120,
+      retailCost: 200,
       notes: undefined,
       ...extra,
     }) as any;
@@ -239,7 +309,7 @@ describe('a guest: the on-device store', () => {
   it('keeps a searched wish out of the owned list, and the owned piece out of the wishlist', async () => {
     await save(owned(), 1111);
     await save(searchResult(), 2222);
-    await save(searchResult({ name: 'Padded Tote', category: 'bags', cost: undefined, retailer: '' }), 3333);
+    await save(searchResult({ name: 'Padded Tote', category: 'bags', cost: undefined, retailCost: undefined, retailer: '' }), 3333);
 
     const ownedList = await getOwnedClothingItems();
     const wishList = await getWishlistClothingItems();
@@ -248,23 +318,45 @@ describe('a guest: the on-device store', () => {
     expect(ownedList.some(i => i.isWishlist)).toBe(false);
   });
 
-  it('the screen shows the wishes and totals only their prices', async () => {
+  it('the screen shows the wishes and totals only their prices, New and Used', async () => {
     await save(owned(), 1111);
     await save(searchResult(), 2222);
-    await save(searchResult({ name: 'Padded Tote', category: 'bags', cost: undefined, retailer: '' }), 3333);
+    await save(searchResult({ name: 'Padded Tote', category: 'bags', cost: undefined, retailCost: undefined, retailer: '' }), 3333);
 
     const t = text(await mount());
     expect(t).toContain('Cassette Padded Boots');
     expect(t).toContain('Padded Tote');
     expect(t).not.toContain('Brown Knee-High Boots');
-    expect(t).toMatch(/Wishlist total\s+\$862\s+1 without a price/); // not 982: the owned 120 is not in it
+    expect(t).toMatch(/New total\s+\$1,450\s+1 without a new price/); // not 1,650: the owned 200 is not in it
+    expect(t).toMatch(/Used total\s+\$862\s+1 without a used price/); // not 982: the owned 120 is not in it
+    expect(t).not.toContain('$1,650');
+    expect(t).not.toContain('$982');
   });
 
-  it('with only owned items the wishlist is empty and totals $0', async () => {
+  it('a wish saved with only a cost (the way earlier versions kept a search price) reads as a Used price', async () => {
+    await save(searchResult({ retailCost: undefined }), 2222);
+    const tree = await mount();
+    const t = text(tree);
+    expect(t).toMatch(/New total\s+\$0\s+1 without a new price/);
+    expect(t).toMatch(/Used total\s+\$862\b/);
+    expect(pressable(tree, 'Edit prices of Cassette Padded Boots: Used $862')).toBeDefined();
+  });
+
+  it('works for a signed-out guest with no budget saved: the row says Not set, with no bar', async () => {
+    await save(searchResult(), 2222);
+    const tree = await mount();
+    expect(text(tree)).toMatch(/Budget\s+Not set/);
+    expect(tree.root.findAll(n => n.props.accessibilityRole === 'progressbar')).toHaveLength(0);
+    expect(pressable(tree, 'Budget not set. Set a budget')).toBeDefined();
+  });
+
+  it('with only owned items the wishlist is empty and both totals are $0, with no hints', async () => {
     await save(owned(), 1111);
     const t = text(await mount());
     expect(t).toContain('Your wishlist is empty');
-    expect(t).toMatch(/Wishlist total\s+\$0/);
+    expect(t).toMatch(/New total\s+\$0/);
+    expect(t).toMatch(/Used total\s+\$0/);
+    expect(t).not.toContain('without a');
     expect(t).not.toContain('Brown Knee-High Boots');
   });
 });

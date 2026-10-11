@@ -110,8 +110,51 @@ describe('reset', () => {
   it('goes back to All in both groups', async () => {
     const { onApplyFilters } = await mount({ ...NONE, categories: ['tops'], seasons: ['fall'] });
     await act(async () => chipByText('Reset').props.onPress());
-    expect(onApplyFilters).toHaveBeenCalledWith({ categories: [], seasons: [], sortBy: 'date', sortOrder: 'desc' });
+    expect(onApplyFilters).toHaveBeenCalledWith({ categories: [], types: [], seasons: [], sortBy: 'date', sortOrder: 'desc' });
     expect(isOn(chip('All categories'))).toBe(true);
     expect(isOn(chip('All seasons'))).toBe(true);
+  });
+});
+
+describe('types', () => {
+  const mountWithTypes = async (types: string[], filters: FilterOptions = NONE) => {
+    const onApplyFilters = jest.fn();
+    await act(async () => {
+      tree = renderer.create(
+        <FilterModal visible onClose={jest.fn()} onApplyFilters={onApplyFilters} currentFilters={filters} availableTypes={types} />,
+      );
+    });
+    return { onApplyFilters };
+  };
+
+  it('has no Type section when no item has a type', async () => {
+    await mount();
+    expect(tree.root.findAll(n => n.props.accessibilityLabel === 'All types')).toHaveLength(0);
+  });
+
+  it('lists the types the wardrobe has, with All on until one is picked', async () => {
+    await mountWithTypes(['Ankle boots', 'Tote']);
+    expect(isOn(chip('All types'))).toBe(true);
+    await press(chip('Type Tote'));
+    expect(isOn(chip('All types'))).toBe(false);
+    expect(isOn(chip('Type Tote'))).toBe(true);
+  });
+
+  it('passes the chosen types to the wardrobe filter, and All clears them', async () => {
+    const { onApplyFilters } = await mountWithTypes(['Ankle boots', 'Tote']);
+    await press(chip('Type Tote'));
+    await press(chip('Type Ankle boots'));
+    await apply();
+    expect(onApplyFilters).toHaveBeenLastCalledWith(expect.objectContaining({ types: ['Tote', 'Ankle boots'] }));
+
+    await press(chip('All types'));
+    await apply();
+    expect(onApplyFilters).toHaveBeenLastCalledWith(expect.objectContaining({ types: [] }));
+  });
+
+  it('Reset clears the types as well', async () => {
+    const { onApplyFilters } = await mountWithTypes(['Tote'], { ...NONE, types: ['Tote'] });
+    await act(async () => chipByText('Reset').props.onPress());
+    expect(onApplyFilters).toHaveBeenCalledWith(expect.objectContaining({ types: [] }));
   });
 });

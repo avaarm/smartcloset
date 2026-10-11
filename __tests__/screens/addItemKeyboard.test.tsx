@@ -86,7 +86,7 @@ describe('Done bar', () => {
     const needsDone = inputs().filter(
       i => i.props.keyboardType === 'decimal-pad' || i.props.keyboardType === 'number-pad' || i.props.multiline,
     );
-    // used price, new price, estimated value, material %, notes
+    // new price, used price, estimated value, material %, notes
     expect(needsDone.map(i => i.props.placeholder ?? i.props.accessibilityLabel)).toEqual([
       '$0',
       '$0',
@@ -97,11 +97,11 @@ describe('Done bar', () => {
     for (const input of needsDone) expect(input.props.inputAccessoryViewID).toBe(KEYBOARD_DONE_ID);
   });
 
-  it('is on the wishlist form too, for its Price and Original price fields', async () => {
+  it('is on the wishlist form too, for its New price and Used price fields', async () => {
     await render({ isWishlist: true });
     expect(tree.root.findAllByType(InputAccessoryView)).toHaveLength(1);
     const numeric = inputs().filter(i => i.props.keyboardType === 'decimal-pad');
-    expect(numeric).toHaveLength(2);
+    expect(numeric.map(i => i.props.accessibilityLabel)).toEqual(['New price', 'Used price']);
     for (const input of numeric) expect(input.props.inputAccessoryViewID).toBe(KEYBOARD_DONE_ID);
   });
 });

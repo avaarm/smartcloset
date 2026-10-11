@@ -1,6 +1,10 @@
 /**
  * The wishlist budget, and the wishlist money sums that sit next to it.
  *
+ * A wishlist is never "under budget": it is everything someone would like, so the
+ * budget is only a number to keep in view next to the totals, not a limit that the
+ * list is judged against.
+ *
  * The budget is one dollar amount per person, kept on this device. The key
  * carries the account id (a guest has a key of its own), so on a shared phone
  * one account's budget can never show up under another. Because the id is part
@@ -72,47 +76,45 @@ export const parseBudgetInput = (raw: string): BudgetInput => {
 const isPrice = (n: number | undefined): n is number =>
   typeof n === 'number' && Number.isFinite(n) && n > 0;
 
-/**
- * What a wishlist item costs: the listed price (cost), else the full retail
- * price, since the form's "New" field is where someone wishing for an item
- * will often type it. 0 when neither is set.
- */
-export const wishlistItemPrice = (item: Pick<ClothingItem, 'cost' | 'retailCost'>): number => {
-  if (isPrice(item.cost)) return item.cost;
-  if (isPrice(item.retailCost)) return item.retailCost;
-  return 0;
-};
+/** What the item costs new (the full retail price), or 0 when that is not set. */
+export const wishlistNewPrice = (item: Pick<ClothingItem, 'retailCost'>): number =>
+  isPrice(item.retailCost) ? item.retailCost : 0;
 
-/**
- * Sum of the items' prices, and how many have none (they count as 0). Callers
- * pass wishlist items only; owned items are never part of this number.
- */
-export const wishlistTotals = (items: Pick<ClothingItem, 'cost' | 'retailCost'>[]): { total: number; unpriced: number } => {
-  let cents = 0;
-  let unpriced = 0;
-  for (const item of items) {
-    const price = wishlistItemPrice(item);
-    if (price > 0) cents += Math.round(price * 100);
-    else unpriced += 1;
-  }
-  return { total: cents / 100, unpriced };
-};
+/** What the item costs used (resale), or 0 when that is not set. */
+export const wishlistUsedPrice = (item: Pick<ClothingItem, 'cost'>): number =>
+  isPrice(item.cost) ? item.cost : 0;
 
-export interface BudgetStatus {
-  kind: 'under' | 'over' | 'on';
-  /** Whole dollars left (under) or past the budget (over); 0 when on budget. */
-  amount: number;
-  /** How much of the budget the total uses, 0 to 1 (capped, so it can fill a bar). */
-  used: number;
+export interface WishlistTotals {
+  /** Sum of the new prices. */
+  newTotal: number;
+  /** Sum of the used prices. */
+  usedTotal: number;
+  /** Items with no new price, and with no used price (each total leaves them out). */
+  withoutNew: number;
+  withoutUsed: number;
+  /** Items with neither price. */
+  unpriced: number;
 }
 
-/** Compares the total with a budget (above zero). Judged in whole dollars, as they are shown. */
-export const budgetStatus = (total: number, budget: number): BudgetStatus => {
-  const diff = Math.round(budget - total);
-  return {
-    kind: diff > 0 ? 'under' : diff < 0 ? 'over' : 'on',
-    amount: Math.abs(diff),
-    // A zero or missing budget (never saved, but never divide by it) shows an empty bar.
-    used: budget > 0 ? Math.min(Math.max(total / budget, 0), 1) : 0,
-  };
+/**
+ * The two wishlist totals: everything on it bought new, and everything bought used.
+ * Callers pass wishlist items only; owned items are never part of these numbers.
+ * Summed in cents so a long list of prices with cents adds up exactly.
+ */
+export const wishlistTotals = (items: Pick<ClothingItem, 'cost' | 'retailCost'>[]): WishlistTotals => {
+  let newCents = 0;
+  let usedCents = 0;
+  let withoutNew = 0;
+  let withoutUsed = 0;
+  let unpriced = 0;
+  for (const item of items) {
+    const newPrice = wishlistNewPrice(item);
+    const usedPrice = wishlistUsedPrice(item);
+    if (newPrice > 0) newCents += Math.round(newPrice * 100);
+    else withoutNew += 1;
+    if (usedPrice > 0) usedCents += Math.round(usedPrice * 100);
+    else withoutUsed += 1;
+    if (newPrice <= 0 && usedPrice <= 0) unpriced += 1;
+  }
+  return { newTotal: newCents / 100, usedTotal: usedCents / 100, withoutNew, withoutUsed, unpriced };
 };

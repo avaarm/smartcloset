@@ -29,7 +29,7 @@ describe('fetchProductMetadata', () => {
     serve(page('Bottega Veneta - Women - Andiamo Large shopper bag - Brown - Picture 4 of 6'));
     const res = await fetchProductMetadata('https://www.ebay.com/itm/1234567890');
     expect(res?.sourceKind).toBe('resale');
-    expect(res?.title).toBe('Bottega Veneta - Women - Andiamo Large shopper bag - Brown');
+    expect(res?.title).toBe('Bottega Veneta - Andiamo Large shopper bag - Brown');
   });
 
   it('leaves a site it does not know unclassified, adds https when it is missing', async () => {

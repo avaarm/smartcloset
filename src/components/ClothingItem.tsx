@@ -86,8 +86,10 @@ const ClothingItem: React.FC<Props> = ({
     }
   };
 
-  const cardLabel = [item.name, categoryLabel(item.category), item.brand].filter(Boolean).join(', ');
-  const metaLine = [categoryLabel(item.category), item.brand].filter(Boolean).join(' · ');
+  // The specific type ("Tote") says more than the category ("Bags") when the item has one.
+  const kindLabel = item.subcategory?.trim() || categoryLabel(item.category);
+  const cardLabel = [item.name, kindLabel, item.brand].filter(Boolean).join(', ');
+  const metaLine = [kindLabel, item.brand].filter(Boolean).join(' · ');
   const imageStyle = compact ? styles.imageSquare : styles.image;
   const colorMatchText = colorMatch === 'match' ? 'Great color for you' : 'Outside your palette';
   const colorMatchColor = colorMatch === 'match' ? '#2E8B57' : '#E57373';
@@ -164,7 +166,7 @@ const ClothingItem: React.FC<Props> = ({
         ) : (
           <View style={styles.details}>
             <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
-            <Text style={styles.category} numberOfLines={1}>{categoryLabel(item.category)}</Text>
+            <Text style={styles.category} numberOfLines={1}>{kindLabel}</Text>
             {item.brand ? <Text style={styles.brand} numberOfLines={1}>{item.brand}</Text> : null}
             {colorMatch && (
               <View style={styles.colorMatchRow}>

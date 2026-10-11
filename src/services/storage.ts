@@ -7,6 +7,7 @@ import { canonicalizeImageUrl, withSignedImages } from './imageUrls';
 import { seedAllDemoData } from './seedDemoData';
 import { rehomeItemImages } from './localImagePaths';
 import { removeCloudImages } from './imageStorage';
+import { refreshLegacySampleData } from './sampleDataRefresh';
 
 const STORAGE_KEY = '@smartcloset_items';
 const INITIALIZED_KEY = '@smartcloset_initialized_v6';
@@ -25,6 +26,7 @@ export const mapDbToClothingItem = (row: any): ClothingItem => ({
   id: row.id,
   name: row.name,
   category: row.category,
+  subcategory: row.subcategory || undefined,
   retailerImage: row.retailer_image,
   userImage: row.user_image,
   brand: row.brand,
@@ -52,6 +54,7 @@ const mapClothingItemToDb = (item: Partial<ClothingItem>, userId: string) => ({
   user_id: userId,
   name: item.name,
   category: item.category,
+  subcategory: item.subcategory?.trim() ? item.subcategory.trim().slice(0, 60) : undefined,
   color: item.color,
   season: item.season || [],
   retailer_image: canonicalizeImageUrl(item.retailerImage),
@@ -78,6 +81,8 @@ const mapClothingItemToDb = (item: Partial<ClothingItem>, userId: string) => ({
 const initializeLocalStorage = async (): Promise<void> => {
   try {
     const initialized = await AsyncStorage.getItem(INITIALIZED_KEY);
+    // A device that saved the samples before their photos were fixed gets the fixed ones, once.
+    if (initialized) await refreshLegacySampleData({ items: STORAGE_KEY, outfits: SAVED_OUTFITS_KEY });
     if (!initialized) {
       // Seed the wardrobe with sample data on first launch
       const items = enhancedClothingItems.map(item => ({
@@ -173,7 +178,7 @@ const isMissingColumnError = (error: any, column: string): boolean =>
  * one (the migration hasn't been applied to this project yet) the write is
  * retried without its group, rather than blocking the whole item.
  */
-const MIGRATION_COLUMNS: string[][] = [['materials'], ['estimated_value', 'value_source']];
+const MIGRATION_COLUMNS: string[][] = [['materials'], ['estimated_value', 'value_source'], ['subcategory']];
 
 const writeWithoutMissingColumns = async (
   payload: Record<string, any>,
@@ -351,6 +356,10 @@ export const updateClothingItem = async (
     if (estimatedValue !== undefined) payload.estimated_value = estimatedValue;
     const valueSource = valueSourceOf(updatedItem.valueSource);
     if (valueSource !== undefined) payload.value_source = valueSource;
+    // Same rule: undefined leaves the saved type alone, an empty string clears it.
+    if (updatedItem.subcategory !== undefined) {
+      payload.subcategory = updatedItem.subcategory.trim() ? updatedItem.subcategory.trim().slice(0, 60) : null;
+    }
 
     // Remember the photos this row used so ones that were replaced can be removed.
     const { data: before } = await supabase

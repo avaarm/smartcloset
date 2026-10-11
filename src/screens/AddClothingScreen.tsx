@@ -35,6 +35,7 @@ import {
 } from '../services/productContributions';
 import MatchPickerSheet, { type PickedMatch } from './MatchPickerSheet';
 import MaterialsEditor from '../components/MaterialsEditor';
+import TypePicker from '../components/TypePicker';
 import {
   KeyboardDoneBar,
   KeyboardSafeScrollView,
@@ -43,6 +44,7 @@ import {
 } from '../components/KeyboardSafe';
 import { readImageAsBase64 } from '../platform/fileSystem';
 import { parseMoney } from '../utils/money';
+import { CLOTHING_TYPES, inferType, isKnownType } from '../utils/clothingTypes';
 import { estimateItemValue, type ValueSource } from '../utils/itemValue';
 import {
   CATEGORY_LABELS,
@@ -87,6 +89,11 @@ const OCCASION_OPTIONS: { label: string; value: Occasion | 'any' }[] = [
 // Far above any wardrobe item and far below the column's limit, so one stray digit
 // can't wreck the wardrobe total or fail the save.
 const MAX_VALUE = 1_000_000;
+
+// A phone photo is 4032 x 3024 and a few MB, and it goes twice to the AI (Google Vision and the vision model),
+// which read no more than about 1600 px of it. Scaled down on the way in it uploads and answers sooner, so
+// the analysis finishes inside its time limit instead of falling back to a pixel-only guess.
+const PHOTO_MAX_SIZE = 1600;
 
 const isUsableValue = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
 
@@ -149,6 +156,8 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   const isEditing = !!editItem;
   const [name, setName] = useState<string>(editItem?.name || '');
   const [category, setCategory] = useState<ClothingCategory>(editItem?.category || 'tops');
+  // The specific kind within the category ("Tote", "Ankle boots"); '' is none.
+  const [subcategory, setSubcategory] = useState<string>(editItem?.subcategory || '');
   const [brand, setBrand] = useState<string>(editItem?.brand || '');
   const [imageUri, setImageUri] = useState(editItem?.userImage || editItem?.imageUrl || editItem?.retailerImage || '');
   const [color, setColor] = useState<string>(editItem?.color || '');
@@ -172,6 +181,11 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   // True once the user has chosen a category themselves (or is editing an item
   // that already has one), so photo analysis never overrides it.
   const categoryTouched = useRef(isEditing);
+  // Same for the type: once picked or typed (or saved on the item), photo analysis leaves it alone.
+  const typeTouched = useRef(!!editItem?.subcategory);
+  // What the form holds right now, for the analysis that finishes seconds later.
+  const categoryNow = useRef(category);
+  categoryNow.current = category;
 
   // Multi-tier material composition — feeds the fabric knowledge base.
   const [materials, setMaterials] = useState<MaterialComponent[]>(
@@ -260,6 +274,21 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
     setCategory(value);
   }, []);
 
+  // A type from one category's menu ("Tote") means nothing in another's, so it goes when the
+  // category changes, by hand or by the photo analysis. A type the owner typed themselves stays.
+  useEffect(() => {
+    setSubcategory(prev => {
+      if (!prev || isKnownType(category, prev)) return prev;
+      const onSomeMenu = (Object.keys(CLOTHING_TYPES) as ClothingCategory[]).some(c => isKnownType(c, prev));
+      return onSomeMenu ? '' : prev;
+    });
+  }, [category]);
+
+  const onTypeChange = useCallback((value: string) => {
+    typeTouched.current = true;
+    setSubcategory(value);
+  }, []);
+
   const onSeasonToggle = useCallback((value: Season | 'all') => {
     setSeasons(prev => toggleSeasonChoice(prev, value));
   }, []);
@@ -267,6 +296,10 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   const onOccasionChange = useCallback((value: Occasion | 'any' | null) => {
     setOccasion(value === null || value === 'any' ? null : value);
   }, []);
+
+  const redetectFromPhoto = () => {
+    if (imageUri && !analyzing) analyzeImage(imageUri, { redetect: true });
+  };
 
   const showImageOptions = () => {
     Alert.alert(
@@ -314,6 +347,8 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
     ImagePicker.launchCamera({
       mediaType: 'photo',
       quality: 0.8,
+      maxWidth: PHOTO_MAX_SIZE,
+      maxHeight: PHOTO_MAX_SIZE,
       // The photo is kept privately inside the app; don't also copy it into the Camera Roll.
       saveToPhotos: false,
     }, async (response) => {
@@ -342,6 +377,8 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
     ImagePicker.launchImageLibrary({
       mediaType: 'photo',
       quality: 0.8,
+      maxWidth: PHOTO_MAX_SIZE,
+      maxHeight: PHOTO_MAX_SIZE,
     }, async (response) => {
       if (response.didCancel) {
         return;
@@ -375,8 +412,12 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
 
       if (!name.trim()) setName(match.name);
       // A category the user picked (or an item being edited) is theirs to keep.
-      if (isClothingCategory(match.category) && !categoryTouched.current) {
-        setCategory(match.category);
+      const matchCategory =
+        isClothingCategory(match.category) && !categoryTouched.current ? match.category : categoryNow.current;
+      if (matchCategory !== categoryNow.current) setCategory(matchCategory);
+      if (!typeTouched.current) {
+        const matchType = inferType(matchCategory, match.name);
+        if (matchType) setSubcategory(prev => prev || matchType);
       }
       if (match.brand && !brand.trim()) setBrand(match.brand);
       if (match.retailer && !retailer.trim()) setRetailer(match.retailer);
@@ -411,7 +452,13 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
     setMatchSheetDismissed(true);
   }, []);
 
-  const analyzeImage = async (uri: string) => {
+  /**
+   * Reads the photo and fills the form from it. `redetect` is the owner asking again about the
+   * photo already on the item: it corrects the category, type and colour (replacing what is
+   * there) and leaves everything else, including any picked match, as it is.
+   */
+  const analyzeImage = async (uri: string, opts: { redetect?: boolean } = {}) => {
+    const redetect = !!opts.redetect;
     // Analysis and the match search take seconds, and another photo can be
     // picked meanwhile. Everything this run sets goes through isCurrent() so a
     // late answer for the old photo never lands on the new one.
@@ -419,22 +466,24 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
     const isCurrent = () => analysisId.current === myId;
 
     setAnalyzing(true);
-    setMatchSheetDismissed(false);
-    setPickedMatch(null);
-    // A price a picked match filled in is the listing's, not what the owner paid.
-    // Clear it along with the match, or it would turn into a 'paid' price.
-    setCost(prev => (prev && prev === matchFilled.cost ? '' : prev));
-    setRetailCost(prev => (prev && prev === matchFilled.retailCost ? '' : prev));
-    setMatchFilled({});
-    setKbMatches([]);
-    setLensResults([]);
-    setMatchError(null);
-    setMatchLoading(false);
+    if (!redetect) {
+      setMatchSheetDismissed(false);
+      setPickedMatch(null);
+      // A price a picked match filled in is the listing's, not what the owner paid.
+      // Clear it along with the match, or it would turn into a 'paid' price.
+      setCost(prev => (prev && prev === matchFilled.cost ? '' : prev));
+      setRetailCost(prev => (prev && prev === matchFilled.retailCost ? '' : prev));
+      setMatchFilled({});
+      setKbMatches([]);
+      setLensResults([]);
+      setMatchError(null);
+      setMatchLoading(false);
+      setFingerprint(null);
+      setSemanticFp(null);
+      setImageHash(null);
+      setVisionLabels([]);
+    }
     setRecognitionResult(null);
-    setFingerprint(null);
-    setSemanticFp(null);
-    setImageHash(null);
-    setVisionLabels([]);
     try {
       // ── 1. Compute image fingerprint (cheap, local) ──
       let base64: string | null = null;
@@ -453,6 +502,31 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
       setRecognitionResult(result);
       setVisionLabels(result.rawLabels || []);
 
+      if (redetect) {
+        if (result.isReal) {
+          if (result.category && shouldAutofillPrediction(result, 'category')) {
+            categoryTouched.current = true;
+            setCategory(result.category);
+            const detectedType = result.type ?? inferType(result.category, result.subtype);
+            if (detectedType) {
+              typeTouched.current = true;
+              setSubcategory(detectedType);
+            }
+          }
+          if (
+            result.color &&
+            shouldAutofillPrediction(result, 'color') &&
+            (result.confidence.color ?? 0) >= MIN_SUGGESTION_CONFIDENCE
+          ) {
+            setColor(result.color.charAt(0).toUpperCase() + result.color.slice(1));
+          }
+          if (result.brand && shouldAutofillPrediction(result, 'brand')) {
+            setBrand(prev => (prev.trim() ? prev : result.brand!));
+          }
+        }
+        return;
+      }
+
       // ── 3. Build fingerprints ──
       //   content+labels fp = legacy exact-match
       //   semantic fp = crop/angle-tolerant (preferred for KB matching)
@@ -466,7 +540,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         // Skipped when the analysis itself didn't work (guest, AI off, offline):
         // there are no detected attributes to match on, and the banner below
         // already explains why.
-        if (result.isReal) {
+        if (result.isReal && !redetect) {
           setMatchLoading(true);
           Promise.allSettled([
             lookupKnowledgeBase(fp, semFp),
@@ -519,6 +593,17 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
       // picked (which would overwrite what they typed in the meantime).
       if (result.category && shouldAutofillPrediction(result, 'category') && !categoryTouched.current) {
         setCategory(result.category);
+      }
+
+      // The specific type, but only for the category the form ends up with: a "Tote" means nothing
+      // under a category the owner picked themselves.
+      if (result.category && shouldAutofillPrediction(result, 'category') && !typeTouched.current) {
+        const formCategory = categoryTouched.current ? categoryNow.current : result.category;
+        const detectedType =
+          formCategory === result.category
+            ? result.type ?? inferType(result.category, result.subtype)
+            : undefined;
+        if (detectedType) setSubcategory(prev => prev || detectedType);
       }
 
       if (result.brand && shouldAutofillPrediction(result, 'brand')) {
@@ -684,6 +769,8 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         id: isEditing ? editItem.id : '',
         name: name.trim(),
         category,
+        // '' (not undefined) so clearing the type on an edit clears it in the database too.
+        subcategory: subcategory.trim(),
         brand: brand.trim(),
         userImage: imageUri,
         retailerImage: imageUri,
@@ -765,11 +852,8 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
 
   const unavailableReason = recognitionResult?.unavailableReason ?? 'other';
 
-  // Something on a wishlist is not owned yet, so "Used" / "New" would mislead:
-  // it has the listed price, and optionally the price before a sale.
-  const priceLabels = isWishlist
-    ? { cost: 'Price', retail: 'Original price' }
-    : { cost: 'Used', retail: 'New' };
+  // Every item can be priced two ways: new (full retail) and used (resale, or what you paid for it secondhand).
+  const priceLabels = { cost: 'Used price', retail: 'New price' };
 
   // What the photo analysis suggested, worded against what the form shows now.
   const aiRows = buildAiSuggestionRows(recognitionResult, {
@@ -820,6 +904,19 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
               </View>
             )}
           </TouchableOpacity>
+
+          {/* Re-run the analysis on the photo the item already has (e.g. an item added from a search result). */}
+          {!!imageUri && !analyzing && !isGuestUser && (
+            <TouchableOpacity
+              style={styles.redetectButton}
+              onPress={redetectFromPhoto}
+              accessibilityRole="button"
+              accessibilityLabel="Detect category, type and colour from the photo"
+            >
+              <Icon name="sparkles-outline" size={16} color="#C4975A" />
+              <Text style={styles.redetectText}>Detect category, type and colour from photo</Text>
+            </TouchableOpacity>
+          )}
 
           {/* AI detection banner — shows what Vision returned so you can tell if it worked */}
           {recognitionResult && !analyzing && (
@@ -976,10 +1073,10 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
                   (median ${median})
                 </Text>
                 <Pressable
-                  onPress={() => (isWishlist ? setCost(String(median)) : setRetailCost(String(median)))}
+                  onPress={() => setRetailCost(String(median))}
                   style={styles.useButton}
                 >
-                  <Text style={styles.useButtonText}>{isWishlist ? 'Use as price' : 'Use as new'}</Text>
+                  <Text style={styles.useButtonText}>Use as new price</Text>
                 </Pressable>
               </View>
             );
@@ -1093,28 +1190,39 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
           />
         </FormSection>
 
-        <FormSection title="Price">
+        <FormSection title="Type" hint="Optional. Pick the specific kind, or choose Other to type your own.">
+          <TypePicker category={category} value={subcategory} onChange={onTypeChange} />
+        </FormSection>
+
+        <FormSection
+          title="Price"
+          hint={
+            isWishlist
+              ? 'What it costs new, and what it costs used (resale).'
+              : 'New is the full retail price. Used is what you paid, or what it costs secondhand.'
+          }
+        >
           <View style={styles.priceFields}>
             <View style={styles.priceField}>
-              <Text style={styles.inputSubLabel}>{priceLabels.cost}</Text>
+              <Text style={styles.inputSubLabel}>{priceLabels.retail}</Text>
               <TextInput
                 style={styles.input}
-                accessibilityLabel={isWishlist ? 'Price' : 'Used price'}
+                accessibilityLabel="New price"
                 placeholder="$0"
-                value={cost}
-                onChangeText={setCost}
+                value={retailCost}
+                onChangeText={setRetailCost}
                 keyboardType="decimal-pad"
                 {...keyboardDoneProps}
               />
             </View>
             <View style={styles.priceField}>
-              <Text style={styles.inputSubLabel}>{priceLabels.retail}</Text>
+              <Text style={styles.inputSubLabel}>{priceLabels.cost}</Text>
               <TextInput
                 style={styles.input}
-                accessibilityLabel={isWishlist ? 'Original price' : 'New price'}
+                accessibilityLabel="Used price"
                 placeholder="$0"
-                value={retailCost}
-                onChangeText={setRetailCost}
+                value={cost}
+                onChangeText={setCost}
                 keyboardType="decimal-pad"
                 {...keyboardDoneProps}
               />
@@ -1134,7 +1242,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
               <View style={styles.savings}>
                 <Icon name="pricetag" size={12} color="#065F46" />
                 <Text style={styles.savingsText}>
-                  {isWishlist ? 'Save' : 'Saved'} ${savings.toFixed(savings % 1 === 0 ? 0 : 2)} ({percent}% off)
+                  {isWishlist ? 'Buying used saves' : 'Saved'} ${savings.toFixed(savings % 1 === 0 ? 0 : 2)} ({percent}% off new)
                 </Text>
               </View>
             );
@@ -1167,26 +1275,29 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
           </FormSection>
         )}
 
-        <FormSection title="Purchase Date">
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => setShowDatePicker(true)}
-          >
-            <Icon name="calendar-outline" size={20} color="#666" />
-            <Text style={styles.dateButtonText}>
-              {purchaseDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-            </Text>
-          </TouchableOpacity>
-          {showDatePicker && (
-            <DateTimePicker
-              value={purchaseDate}
-              mode="date"
-              display="default"
-              onChange={onDateChange}
-              maximumDate={new Date()}
-            />
-          )}
-        </FormSection>
+        {/* Nothing on a wishlist has been bought yet, so it has no purchase date. */}
+        {!isWishlist && (
+          <FormSection title="Purchase Date">
+            <TouchableOpacity
+              style={styles.dateButton}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Icon name="calendar-outline" size={20} color="#666" />
+              <Text style={styles.dateButtonText}>
+                {purchaseDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+              </Text>
+            </TouchableOpacity>
+            {showDatePicker && (
+              <DateTimePicker
+                value={purchaseDate}
+                mode="date"
+                display="default"
+                onChange={onDateChange}
+                maximumDate={new Date()}
+              />
+            )}
+          </FormSection>
+        )}
 
         <FormSection title="Season" hint="Pick every season it suits.">
           <ChipMultiSelect<Season | 'all'>
@@ -1584,6 +1695,15 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
+  redetectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 12,
+    paddingVertical: 10,
+  },
+  redetectText: { fontSize: 14, fontWeight: '600', color: '#C4975A' },
   input: {
     height: 44,
     borderWidth: 1,

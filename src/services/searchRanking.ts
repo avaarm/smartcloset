@@ -63,6 +63,9 @@ const clipAtWord = (s: string, max: number): string => {
 
 const compactLower = (s: string): string => stripAccents(s.toLowerCase()).replace(/[^a-z0-9]/g, '');
 
+const STOREFRONT_COUNTRIES =
+  'Thailand|Singapore|Malaysia|Hong Kong|Japan|Korea|Taiwan|China|India|Australia|Canada|Mexico|Brazil|Germany|France|Italy|Spain|Netherlands|Switzerland|Sweden|Denmark|Norway|Ireland|Poland|Turkey|UAE|United States|United Kingdom';
+
 /**
  * A result title as a person would write it: entities decoded, gallery counters
  * ("Picture 4 of 6") and the trailing "| eBay" / "- Zara United States" site
@@ -71,8 +74,16 @@ const compactLower = (s: string): string => stripAccents(s.toLowerCase()).replac
 export const cleanResultTitle = (title: string, source: string, max = 80): string => {
   const original = title.replace(/&(?:amp|lt|gt|quot|nbsp|#39|#x27);/g, m => ENTITIES[m]).trim();
   const withoutCounter = original
-    .replace(/[\s\-–—|,:·•]*\(?\b(?:picture|image|photo|pic)\s+\d+\s+of\s+\d+\b\)?/gi, '')
+    // "*VIRTUAL TRUNK SHOW* Oscar de la Renta ...": a promo tag at the start
+    .replace(/^(?:\*[^*]{2,40}\*|\[[^\]]{2,40}\])\s*/, '')
+    // "Picture 4 of 6" and a bare "Image 8" gallery counter
+    .replace(/[\s\-–—|,:·•]*\(?\b(?:picture|image|photo|pic)\s+\d+(?:\s+of\s+\d+)?\b\)?/gi, '')
+    // "... Thailand EN": the storefront's country and language
+    .replace(new RegExp(`\\s+(?:${STOREFRONT_COUNTRIES})(?:\\s+[A-Z]{2})?\\s*$`), '')
+    // "Bottega Veneta - Women - 'Andiamo'": a segment that only says who it is for
+    .replace(/\s+[-–—|]\s+(?:women|men|womens|mens|unisex|ladies)(?=\s+[-–—|]\s+|\s*$)/gi, '')
     .replace(/\s+/g, ' ')
+    .replace(/[\s\-–—|,:·•]+$/, '')
     .trim();
   const name = compactLower(registrableDomain(source)?.name ?? '');
   const parts = withoutCounter.split(/\s+[|\-–—·•]\s+/);

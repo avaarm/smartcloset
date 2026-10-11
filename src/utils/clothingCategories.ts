@@ -27,7 +27,7 @@ const TERMS: Array<[ClothingCategory | null, TermSpecificity, string[]]> = [
   ['tops', 3, [
     'shirt', 't-shirt', 'tee', 'blouse', 'sweater', 'polo', 'tank top', 'camisole', 'hoodie',
     'cardigan', 'turtleneck', 'crop top', 'sweatshirt', 'button-down', 'henley', 'tunic',
-    'bodysuit', 'jersey', 'thermal', 'pullover', 'knitwear', 'bralette',
+    'bodysuit', 'jersey', 'thermal', 'pullover', 'knitwear', 'bralette', 'jumper', 'halter top', 'tube top',
   ]],
   ['tops', 2, ['top']],
   ['tops', 1, ['short sleeve', 'long sleeve', 'cap sleeve']],
@@ -37,12 +37,12 @@ const TERMS: Array<[ClothingCategory | null, TermSpecificity, string[]]> = [
   ]],
   ['dresses', 3, [
     'dress', 'gown', 'jumpsuit', 'romper', 'maxi dress', 'mini dress', 'wrap dress', 'sheath dress',
-    'overalls', 'dungarees', 'sundress',
+    'overalls', 'overall', 'dungarees', 'sundress', 'pinafore',
   ]],
   ['outerwear', 3, [
     'jacket', 'coat', 'blazer', 'parka', 'vest', 'windbreaker', 'puffer jacket', 'puffer', 'down jacket',
     'trench coat', 'peacoat', 'overcoat', 'raincoat', 'anorak', 'fleece jacket', 'bomber jacket',
-    'denim jacket', 'leather jacket', 'poncho', 'cape',
+    'denim jacket', 'leather jacket', 'poncho', 'cape', 'cloak', 'gilet', 'waistcoat', 'duster coat',
   ]],
   ['outerwear', 2, ['outerwear']],
   ['shoes', 3, [
@@ -50,6 +50,7 @@ const TERMS: Array<[ClothingCategory | null, TermSpecificity, string[]]> = [
     'derby', 'oxford shoe', 'chelsea boot', 'ankle boot', 'knee-high boot', 'combat boot', 'stiletto',
     'wedge', 'espadrille', 'clog', 'slides', 'trainer', 'moccasin', 'brogue', 'platform shoe', 'cowboy boot',
     'rain boot', 'running shoe', 'flip-flop', 'bootie', 'mary jane', 'slingback', 'sling back',
+    'high-heeled shoe', 'court shoe', 'tennis shoe', 'walking shoe', 'riding boot', 'hiking boot', 'high-top',
   ]],
   ['shoes', 2, ['shoe', 'footwear']],
   ['bags', 3, [
@@ -57,7 +58,8 @@ const TERMS: Array<[ClothingCategory | null, TermSpecificity, string[]]> = [
     'shoulder bag', 'backpack', 'duffel', 'duffle bag', 'bucket bag', 'hobo bag', 'messenger bag',
     'wristlet', 'belt bag', 'fanny pack', 'bum bag', 'baguette bag', 'saddle bag', 'briefcase', 'pouch',
   ]],
-  ['bags', 2, ['bag']],
+  ['bags', 3, ['rucksack', 'sling bag', 'camera bag', 'pochette']],
+  ['bags', 2, ['bag', 'baggage']],
   ['jewelry', 3, [
     'necklace', 'pendant', 'earring', 'ring', 'bracelet', 'bangle', 'watch', 'wristwatch', 'anklet',
     'brooch', 'choker', 'locket', 'cufflinks', 'smartwatch', 'smart watch',
@@ -81,7 +83,7 @@ const TERMS: Array<[ClothingCategory | null, TermSpecificity, string[]]> = [
   ['accessories', 3, [
     'belt', 'scarf', 'scarves', 'glove', 'mitten', 'sunglasses', 'glasses', 'eyewear', 'goggles', 'tie',
     'necktie', 'bow tie', 'sock', 'wallet', 'headband', 'hair clip', 'tie bar', 'shawl', 'stole', 'bandana',
-    'pashmina',
+    'pashmina', 'neckerchief', 'cravat', 'umbrella',
   ]],
   ['accessories', 1, ['fashion accessory', 'accessory', 'accessories']],
   // Phrases that contain a clothing word without being clothing of that kind.
@@ -150,19 +152,49 @@ export const matchCategoryTerm = (text: string): CategoryMatch | null => {
 export const categoryFromText = (text: string): ClothingCategory | undefined =>
   matchCategoryTerm(text)?.category;
 
+// Garment categories whose edges blur: a model that files "knit sweater" under outerwear has not confused
+// a sweater with a shoe, it has put a top in the next bucket along.
+const NEIGHBOURS: ReadonlyArray<readonly [ClothingCategory, ClothingCategory]> = [
+  ['tops', 'outerwear'], ['tops', 'dresses'], ['bottoms', 'dresses'], ['outerwear', 'dresses'],
+];
+const areNeighbours = (a: ClothingCategory, b: ClothingCategory): boolean =>
+  NEIGHBOURS.some(([x, y]) => (a === x && b === y) || (a === y && b === x));
+
 /**
  * The category to trust when a model gave a coarse category and a more
- * specific sub-category ("accessories" + "structured tote" = bags). The coarse
- * answer stands unless it is the catch-all "accessories", is missing, or the
- * sub-category clearly belongs to one of the newer categories.
+ * specific sub-category ("accessories" + "structured tote" = bags,
+ * "outerwear" + "knit sweater" = tops). The sub-category names the item; the
+ * category is the bucket the model chose first. They disagree about once in
+ * thirty photos, and when they do the sub-category is the one that is right:
+ * a sweater or hoodie filed under outerwear, a cardigan under tops. So the
+ * coarse answer yields to a sub-category that names an item outright when the
+ * coarse answer is the catch-all "accessories", is missing, the sub-category
+ * belongs to one of the newer categories, or the two are neighbouring garment
+ * categories. Any other disagreement (an "outerwear" that is a "sock") is
+ * nonsense from one side or the other and the coarse answer stands.
  */
 export const refineCategory = (
   category: ClothingCategory | undefined,
   subtype: string | undefined,
+  item?: string,
 ): ClothingCategory | undefined => {
-  const fromSubtype = subtype ? categoryFromText(subtype) : undefined;
-  if (!fromSubtype) return category;
-  if (!category || category === 'accessories' || EXTENDED_CATEGORIES.has(fromSubtype)) return fromSubtype;
+  const named = (text: string | undefined) => {
+    const m = text ? matchCategoryTerm(text) : null;
+    return m && m.specificity === 3 ? m.category : undefined;
+  };
+  // No category at all: any category word in the text will do.
+  if (!category) return (subtype ? categoryFromText(subtype) : undefined) ?? (item ? categoryFromText(item) : undefined);
+  const fromSubtype = named(subtype);
+  const fromItem = named(item);
+  // Both texts name an item and disagree: the model is unsure, so its own category stands when it matches either.
+  const fromText =
+    fromSubtype && fromItem && fromSubtype !== fromItem
+      ? category === fromSubtype || category === fromItem
+        ? category
+        : fromSubtype
+      : fromSubtype ?? fromItem;
+  if (!fromText) return category;
+  if (category === 'accessories' || EXTENDED_CATEGORIES.has(fromText) || areNeighbours(category, fromText)) return fromText;
   return category;
 };
 

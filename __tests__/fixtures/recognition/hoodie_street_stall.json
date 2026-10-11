@@ -1,0 +1,254 @@
+{
+ "about": "Real Google Vision labels/objects/pixels and real gpt-4o answers for one photo (black_hoodie_street_stall in the accuracy corpus). \"answers.before\" is what the proxy returned before the prompt was rewritten, \"answers.after\" what it returns now.",
+ "vision": {
+  "labelAnnotations": [
+   {
+    "description": "Sleeve",
+    "score": 0.985
+   },
+   {
+    "description": "Active Shirt",
+    "score": 0.866
+   },
+   {
+    "description": "Hood",
+    "score": 0.697
+   }
+  ],
+  "localizedObjectAnnotations": [
+   {
+    "name": "Outerwear",
+    "score": 0.867,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.112,
+       "y": 0.412
+      },
+      {
+       "x": 0.715,
+       "y": 0.412
+      },
+      {
+       "x": 0.715,
+       "y": 0.996
+      },
+      {
+       "x": 0.112,
+       "y": 0.996
+      }
+     ]
+    }
+   },
+   {
+    "name": "Top",
+    "score": 0.716,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.021,
+       "y": 0.007
+      },
+      {
+       "x": 0.357,
+       "y": 0.007
+      },
+      {
+       "x": 0.357,
+       "y": 0.438
+      },
+      {
+       "x": 0.021,
+       "y": 0.438
+      }
+     ]
+    }
+   },
+   {
+    "name": "Top",
+    "score": 0.671,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.021,
+       "y": 0.007
+      },
+      {
+       "x": 0.357,
+       "y": 0.007
+      },
+      {
+       "x": 0.357,
+       "y": 0.438
+      },
+      {
+       "x": 0.021,
+       "y": 0.438
+      }
+     ]
+    }
+   },
+   {
+    "name": "Outerwear",
+    "score": 0.582,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.112,
+       "y": 0.412
+      },
+      {
+       "x": 0.715,
+       "y": 0.412
+      },
+      {
+       "x": 0.715,
+       "y": 0.996
+      },
+      {
+       "x": 0.112,
+       "y": 0.996
+      }
+     ]
+    }
+   },
+   {
+    "name": "Clothing",
+    "score": 0.504,
+    "boundingPoly": {
+     "normalizedVertices": [
+      {
+       "x": 0.021,
+       "y": 0.007
+      },
+      {
+       "x": 0.357,
+       "y": 0.007
+      },
+      {
+       "x": 0.357,
+       "y": 0.438
+      },
+      {
+       "x": 0.021,
+       "y": 0.438
+      }
+     ]
+    }
+   }
+  ],
+  "imagePropertiesAnnotation": {
+   "dominantColors": {
+    "colors": [
+     {
+      "color": {
+       "red": 148,
+       "green": 157,
+       "blue": 156
+      },
+      "pixelFraction": 0.2879,
+      "score": 0.2673
+     },
+     {
+      "color": {
+       "red": 53,
+       "green": 53,
+       "blue": 58
+      },
+      "pixelFraction": 0.2471,
+      "score": 0.0599
+     },
+     {
+      "color": {
+       "red": 139,
+       "green": 54,
+       "blue": 57
+      },
+      "pixelFraction": 0.0079,
+      "score": 0.0517
+     },
+     {
+      "color": {
+       "red": 234,
+       "green": 184,
+       "blue": 162
+      },
+      "pixelFraction": 0.0049,
+      "score": 0.0366
+     },
+     {
+      "color": {
+       "red": 161,
+       "green": 36,
+       "blue": 37
+      },
+      "pixelFraction": 0.0017,
+      "score": 0.0281
+     },
+     {
+      "color": {
+       "red": 179,
+       "green": 89,
+       "blue": 93
+      },
+      "pixelFraction": 0.006,
+      "score": 0.0358
+     },
+     {
+      "color": {
+       "red": 195,
+       "green": 78,
+       "blue": 88
+      },
+      "pixelFraction": 0.0051,
+      "score": 0.0349
+     },
+     {
+      "color": {
+       "red": 216,
+       "green": 195,
+       "blue": 166
+      },
+      "pixelFraction": 0.0147,
+      "score": 0.0335
+     },
+     {
+      "color": {
+       "red": 108,
+       "green": 31,
+       "blue": 32
+      },
+      "pixelFraction": 0.0042,
+      "score": 0.0278
+     },
+     {
+      "color": {
+       "red": 199,
+       "green": 69,
+       "blue": 69
+      },
+      "pixelFraction": 0.002,
+      "score": 0.0276
+     }
+    ]
+   }
+  },
+  "webDetection": {
+   "webEntities": [
+    {
+     "description": "Hoodie",
+     "score": 0.319
+    }
+   ],
+   "bestGuessLabels": [
+    {
+     "label": "hoodie"
+    }
+   ]
+  }
+ },
+ "answers": {
+  "before": "{\n  \"category\": \"outerwear\",\n  \"subcategory\": \"hoodie\",\n  \"brand\": null,\n  \"colors\": [\"black\", \"red\", \"white\"],\n  \"pattern\": \"graphic\",\n  \"material\": \"cotton\",\n  \"season\": [\"fall\", \"winter\"],\n  \"occasion\": \"casual\",\n  \"style\": [\"streetwear\"],\n  \"gender\": \"unisex\",\n  \"description\": \"A black hoodie with a red and white graphic design that reads 'VACCINATED'.\",\n  \"confidence\": 0.95\n}",
+  "after": "{\n  \"item\": \"graphic hoodie\",\n  \"category\": \"tops\",\n  \"subcategory\": \"Hoodie\",\n  \"brand\": null,\n  \"colors\": [\"black\", \"red\", \"white\"],\n  \"pattern\": \"graphic\",\n  \"material\": \"cotton\",\n  \"season\": [\"fall\", \"winter\"],\n  \"occasion\": \"casual\",\n  \"style\": [\"streetwear\"],\n  \"gender\": \"unisex\",\n  \"description\": \"A black hoodie with a red and white graphic design featuring the word 'Vaccinated'.\",\n  \"confidence\": 0.95,\n  \"confidences\": {\"category\": 0.95, \"subcategory\": 0.95, \"color\": 0.95},\n  \"other_items\": [\"T-shirt\", \"socks\"]\n}"
+ }
+}

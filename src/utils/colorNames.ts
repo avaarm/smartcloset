@@ -174,6 +174,34 @@ export const isWoodTone = ({ r, g, b }: Rgb): boolean => {
   return h <= 36 && s >= 0.3 && l >= 0.12 && l <= 0.56;
 };
 
+// ─── Hue families ────────────────────────────────────────────────────────────
+
+export type ColorFamily = 'neutral' | 'red' | 'pink' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple';
+
+const FAMILY_OF: Record<string, ColorFamily> = {};
+const setFamily = (family: ColorFamily, names: string[]) => names.forEach(n => (FAMILY_OF[n] = family));
+setFamily('neutral', [
+  'white', 'ivory', 'cream', 'beige', 'tan', 'camel', 'khaki', 'taupe', 'brown', 'dark brown',
+  'light gray', 'gray', 'silver', 'charcoal', 'black',
+]);
+setFamily('red', ['red', 'burgundy', 'maroon', 'rust', 'terracotta', 'coral']);
+setFamily('pink', ['pink', 'blush', 'hot pink', 'mauve']);
+setFamily('orange', ['orange', 'peach']);
+setFamily('yellow', ['mustard', 'yellow', 'gold']);
+setFamily('green', ['olive', 'sage', 'green', 'forest green', 'lime', 'mint']);
+setFamily('blue', ['teal', 'turquoise', 'navy', 'blue', 'light blue']);
+setFamily('purple', ['purple', 'lavender', 'plum']);
+
+/** The hue family of a palette colour name ("burgundy" is red, "mustard" is yellow); undefined for anything else, including multicolor. */
+export const colorFamily = (name: string | undefined | null): ColorFamily | undefined => (name ? FAMILY_OF[name] : undefined);
+
+/** The hue family an RGB value sits in: neutral when it has too little colour to say. */
+export const familyForRgb = (rgb: Rgb): ColorFamily => colorFamily(nameForRgb(rgb)) ?? 'neutral';
+
+/** The palette colours of one hue family, e.g. every red-ish name. */
+export const colorsInFamily = (family: ColorFamily): string[] =>
+  CLOTHING_COLORS.filter(c => FAMILY_OF[c.name] === family).map(c => c.name);
+
 // ─── Names from text ─────────────────────────────────────────────────────────
 
 const PALETTE_NAMES = new Set(CLOTHING_COLORS.map(c => c.name));
@@ -206,6 +234,17 @@ const ALIASES: Record<string, string> = {
   multi: MULTICOLOR, multicolor: MULTICOLOR, multicolour: MULTICOLOR, multicolored: MULTICOLOR,
   multicoloured: MULTICOLOR, 'multi color': MULTICOLOR, 'multi colored': MULTICOLOR, 'multi colour': MULTICOLOR,
   rainbow: MULTICOLOR, colorful: MULTICOLOR, colourful: MULTICOLOR, assorted: MULTICOLOR,
+  // Reds and the words next to them. In "orange red" the last word is the colour and the first the tint.
+  tomato: 'red', 'tomato red': 'red', 'fire engine red': 'red', 'cherry red': 'red', 'blood red': 'red',
+  'orange red': 'red', 'red orange': 'orange', 'brick red': 'rust', brick: 'rust', 'rust red': 'rust',
+  cranberry: 'burgundy', garnet: 'burgundy', claret: 'burgundy', raspberry: 'hot pink',
+  mahogany: 'dark brown', cocoa: 'brown', tobacco: 'brown',
+  // Yellows and golds
+  ochre: 'mustard', ocher: 'mustard', amber: 'mustard', honey: 'mustard', saffron: 'mustard', turmeric: 'mustard',
+  butterscotch: 'mustard', 'mustard yellow': 'mustard', canary: 'yellow', sunflower: 'yellow', 'neon yellow': 'yellow',
+  'yellow orange': 'orange', 'orange yellow': 'yellow', 'yellow green': 'lime', 'neon green': 'lime',
+  'blue green': 'teal', 'green blue': 'teal',
+  'pale pink': 'blush', 'baby pink': 'blush', 'dusty pink': 'blush',
 };
 
 const lookup = (phrase: string): string | null => {

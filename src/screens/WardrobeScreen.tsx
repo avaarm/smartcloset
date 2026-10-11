@@ -126,6 +126,7 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
           item.name.toLowerCase().includes(query) ||
           item.brand?.toLowerCase().includes(query) ||
           item.color?.toLowerCase().includes(query) ||
+          item.subcategory?.toLowerCase().includes(query) ||
           item.tags?.some(tag => tag.toLowerCase().includes(query)) ||
           item.retailer?.toLowerCase().includes(query),
       );
@@ -135,6 +136,11 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
       result = result.filter(item =>
         filters.categories.includes(item.category as ClothingCategory),
       );
+    }
+
+    if (filters.types && filters.types.length > 0) {
+      const wanted = filters.types.map(t => t.toLowerCase());
+      result = result.filter(item => !!item.subcategory && wanted.includes(item.subcategory.toLowerCase()));
     }
 
     if (filters.seasons.length > 0) {
@@ -185,7 +191,17 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
     [profile, handleEdit, handleDelete, handleItemPress],
   );
 
-  const activeFiltersCount = filters.categories.length + filters.seasons.length;
+  const activeFiltersCount = filters.categories.length + filters.seasons.length + (filters.types?.length ?? 0);
+
+  // The types the wardrobe really has, so the filter never offers one that shows nothing.
+  const availableTypes = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const item of clothes) {
+      const type = item.subcategory?.trim();
+      if (type && !seen.has(type.toLowerCase())) seen.set(type.toLowerCase(), type);
+    }
+    return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
+  }, [clothes]);
   const isNarrowed = activeFiltersCount > 0 || searchQuery.trim().length > 0;
 
   const headerElement = (
@@ -287,11 +303,14 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
           {filters.categories.map(c => (
             <Badge key={c} label={CATEGORY_LABELS[c]} tone="accent" />
           ))}
+          {(filters.types ?? []).map(type => (
+            <Badge key={type} label={type} tone="accent" />
+          ))}
           {filters.seasons.map(s => (
             <Badge key={s} label={SEASON_LABELS[s]} tone="neutral" />
           ))}
           <Pressable
-            onPress={() => setFilters({ categories: [], seasons: [], sortBy: 'date', sortOrder: 'desc' })}
+            onPress={() => setFilters({ categories: [], types: [], seasons: [], sortBy: 'date', sortOrder: 'desc' })}
             accessibilityLabel="Clear all filters"
             accessibilityRole="button"
           >
@@ -383,6 +402,7 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
         onClose={() => setShowFilterModal(false)}
         onApplyFilters={handleApplyFilters}
         currentFilters={filters}
+        availableTypes={availableTypes}
       />
     </Screen>
   );

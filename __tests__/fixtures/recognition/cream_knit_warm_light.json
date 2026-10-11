@@ -1,0 +1,182 @@
+{
+ "about": "Real Google Vision labels/objects/pixels and real gpt-4o answers for one photo (w_cream_knit_warm_light in the accuracy corpus). \"answers.before\" is what the proxy returned before the prompt was rewritten, \"answers.after\" what it returns now.",
+ "vision": {
+  "labelAnnotations": [
+   {
+    "description": "Textile",
+    "score": 0.948
+   },
+   {
+    "description": "Brown",
+    "score": 0.918
+   },
+   {
+    "description": "Woolen",
+    "score": 0.881
+   },
+   {
+    "description": "Wool",
+    "score": 0.85
+   },
+   {
+    "description": "Close-up",
+    "score": 0.84
+   },
+   {
+    "description": "Creative arts",
+    "score": 0.712
+   },
+   {
+    "description": "Knitting",
+    "score": 0.687
+   },
+   {
+    "description": "Yarn",
+    "score": 0.676
+   },
+   {
+    "description": "Woven fabric",
+    "score": 0.665
+   },
+   {
+    "description": "Stitch",
+    "score": 0.542
+   }
+  ],
+  "localizedObjectAnnotations": [],
+  "imagePropertiesAnnotation": {
+   "dominantColors": {
+    "colors": [
+     {
+      "color": {
+       "red": 247,
+       "green": 234,
+       "blue": 205
+      },
+      "pixelFraction": 0.0569,
+      "score": 0.3431
+     },
+     {
+      "color": {
+       "red": 213,
+       "green": 193,
+       "blue": 163
+      },
+      "pixelFraction": 0.0376,
+      "score": 0.2675
+     },
+     {
+      "color": {
+       "red": 175,
+       "green": 153,
+       "blue": 125
+      },
+      "pixelFraction": 0.0331,
+      "score": 0.1696
+     },
+     {
+      "color": {
+       "red": 140,
+       "green": 118,
+       "blue": 93
+      },
+      "pixelFraction": 0.0558,
+      "score": 0.0843
+     },
+     {
+      "color": {
+       "red": 101,
+       "green": 80,
+       "blue": 60
+      },
+      "pixelFraction": 0.0579,
+      "score": 0.0448
+     },
+     {
+      "color": {
+       "red": 71,
+       "green": 52,
+       "blue": 37
+      },
+      "pixelFraction": 0.0589,
+      "score": 0.0192
+     },
+     {
+      "color": {
+       "red": 67,
+       "green": 54,
+       "blue": 49
+      },
+      "pixelFraction": 0.1195,
+      "score": 0.0138
+     },
+     {
+      "color": {
+       "red": 91,
+       "green": 79,
+       "blue": 74
+      },
+      "pixelFraction": 0.0288,
+      "score": 0.0129
+     },
+     {
+      "color": {
+       "red": 126,
+       "green": 115,
+       "blue": 109
+      },
+      "pixelFraction": 0.0123,
+      "score": 0.0078
+     },
+     {
+      "color": {
+       "red": 164,
+       "green": 153,
+       "blue": 145
+      },
+      "pixelFraction": 0.0033,
+      "score": 0.0063
+     }
+    ]
+   }
+  },
+  "webDetection": {
+   "webEntities": [
+    {
+     "description": "Jumper",
+     "score": 0.738
+    },
+    {
+     "description": "Cashmere wool",
+     "score": 0.703
+    },
+    {
+     "description": "Knitted fabric",
+     "score": 0.7
+    },
+    {
+     "description": "Clothing",
+     "score": 0.682
+    },
+    {
+     "description": "Wool",
+     "score": 0.642
+    },
+    {
+     "description": "Merino",
+     "score": 0.641
+    }
+   ],
+   "bestGuessLabels": [
+    {
+     "label": "sweater crumpled on floor",
+     "languageCode": "en"
+    }
+   ]
+  }
+ },
+ "answers": {
+  "before": "{\n  \"category\": \"outerwear\",\n  \"subcategory\": \"knit sweater\",\n  \"brand\": null,\n  \"colors\": [\"beige\"],\n  \"pattern\": \"solid\",\n  \"material\": \"wool\",\n  \"season\": [\"fall\", \"winter\"],\n  \"occasion\": \"casual\",\n  \"style\": [\"classic\", \"minimalist\"],\n  \"gender\": \"unisex\",\n  \"description\": \"A beige knit sweater made of wool, suitable for casual wear in fall and winter.\",\n  \"confidence\": 0.95\n}",
+  "after": "{\n  \"item\": \"knit sweater\",\n  \"category\": \"tops\",\n  \"subcategory\": \"Sweater\",\n  \"brand\": null,\n  \"colors\": [\"beige\"],\n  \"pattern\": \"solid\",\n  \"material\": \"wool\",\n  \"season\": [\"fall\", \"winter\"],\n  \"occasion\": \"casual\",\n  \"style\": [\"classic\"],\n  \"gender\": \"unisex\",\n  \"description\": \"A beige knit sweater is crumpled on a wooden surface, showcasing its texture.\",\n  \"confidence\": 0.85,\n  \"confidences\": {\n    \"category\": 0.9,\n    \"subcategory\": 0.9,\n    \"color\": 0.85\n  },\n  \"other_items\": []\n}"
+ }
+}

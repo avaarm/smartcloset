@@ -6,7 +6,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  *  (a) Guest / demo content. It belongs to the device's guest session, not to an
  *      account, so signing out must leave it alone: the guest wardrobe
  *      (@smartcloset_items), saved outfits and wear history, the demo-seed flags
- *      (@smartcloset_initialized_v6, @smartcloset_demo_seeded_v4), the demo
+ *      (@smartcloset_initialized_v6, @smartcloset_demo_seeded_v4,
+ *      @smartcloset_sample_photos_fix_v1), the demo
  *      stylist / client / marketplace / messaging stores. A signed-in user's wardrobe, outfits and wear
  *      history live in Supabase, so none of this is theirs.
  *  (b) Per-person data whose key carries no account id. On sign-out it is

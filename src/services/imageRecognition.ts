@@ -22,6 +22,7 @@ import {
   type VisionAnalysis,
 } from './recognitionFusion';
 import { CATEGORY_NOUN } from '../utils/clothingCategories';
+import { MIN_SUGGESTION_CONFIDENCE } from '../utils/aiSuggestionSummary';
 
 // Define pattern types for clothing
 export type PatternType = 'solid' | 'striped' | 'plaid' | 'floral' | 'polka_dot' | 'graphic' | 'other';
@@ -53,6 +54,11 @@ export interface RecognitionResult {
   category?: ClothingCategory;
   /** Specific sub-category keyword like "handbag", "jeans", "sneaker" — used for name auto-fill. */
   subtype?: string;
+  /**
+   * The kind of item inside the category, as the label shown in the item form ("Ankle boots", "Tote",
+   * "Cardigan", "Belt"; see clothingTypes.ts), when one fits. Left out rather than guessed.
+   */
+  type?: string;
   brand?: string;
   occasion?: string;
   /** Primary color name of the ITEM (e.g. "burgundy"), never of the floor or backdrop — backwards compat with existing consumers. */
@@ -65,6 +71,8 @@ export interface RecognitionResult {
   prices?: DetectedPrice[];
   confidence: {
     category?: number;
+    /** Never higher than the category's: the type is only as sure as the category it sits in. */
+    type?: number;
     brand?: number;
     occasion?: number;
     color?: number;
@@ -159,29 +167,87 @@ const readWithGoogleVision = async (base64: string, failures: unknown[]): Promis
   return null;
 };
 
-/** The vision model's read of the photo, or null when it could not be had (the cause goes into `failures`). */
+/** How long to wait before asking the vision model a second time after a hiccup that is gone in a moment. */
+const RETRY_DELAY_MS = 1500;
+/** A "rate limited, try again in N seconds" is worth waiting for only this long. */
+const RETRY_MAX_WAIT_MS = 8000;
+
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
+/**
+ * How long to wait before asking again, or null when asking again would not help: a failure that is
+ * not a hiccup (signed out, over the daily limit, a bad request) or one that already used up its time.
+ * Without the vision model the result rests on Google Vision's pixels and labels alone, which name the
+ * colour wrongly about three times in four, so one more try is worth a moment.
+ */
+export const retryDelayAfter = (error: unknown): number | null => {
+  const message = typeof (error as any)?.message === 'string' ? (error as any).message : '';
+  const status = /^ai-proxy openai-vision (\d{3})\b/.exec(message)?.[1];
+  if (!status) return /network request failed|failed to fetch|fetch failed|econnreset|socket/i.test(message) ? RETRY_DELAY_MS : null;
+  if (status === '429') {
+    // The daily limit does not lift in a few seconds; the per-minute one does.
+    if (/daily limit/i.test(message)) return null;
+    const seconds = Number(/"retryAfter"\s*:\s*(\d+)/.exec(message)?.[1]);
+    return Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds * 1000, RETRY_MAX_WAIT_MS) : RETRY_DELAY_MS;
+  }
+  return ['500', '502', '503', '504'].includes(status) ? RETRY_DELAY_MS : null;
+};
+
+/** One ask of the vision model: its answer, or null when it replied with nothing usable. Rejects when the call fails. */
+const askVisionModel = async (base64: string, hints: VisionAnalysis | null, title?: string): Promise<AiAnswer | null> => {
+  const response = await withTimeout(
+    callAiProxy<any>('openai-vision', {
+      imageBase64: base64,
+      visionContext: buildVisionContext(hints, { title }),
+    }),
+    AI_CALL_TIMEOUT_MS,
+  );
+  const ai = normalizeAiAnswer(parseAiContent(response?.choices?.[0]?.message?.content));
+  console.log('[AI Vision] category:', ai?.category, 'colors:', ai?.colors, 'material:', ai?.material);
+  return ai;
+};
+
+/**
+ * The vision model's read of the photo, or null when it could not be had (the cause goes into `failures`).
+ * A hiccup (a 5xx, a per-minute limit, a dropped connection) or a reply that holds no answer is tried once more.
+ */
 const readWithVisionModel = async (
   base64: string,
   hints: VisionAnalysis | null,
   failures: unknown[],
+  title?: string,
 ): Promise<AiAnswer | null> => {
   try {
-    const response = await withTimeout(
-      callAiProxy<any>('openai-vision', {
-        imageBase64: base64,
-        visionContext: buildVisionContext(hints),
-      }),
-      AI_CALL_TIMEOUT_MS,
-    );
-    const ai = normalizeAiAnswer(parseAiContent(response?.choices?.[0]?.message?.content));
-    console.log('[AI Vision] category:', ai?.category, 'colors:', ai?.colors, 'material:', ai?.material);
-    return ai;
+    const first = await askVisionModel(base64, hints, title);
+    if (first) return first;
+    // Answered, but with nothing the form can use (a refusal, cut-off JSON): worth one more ask.
+    await sleep(RETRY_DELAY_MS);
+    return await askVisionModel(base64, hints, title);
   } catch (error: any) {
-    failures.push(error);
+    const delay = retryDelayAfter(error);
     console.warn('[AI Vision] error:', error?.message);
-    return null;
+    if (delay === null) {
+      failures.push(error);
+      return null;
+    }
+    try {
+      await sleep(delay);
+      return await askVisionModel(base64, hints, title);
+    } catch (retryError: any) {
+      failures.push(retryError);
+      console.warn('[AI Vision] retry error:', retryError?.message);
+      return null;
+    }
   }
 };
+
+export interface AnalyzeOptions {
+  /**
+   * The title of the product listing the photo came from (wishlist search). It is passed to the model as
+   * untrusted text to quote, and backs the category, brand, type and colour the photo shows.
+   */
+  title?: string;
+}
 
 /**
  * Analyzes a clothing image and returns predicted attributes.
@@ -189,7 +255,7 @@ const readWithVisionModel = async (
  * Uses Google Cloud Vision when GOOGLE_VISION_API_KEY is set.
  * Falls back to mock results otherwise.
  */
-export const analyzeClothingImage = async (imageUri: string): Promise<RecognitionResult> => {
+export const analyzeClothingImage = async (imageUri: string, options: AnalyzeOptions = {}): Promise<RecognitionResult> => {
   console.log('[Vision] analyzeClothingImage called. hasGoogleVision=', hasGoogleVision(),
     'enabled=', env.ENABLE_VISION_API);
   try {
@@ -209,16 +275,16 @@ export const analyzeClothingImage = async (imageUri: string): Promise<Recognitio
       // is first (without hints in the second case), and Vision's result is still used when it arrives.
       const visionRun = readWithGoogleVision(base64, failures);
       const hints = await withinMs(visionRun, VISION_HINT_WAIT_MS);
-      const [vision, ai] = await Promise.all([visionRun, readWithVisionModel(base64, hints, failures)]);
+      const [vision, ai] = await Promise.all([visionRun, readWithVisionModel(base64, hints, failures, options.title)]);
 
-      const result = fuseRecognition(vision, ai);
+      const result = fuseRecognition(vision, ai, { title: options.title });
       if (result) {
         if (vision) {
           const prices = extractPrices(vision.ocrText);
           if (prices.length > 0) result.prices = prices;
         }
         console.log('[Vision] result:', JSON.stringify({
-          category: result.category, subtype: result.subtype, brand: result.brand,
+          category: result.category, type: result.type, subtype: result.subtype, brand: result.brand,
           color: result.color, material: result.material, aiEnhanced: result.gpt4Enhanced,
         }));
         return result;
@@ -433,16 +499,17 @@ const getMockRecognitionResult = (): RecognitionResult => ({
 
 // ─── Confidence helper ──────────────────────────────────────────────────────
 
+/** The fields a result can be asked about. */
+export type PredictionField = 'category' | 'type' | 'brand' | 'occasion' | 'color' | 'pattern' | 'material';
+
 /**
  * Determines if a recognition result is confident enough to autofill.
  * Stricter threshold — use for UI highlighting / "confirm this guess" prompts.
  */
-export const isConfidentPrediction = (
-  result: RecognitionResult,
-  field: 'category' | 'brand' | 'occasion' | 'color' | 'pattern' | 'material',
-): boolean => {
-  const threshold: Record<string, number> = {
+export const isConfidentPrediction = (result: RecognitionResult, field: PredictionField): boolean => {
+  const threshold: Record<PredictionField, number> = {
     category: 0.7,
+    type: 0.7,
     brand: 0.8,
     occasion: 0.65,
     color: 0.7,
@@ -452,8 +519,9 @@ export const isConfidentPrediction = (
   return !!result.confidence[field] && (result.confidence[field] as number) >= threshold[field];
 };
 
-const AUTOFILL_THRESHOLD = {
+const AUTOFILL_THRESHOLD: Record<PredictionField, number> = {
   category: 0.35,
+  type: 0.35,
   brand: 0.5,
   occasion: 0.4,
   color: 0.4,
@@ -465,11 +533,45 @@ const AUTOFILL_THRESHOLD = {
  * Looser threshold for auto-filling an EMPTY field — we'd rather pre-fill a
  * reasonable guess than leave the form blank. The user can always override.
  */
-export const shouldAutofillPrediction = (
-  result: RecognitionResult,
-  field: 'category' | 'brand' | 'occasion' | 'color' | 'pattern' | 'material',
-): boolean =>
+export const shouldAutofillPrediction = (result: RecognitionResult, field: PredictionField): boolean =>
   !!result.confidence[field] && (result.confidence[field] as number) >= AUTOFILL_THRESHOLD[field];
+
+/** What a photo analysis may fill in on an item (or a wishlist entry), and nothing it is not sure of. */
+export interface ItemFields {
+  category?: ClothingCategory;
+  /** The kind of item inside the category ("Tote"), a label from clothingTypes. */
+  type?: string;
+  /** Capitalised, as the colour field shows it ("Burgundy"). */
+  color?: string;
+  brand?: string;
+  material?: string;
+}
+
+/**
+ * The values of a result that are sure enough to put in a form, by the same rules the Add Item screen
+ * applies: category and type at the autofill bar, colour at the higher of the autofill bar and the one the
+ * AI Suggestions box uses, brand and material at their own. A caller (the wishlist search) can use this
+ * without knowing any threshold; what comes back is only ever a value worth showing, and a field the
+ * analysis was unsure of is simply absent.
+ */
+export const recognitionToItemFields = (result: RecognitionResult | null | undefined): ItemFields => {
+  if (!result || !result.isReal) return {};
+  const fields: ItemFields = {};
+  const categoryOk = !!result.category && shouldAutofillPrediction(result, 'category');
+  if (result.category && categoryOk) fields.category = result.category;
+  // A type belongs to a category: with no category to file it under it would mean nothing.
+  if (categoryOk && result.type && shouldAutofillPrediction(result, 'type')) fields.type = result.type;
+  if (
+    result.color &&
+    shouldAutofillPrediction(result, 'color') &&
+    (result.confidence.color ?? 0) >= MIN_SUGGESTION_CONFIDENCE
+  ) {
+    fields.color = result.color.charAt(0).toUpperCase() + result.color.slice(1);
+  }
+  if (result.brand && shouldAutofillPrediction(result, 'brand')) fields.brand = result.brand;
+  if (result.material && shouldAutofillPrediction(result, 'material')) fields.material = result.material;
+  return fields;
+};
 
 // Fibres and fabrics that make an item recognisable; "cotton" or "polyester" would only clutter a name.
 const NAME_MATERIALS = new Set([

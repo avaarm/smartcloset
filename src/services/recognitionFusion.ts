@@ -20,7 +20,14 @@ import {
   categoryFromText,
   refineCategory,
 } from '../utils/clothingCategories';
-import { CLOTHING_COLORS, MULTICOLOR, hexForColorName, normalizeColorName } from '../utils/colorNames';
+import {
+  CLOTHING_COLORS,
+  MULTICOLOR,
+  colorFamily,
+  hexForColorName,
+  normalizeColorName,
+} from '../utils/colorNames';
+import { inferType } from '../utils/clothingTypes';
 import {
   CLOTHING_CATEGORIES,
   SEASONS,
@@ -29,7 +36,13 @@ import {
   normalizeSeason,
 } from '../utils/clothingOptions';
 import { containsPhrase, tokenize } from '../utils/wordMatch';
-import { readPixelColors, resolveItemColors, type ColorScene, type PixelColor } from './recognitionColors';
+import {
+  readPixelColors,
+  resolveItemColors,
+  type ColorScene,
+  type LabelColor,
+  type PixelColor,
+} from './recognitionColors';
 
 // ─── Keyword tables ──────────────────────────────────────────────────────────
 
@@ -198,6 +211,13 @@ export interface VisionAnalysis {
   ocrText: string;
   /** A colour word among the item's labels - the last resort when nothing was measured and no surface is in view. */
   labelColor?: string;
+  /** Vivid colour words among the item's labels ("Red" 0.98), which describe the whole frame. Neutral ones (Brown, White) are left out. */
+  labelColors: LabelColor[];
+  /**
+   * How closely a second category competes with the first in the boxes Vision drew, 0..1 (0 = one category,
+   * 1 = two of equal weight). A person in a sweater and jeans holding a bag is a scene with several possible items.
+   */
+  categoryRivalry: number;
 }
 
 const num = (v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
@@ -241,6 +261,34 @@ const unionArea = (rects: Rect[]): number => {
   return area;
 };
 
+/**
+ * Google often boxes one hat as "Sun hat", "Fedora", "Hat" and "Straw hat", and one boot as "Boot", "Shoe" and
+ * "Footwear". Each box would count as one more item of that category, so a hat the size of a coin outweighed
+ * the dress under it. Of the boxes that name the same category and are about the same box (more than half of
+ * their combined area shared), only the most certain one stays; two boots standing apart are still two, and a
+ * small box inside a large one is a different thing.
+ */
+const distinctObjects = (objects: LocalizedObject[]): LocalizedObject[] => {
+  const kept: Array<{ o: LocalizedObject; category: ClothingCategory | null }> = [];
+  const byCertainty = [...objects].sort((a, b) => b.score - a.score);
+  for (const o of byCertainty) {
+    const category = matchCategoryTerm(o.text)?.category ?? null;
+    const duplicate = category !== null && kept.some(k => k.category === category && overlapShare(k.o.rect, o.rect) > 0.5);
+    if (!duplicate) kept.push({ o, category });
+  }
+  return kept.map(k => k.o);
+};
+
+/** Intersection over union of two boxes, 0..1: 1 for the same box, 0 for boxes that do not touch. */
+const overlapShare = (a: Rect, b: Rect): number => {
+  const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]);
+  const h = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
+  if (w <= 0 || h <= 0) return 0;
+  const shared = w * h;
+  const union = rectArea(a) + rectArea(b) - shared;
+  return union > 0 ? shared / union : 0;
+};
+
 const isSurfaceLabel = (text: string): boolean => SURFACE_LABELS.some(p => containsPhrase(text, p));
 const isSceneLabel = (text: string): boolean =>
   isSurfaceLabel(text) || SCENE_LABELS.some(p => containsPhrase(text, p));
@@ -251,6 +299,7 @@ interface CategoryRead {
   subtype?: string;
   mainItem?: string;
   coverage?: number;
+  rivalry: number;
 }
 
 interface Tally {
@@ -273,6 +322,7 @@ const readCategory = (
   bestGuess?: string,
 ): CategoryRead => {
   // The item the photo is about: the category whose boxes carry the most (certainty x size).
+  objects = distinctObjects(objects);
   const boxes = objects.flatMap(o => {
     const m = matchCategoryTerm(o.text);
     return m ? [{ o, category: m.category }] : [];
@@ -281,7 +331,10 @@ const readCategory = (
   for (const { o, category } of boxes) {
     boxWeight.set(category, (boxWeight.get(category) ?? 0) + o.score * o.area);
   }
-  const mainCategory = Array.from(boxWeight.entries()).sort((a, b) => b[1] - a[1])[0]?.[0];
+  const boxRanking = Array.from(boxWeight.entries()).sort((a, b) => b[1] - a[1]);
+  const mainCategory = boxRanking[0]?.[0];
+  // A second category nearly as heavy as the first (a bag and a sweater in one frame) makes the item a toss-up.
+  const rivalry = boxRanking.length > 1 && boxRanking[0][1] > 0 ? Math.min(1, boxRanking[1][1] / boxRanking[0][1]) : 0;
   const mainBoxes = boxes.filter(b => b.category === mainCategory);
   const mainObject = [...mainBoxes].sort((a, b) => b.o.area - a.o.area)[0]?.o;
   const coverage = mainBoxes.length ? unionArea(mainBoxes.map(b => b.o.rect)) : undefined;
@@ -307,7 +360,7 @@ const readCategory = (
   if (bestGuess) add(bestGuess, 0.7, 0.6);
 
   const ranked = Array.from(tallies.entries()).sort((a, b) => b[1].total - a[1].total || b[1].top - a[1].top);
-  if (ranked.length === 0) return { mainItem: mainObject?.text, coverage };
+  if (ranked.length === 0) return { mainItem: mainObject?.text, coverage, rivalry };
 
   const [winner, t] = ranked[0];
   const sum = ranked.reduce((acc, [, x]) => acc + x.total, 0);
@@ -319,7 +372,7 @@ const readCategory = (
     (a, b) => b.specificity - a.specificity || Number(b.fromMain) - Number(a.fromMain) || b.value - a.value,
   )[0];
 
-  return { category: winner, confidence, subtype: best?.phrase, mainItem: mainObject?.text, coverage };
+  return { category: winner, confidence, subtype: best?.phrase, mainItem: mainObject?.text, coverage, rivalry };
 };
 
 const leadsWith = (text: string, phrase: string): boolean => {
@@ -396,6 +449,24 @@ const colorWordIn = (texts: string[]): string | undefined => {
   }
   return undefined;
 };
+
+// Words that only tint a colour name ("Light blue", "Hot pink").
+const COLOR_TINT_WORDS = new Set(['light', 'dark', 'bright', 'pale', 'deep', 'hot', 'neon']);
+
+/**
+ * The vivid colour words among Vision's labels: a label that is nothing but a colour name ("Red", "Hot pink").
+ * Neutral ones are left out (a "Brown" label is usually the floor and a "White" one the wall), and so is any
+ * label that says more than a colour ("Red hair", "Blue jeans").
+ */
+const colorLabelsIn = (labels: Scored[]): LabelColor[] =>
+  labels.flatMap(l => {
+    const words = tokenize(l.text);
+    if (words.length === 0 || words.length > 2) return [];
+    const name = normalizeColorName(l.text);
+    if (!name || name === MULTICOLOR || colorFamily(name) === 'neutral' || colorFamily(name) === undefined) return [];
+    const onlyColour = words.every(w => COLOR_TINT_WORDS.has(w) || normalizeColorName(w) !== null);
+    return onlyColour ? [{ name, score: l.score }] : [];
+  });
 
 /** Read one Google Vision `responses[0]` into what it says about the item. */
 export const analyzeVision = (raw: any): VisionAnalysis => {
@@ -495,13 +566,15 @@ export const analyzeVision = (raw: any): VisionAnalysis => {
     ocrText: textAnnotations[0]?.description || '',
     // With a floor in the frame, a "Red" or "Brown" label is as likely the floor as the item.
     labelColor: woodSurface ? undefined : colorWordIn(labels.map(l => l.text)),
+    labelColors: colorLabelsIn(labels),
+    categoryRivalry: read.rivalry,
   };
 };
 
 // The proxy's prompt asks for the same item, categories and colours (supabase/functions/ai-proxy). These
 // hints, appended to it as "Hints from Google Vision", repeat that so an older deployment answers alike.
 const FOCUS =
-  'Describe ONLY the single main garment or accessory (mainItem when given: the largest one in the photo). ' +
+  'Describe ONLY the single main garment or accessory (mainItem when given is only Google\'s guess at it and may be wrong). ' +
   'Ignore floors, walls, furniture, hands, people, mannequins and every other item in the frame. ' +
   'category must be exactly one of allowedCategories (boots, sneakers, heels and flats are shoes; ' +
   'handbags, totes and backpacks are bags). colors lists the item\'s own colours, most prominent first, ' +
@@ -509,13 +582,37 @@ const FOCUS =
 
 const ALLOWED_COLORS = [...CLOTHING_COLORS.map(c => c.name), MULTICOLOR];
 
+/** The longest a listing title is kept: enough for brand, item and colour, too short to carry a story. */
+export const MAX_LISTING_TITLE_CHARS = 160;
+
+/**
+ * A product title as a hint: one line of plain text. Control characters, quotes, brackets and anything
+ * that looks like markup are dropped, so the title can only ever be read as words about the item.
+ */
+export const cleanListingTitle = (title: unknown): string | undefined => {
+  if (typeof title !== 'string') return undefined;
+  const text = title
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, ' ')
+    .replace(/[<>{}\[\]"`\\]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_LISTING_TITLE_CHARS)
+    .trim();
+  return text.length >= 3 ? text : undefined;
+};
+
 /**
  * Facts for the vision model's prompt: which item Vision found and which labels are
  * only the room, so it describes the boots and not the floor or the flats beside
  * them, and the vocabulary its answer must use. Kept small: the server rejects over
- * 4000 chars.
+ * 4000 chars. `options.title` is the title of the product listing the photo came from,
+ * passed on so the server can quote it as untrusted text.
  */
-export const buildVisionContext = (vision: VisionAnalysis | null): Record<string, unknown> => {
+export const buildVisionContext = (
+  vision: VisionAnalysis | null,
+  options: { title?: string } = {},
+): Record<string, unknown> => {
   const clip = (s: string) => s.slice(0, 40);
   const ctx: Record<string, unknown> = { focus: FOCUS };
   if (vision?.mainItem) ctx.mainItem = clip(vision.mainItem);
@@ -523,6 +620,8 @@ export const buildVisionContext = (vision: VisionAnalysis | null): Record<string
   if (labels.length) ctx.labels = labels;
   if (vision?.backgroundLabels.length) ctx.background = vision.backgroundLabels.map(clip);
   if (vision?.result.bestGuess) ctx.bestGuess = clip(vision.result.bestGuess);
+  const listingTitle = cleanListingTitle(options.title);
+  if (listingTitle) ctx.listingTitle = listingTitle;
   ctx.allowedCategories = CLOTHING_CATEGORIES;
   ctx.allowedColors = ALLOWED_COLORS;
   return ctx;
@@ -544,6 +643,14 @@ export interface AiAnswer {
   gender?: string;
   description?: string;
   confidence: number;
+  /** The item as the model first named it ("knit sweater"), before it chose a category. */
+  item?: string;
+  /** How sure the model is of its category, sub-category and colours separately, when it said so. */
+  confidences?: { category?: number; subtype?: number; color?: number };
+  /** Other clothing or accessories the model saw but did not describe (a hat on someone wearing a dress). */
+  otherItems?: string[];
+  /** The model's sub-category or item named another category than the one it chose; the sub-category won. */
+  contradicted?: boolean;
 }
 
 /** Parse the model's message content: JSON text, JSON wrapped in prose or a code fence, or an object already. */
@@ -588,6 +695,30 @@ const cleanCategory = (v: unknown): ClothingCategory | undefined => {
   return isClothingCategory(s) ? s : categoryFromText(s);
 };
 
+/** A confidence the model wrote, as 0..1 (0..100 is read as a percentage); undefined when it is not a number. */
+const cleanConfidence = (v: unknown): number | undefined => {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return undefined;
+  const c = v > 1 && v <= 100 ? v / 100 : v;
+  return Math.max(0, Math.min(1, c));
+};
+
+const cleanConfidences = (v: unknown): AiAnswer['confidences'] => {
+  if (!v || typeof v !== 'object') return undefined;
+  const g = v as Record<string, unknown>;
+  const out = {
+    category: cleanConfidence(g.category),
+    subtype: cleanConfidence(g.subcategory ?? g.subtype),
+    color: cleanConfidence(g.color ?? g.colors),
+  };
+  return out.category === undefined && out.subtype === undefined && out.color === undefined ? undefined : out;
+};
+
+const cleanOtherItems = (v: unknown): string[] | undefined => {
+  if (!Array.isArray(v)) return undefined;
+  const items = v.map(cleanSubtype).filter((s): s is string => !!s);
+  return items.length ? Array.from(new Set(items)).slice(0, 3) : undefined;
+};
+
 const cleanPattern = (v: unknown): PatternType | undefined => {
   const s = cleanString(v, 30)?.toLowerCase().replace(/[\s-]+/g, '_');
   if (!s) return undefined;
@@ -628,7 +759,9 @@ export const normalizeAiAnswer = (raw: unknown): AiAnswer | null => {
   confidence = Math.max(0, Math.min(1, confidence));
 
   const subtype = cleanSubtype(g.subcategory ?? g.subtype);
-  const category = refineCategory(cleanCategory(g.category), subtype);
+  const item = cleanSubtype(g.item);
+  const chosen = cleanCategory(g.category);
+  const category = refineCategory(chosen, subtype, item);
 
   const colorList: unknown[] = Array.isArray(g.colors) ? g.colors : [g.colors ?? g.color ?? g.dominantColor];
   const colors = Array.from(
@@ -659,6 +792,10 @@ export const normalizeAiAnswer = (raw: unknown): AiAnswer | null => {
     gender: cleanGender(g.gender),
     description: cleanString(g.description, 300),
     confidence,
+    item,
+    confidences: cleanConfidences(g.confidences),
+    otherItems: cleanOtherItems(g.other_items ?? g.otherItems),
+    contradicted: !!chosen && !!category && chosen !== category ? true : undefined,
   };
 
   const saidAnything = answer.category || answer.subtype || answer.colors.length || answer.material || answer.brand;
@@ -680,17 +817,47 @@ const stripLeadingModifiers = (subtype: string, color?: string, material?: strin
   return words.join(' ');
 };
 
+// Small things worn or carried with a garment. When one of these is the answer and the model also saw a garment,
+// the photo may well be about the garment.
+const SMALL_ITEM_CATEGORIES: ReadonlySet<ClothingCategory> = new Set<ClothingCategory>([
+  'hats', 'jewelry', 'accessories', 'bags', 'shoes',
+]);
+const GARMENT_CATEGORIES: ReadonlySet<ClothingCategory> = new Set<ClothingCategory>([
+  'tops', 'bottoms', 'dresses', 'outerwear',
+]);
+
+/** Where a category that nothing can choose between sits: under the autofill bar, so the form is left blank. */
+const TOSS_UP_CONFIDENCE = 0.3;
+
+/** The palette colours a product title names ("Lava red" -> red), in the order written. */
+const colorsInTitle = (title: string): string[] => {
+  const words = tokenize(title);
+  const found: string[] = [];
+  for (let i = 0; i < words.length; i++) {
+    const name = normalizeColorName(words.slice(i, i + 2).join(' ')) ?? normalizeColorName(words[i]);
+    if (name && name !== MULTICOLOR && !found.includes(name)) found.push(name);
+  }
+  return found;
+};
+
+export interface FuseOptions {
+  /** Title of the product listing the photo came from (already or not yet cleaned): what the seller calls the item. */
+  title?: string;
+}
+
 /**
  * One result from whatever analyses succeeded. Returns null when neither did.
  */
 export const fuseRecognition = (
   vision: VisionAnalysis | null,
   ai: AiAnswer | null,
+  options: FuseOptions = {},
 ): RecognitionResult | null => {
   if (!vision && !ai) return null;
   const v = vision?.result;
   const result: RecognitionResult = { confidence: {}, isReal: true };
   const conf = result.confidence;
+  const title = cleanListingTitle(options.title);
 
   if (v) {
     result.rawLabels = v.rawLabels;
@@ -700,9 +867,22 @@ export const fuseRecognition = (
 
   // ── Category ──
   const vCat = v?.category;
-  const vConf = v?.confidence.category ?? 0;
+  const rivalry = vision?.categoryRivalry ?? 0;
+  // Vision's own pick counts for less when its boxes were a toss-up between two categories.
+  const vConf = (v?.confidence.category ?? 0) * (1 - 0.4 * rivalry);
   const aCat = ai?.category;
-  const aConf = (ai?.confidence ?? 0) * 0.9;
+  // What the model said about its category specifically, else its overall confidence, discounted a little.
+  let aConf = (ai?.confidences?.category ?? ai?.confidence ?? 0) * 0.9;
+  // The model's own words disagreed (a "sweater" under "outerwear"): the sub-category won, but it was unsure.
+  if (ai?.contradicted) aConf *= 0.8;
+  // A small item picked when the model also saw a garment: the photo may be about the garment.
+  if (
+    aCat &&
+    SMALL_ITEM_CATEGORIES.has(aCat) &&
+    (ai?.otherItems ?? []).some(t => GARMENT_CATEGORIES.has(categoryFromText(t) as ClothingCategory))
+  ) {
+    aConf *= 0.6;
+  }
   if (vCat && aCat) {
     if (vCat === aCat) {
       result.category = aCat;
@@ -722,6 +902,21 @@ export const fuseRecognition = (
     conf.category = vConf;
   }
 
+  // The listing's own title names the item: it backs a category that agrees, and leaves the form blank
+  // rather than pick a side when the photo and the title disagree.
+  const titleMatch = title ? matchCategoryTerm(title) : null;
+  const titleCategory = titleMatch && titleMatch.specificity === 3 ? titleMatch.category : undefined;
+  if (titleCategory) {
+    if (!result.category) {
+      result.category = titleCategory;
+      conf.category = 0.6;
+    } else if (titleCategory === result.category) {
+      conf.category = Math.min(0.95, noisyOr(conf.category ?? 0, 0.5));
+    } else {
+      conf.category = Math.min(conf.category ?? 0, TOSS_UP_CONFIDENCE);
+    }
+  }
+
   // ── Colour (the item's, not the room's) ──
   // With no garment found (a dog on the grass) the frame's pixels and colour labels only describe the
   // room, so only a colour the model itself gave can stand.
@@ -731,15 +926,19 @@ export const fuseRecognition = (
     scene: vision?.scene ?? { woodSurface: false, hasSubject: false },
     aiColors: ai?.colors ?? [],
     aiConfidence: ai?.confidence ?? 0,
+    aiColorConfidence: ai?.confidences?.color,
+    labelColors: garmentFound ? vision?.labelColors : undefined,
+    titleColors: title ? colorsInTitle(title) : undefined,
   });
   if (colorResult.color) {
     result.color = colorResult.color;
     result.colors = colorResult.colors;
     conf.color = colorResult.confidence;
   } else if (garmentFound && vision?.labelColor) {
+    // A neutral colour word among the labels ("Brown", "White") is as likely the floor or wall as the item: offered, not confident.
     result.color = vision.labelColor;
     result.colors = [{ name: vision.labelColor, hex: hexForColorName(vision.labelColor) ?? '', weight: 0.5 }];
-    conf.color = 0.5;
+    conf.color = 0.35;
   }
 
   // ── Material: a specific kind beats its family; otherwise the model, unless Vision is surer ──
@@ -768,6 +967,14 @@ export const fuseRecognition = (
     result.material = vMat;
     conf.material = v?.confidence.material;
   }
+  // The title may name the material when nothing else did ("Leather Heels").
+  if (!result.material && title) {
+    const fromTitle = pickMaterial(title);
+    if (fromTitle) {
+      result.material = fromTitle;
+      conf.material = 0.6;
+    }
+  }
 
   // ── Subtype: the model's description when it fits the category, else Vision's term if that fits ──
   const fits = (s: string) => {
@@ -776,6 +983,24 @@ export const fuseRecognition = (
   };
   const rawSubtype = [ai?.subtype, v?.subtype].find((s): s is string => !!s && fits(s));
   if (rawSubtype) result.subtype = stripLeadingModifiers(rawSubtype, result.color, result.material);
+
+  // ── Type: the kind of item inside the category, from the model's words first, then the listing title (a seller
+  // says "Heels" where Vision's label says "Sandal"), then Vision's ──
+  const categoryConfidence = conf.category ?? 0;
+  const typeSources: Array<[string | undefined, number]> = [
+    [ai?.subtype, ai?.confidences?.subtype ?? 1],
+    [ai?.item, 0.9],
+    [title, 0.85],
+    [v?.subtype, 0.75],
+  ];
+  for (const [text, factor] of typeSources) {
+    const type = inferType(result.category, text);
+    if (type) {
+      result.type = type;
+      conf.type = Math.min(0.95, categoryConfidence * factor);
+      break;
+    }
+  }
 
   // ── Brand: a logo or text on the item (Vision, >= 0.85) wins; otherwise the model fills or corrects ──
   let brand = v?.brand;
@@ -793,6 +1018,17 @@ export const fuseRecognition = (
     } else if (brandConf < 0.85) {
       brand = aBrand;
       brandConf = Math.max(brandConf, aiBrandConf * 0.8);
+    }
+  }
+  // The title is where a listing says whose item it is.
+  const titleBrand = title ? findBrand('', [title]) : undefined;
+  if (titleBrand) {
+    if (brand && sameBrand(brand, titleBrand.name)) {
+      if (titleBrand.name.length > brand.length) brand = titleBrand.name;
+      brandConf = Math.max(brandConf, 0.85);
+    } else if (!brand || brandConf < 0.85) {
+      brand = titleBrand.name;
+      brandConf = 0.85;
     }
   }
   if (brand) {

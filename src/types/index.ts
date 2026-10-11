@@ -7,6 +7,8 @@ export interface ClothingItem {
   id: string;
   name: string;
   category: ClothingCategory;
+  /** The specific kind inside the category ("Tote", "Ankle boots", "Belt"); see utils/clothingTypes. */
+  subcategory?: string;
   retailerImage?: string;
   userImage?: string;
   brand?: string;
