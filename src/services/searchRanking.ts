@@ -126,6 +126,136 @@ const pathOf = (url: string): string => {
 const hasKidsPath = (url: string): boolean =>
   pathOf(url).split('/').some(seg => KIDS_PATH_SEGMENT.test(seg));
 
+// ─── Women's or men's listings ──────────────────────────────────────────────
+
+/** Whom a wardrobe is shopped for when it is one gender. Searches for "both" or for no answer are not narrowed. */
+export type ShopFor = 'women' | 'men';
+
+/** 'women' or 'men' when that is what `v` is; anything else ('both', null, junk) narrows nothing. */
+export const asShopFor = (v: unknown): ShopFor | undefined => (v === 'women' || v === 'men' ? v : undefined);
+
+// Whole words after apostrophes are gone, so "women's" is "womens" and never reads as "men's".
+// girls/boys are here for the same reason as the rest (they say who it is for); children's
+// listings are told apart separately (hasKidsWords) and a children's search is never narrowed.
+const WOMEN_GENDER_WORDS = new Set([
+  'women', 'womens', 'woman', 'womans', 'womenswear', 'ladies', 'lady', 'ladys', 'female', 'females', 'girls',
+]);
+const MEN_GENDER_WORDS = new Set(['men', 'mens', 'man', 'mans', 'menswear', 'male', 'males', 'gents', 'boys']);
+const NEUTRAL_GENDER_WORDS = new Set(['unisex', 'genderless']);
+// "man" and "woman" also sit inside names and materials ("Spider-Man", "man-made leather"),
+// where they say nothing about who a thing is for.
+const SINGULAR_GENDER_WORDS = new Set(['man', 'mans', 'woman', 'womans', 'lady', 'ladys']);
+const GENDER_NEUTRAL_PHRASE = /\bgender[ -]?(?:neutral|free|fluid|inclusive)\b|\b(?:all|any) genders?\b/;
+
+type GenderWords = { women: boolean; men: boolean; neutral: boolean };
+
+const noteGenderWord = (seen: GenderWords, word: string): void => {
+  if (WOMEN_GENDER_WORDS.has(word)) seen.women = true;
+  else if (MEN_GENDER_WORDS.has(word)) seen.men = true;
+  else if (NEUTRAL_GENDER_WORDS.has(word)) seen.neutral = true;
+};
+
+/** Lower case, accents and apostrophes gone ("Women’s" is "womens"). */
+const genderText = (text: string): string =>
+  stripAccents(text.toLowerCase())
+    .replace(/&(?:#39|#x27|apos);/g, '')
+    .replace(/['’‘`´ʼ]/g, '');
+
+const joinedByHyphen = (s: string, start: number, end: number): boolean =>
+  (/[-‐‑]/.test(s[start - 1] ?? '') && /[a-z0-9]/.test(s[start - 2] ?? '')) ||
+  (/[-‐‑]/.test(s[end] ?? '') && /[a-z0-9]/.test(s[end + 1] ?? ''));
+
+const readGenderWords = (text: string): GenderWords => {
+  const s = genderText(text);
+  const seen: GenderWords = { women: false, men: false, neutral: GENDER_NEUTRAL_PHRASE.test(s) };
+  const word = /[a-z0-9]+/g;
+  let m: RegExpExecArray | null;
+  while ((m = word.exec(s)) !== null) {
+    if (SINGULAR_GENDER_WORDS.has(m[0]) && joinedByHyphen(s, m.index, m.index + m[0].length)) continue;
+    noteGenderWord(seen, m[0]);
+  }
+  return seen;
+};
+
+/** One gender only: naming both, or saying unisex, or naming neither, says nothing. */
+const genderOf = (seen: GenderWords): ShopFor | undefined =>
+  seen.neutral || seen.women === seen.men ? undefined : seen.women ? 'women' : 'men';
+
+/**
+ * Who a listing's words say it is for, or undefined when they say neither, say both
+ * ("men's and women's") or say unisex. Whole words only: "women's" is never read as "men's".
+ */
+export const listingGender = (text: string): ShopFor | undefined => genderOf(readGenderWords(text));
+
+/** True when the words say who it is for in any way, including both genders and unisex. */
+export const namesGender = (text: string): boolean => {
+  const seen = readGenderWords(text);
+  return seen.women || seen.men || seen.neutral;
+};
+
+// A query-string key that carries a department: ?gender=women, ?department=mens, ?filterByGender=...
+const GENDER_QUERY_KEY = /gender|^(?:sex|dept|department|departments|audience)$/;
+
+/**
+ * Who a listing's link says it is for: a path folder or slug word (/women/, /mens-shoes,
+ * zara's /woman-..., nike's /w/mens-shoes-...) or a ?gender= style hint. Whole words, so
+ * "mens" and "womens" are never confused; "man" and "woman" count only at the start of a
+ * slug, where shops put them, not inside a name or "man-made".
+ */
+export const listingUrlGender = (url: string): ShopFor | undefined => {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return undefined;
+  }
+  const seen: GenderWords = { women: false, men: false, neutral: false };
+  for (const raw of u.pathname.split('/')) {
+    let segment = raw;
+    try {
+      segment = decodeURIComponent(raw);
+    } catch {
+      // keep the raw text
+    }
+    const words = genderText(segment).split(/[^a-z0-9]+/).filter(Boolean);
+    words.forEach((w, i) => {
+      if (SINGULAR_GENDER_WORDS.has(w) && (i > 0 || words[1] === 'made')) return;
+      noteGenderWord(seen, w);
+    });
+  }
+  u.searchParams.forEach((value, key) => {
+    if (!GENDER_QUERY_KEY.test(key.toLowerCase())) return;
+    genderText(value).split(/[^a-z0-9]+/).filter(Boolean).forEach(w => noteGenderWord(seen, w));
+  });
+  return genderOf(seen);
+};
+
+export type GenderFit = 'wanted' | 'opposite' | 'unmarked';
+
+/**
+ * How a listing sits with the gender being shopped for, from its title and its link.
+ * 'unmarked' is the common case (many shops do not say) and also what conflicting words
+ * ("Women's" in the title, /men/ in the link) amount to: only a clear signal counts.
+ */
+export const genderFit = (r: { title: string; url: string }, wanted: ShopFor): GenderFit => {
+  const named = [listingGender(r.title), listingUrlGender(r.url)];
+  const hasWanted = named.includes(wanted);
+  const hasOther = named.includes(wanted === 'women' ? 'men' : 'women');
+  if (hasWanted && !hasOther) return 'wanted';
+  if (hasOther && !hasWanted) return 'opposite';
+  return 'unmarked';
+};
+
+/**
+ * Added to the score of a listing that clearly names the wanted gender. Smaller than one missing
+ * search word (2 for a three-word search) so the words still lead, enough to lift a "Women's"
+ * boot over an unmarked one of the same shop kind. Shop kind is sorted first, so retail stays first.
+ */
+export const GENDER_BOOST = 1;
+
+export const genderBoost = (r: { title: string; url: string }, shopFor?: ShopFor): number =>
+  shopFor && genderFit(r, shopFor) === 'wanted' ? GENDER_BOOST : 0;
+
 type Listing = { title: string; source: string; url: string };
 
 const isKidsListing = (r: Listing): boolean => {
@@ -345,24 +475,37 @@ export type RelevanceContext = {
   head?: Family;
   /** Fallback when the type is unknown. 'accessories' and 'activewear' are catch-alls and never filter. */
   category?: string;
+  /**
+   * Whom the wardrobe is for when it is one gender: a result whose title or link clearly names
+   * the other is dropped, and one that names this one is preferred. Set only for an adult search
+   * whose own words do not name a gender (see relevanceContext).
+   */
+  shopFor?: ShopFor;
 };
 
 /**
  * What a search is looking for. Adult unless the subtype or text says children's:
  * a grown-up's tan boot must never come back as a toddler's.
+ *
+ * `shopFor` is kept only for 'women' or 'men', for an adult search, and when the person's own
+ * words do not already name a gender (someone typing "men's boots" is asking for men's).
  */
 export const relevanceContext = (parts: {
   audience?: Audience;
   subtype?: string;
   text?: string;
   category?: string;
-}): RelevanceContext => ({
-  audience:
-    parts.audience ??
-    (hasKidsWords(`${parts.subtype ?? ''} ${parts.text ?? ''}`) ? 'kids' : 'adult'),
-  head: (parts.subtype ? headFamily(parts.subtype) : undefined) ?? headFamily(parts.text ?? ''),
-  category: parts.category,
-});
+  shopFor?: ShopFor;
+}): RelevanceContext => {
+  const words = `${parts.subtype ?? ''} ${parts.text ?? ''}`;
+  const audience: Audience = parts.audience ?? (hasKidsWords(words) ? 'kids' : 'adult');
+  return {
+    audience,
+    head: (parts.subtype ? headFamily(parts.subtype) : undefined) ?? headFamily(parts.text ?? ''),
+    category: parts.category,
+    shopFor: audience === 'adult' && !namesGender(words) ? asShopFor(parts.shopFor) : undefined,
+  };
+};
 
 export type Listable = {
   title: string;
@@ -388,12 +531,17 @@ const hasCompatibleType = (r: Listing, ctx: RelevanceContext): boolean => {
   return true;
 };
 
-/** Kept only if it is a product page for the right kind of item, for the right age group. */
+/**
+ * Kept only if it is a product page for the right kind of item, for the right age group, and
+ * (when the wardrobe is one gender) not clearly for the other: a listing that does not say
+ * who it is for stays, since many shops do not.
+ */
 export const passesRelevance = (r: Listing, ctx: RelevanceContext): boolean => {
   if (isNonProductUrl(r.url) || isNonProductTitle(r.title)) return false;
   const kids = isKidsListing(r);
   if (ctx.audience === 'adult' && kids) return false;
   if (ctx.audience === 'kids' && !kids && isAdultListing(r)) return false;
+  if (ctx.audience === 'adult' && ctx.shopFor && genderFit(r, ctx.shopFor) === 'opposite') return false;
   return hasCompatibleType(r, ctx);
 };
 
@@ -550,26 +698,41 @@ const withCategoryWord = (text: string, category?: string): string => {
   return `${text} ${noun}`;
 };
 
+const GENDER_QUERY_WORD: Record<ShopFor, string> = { women: 'womens', men: 'mens' };
+
+/**
+ * "womens" or "mens" (the form shops write) after the words, so a search for "ankle boots" asks for
+ * the right ones. Not when the words already name a gender, either one ("men's boots", "unisex
+ * sneakers": the person said what they want) or are for children, and never past the limits.
+ */
+const withGenderWord = (base: string, shopFor: ShopFor | undefined, maxLength: number): string => {
+  const word = shopFor ? GENDER_QUERY_WORD[shopFor] : undefined;
+  if (!word || !base || namesGender(base) || hasKidsWords(base)) return base;
+  const next = `${base} ${word}`;
+  return next.length > maxLength || wordCount(next) > BRAVE_QUERY_MAX_WORDS ? base : next;
+};
+
 export type BuiltQuery = {
   /** What is sent to the search engine. */
   q: string;
-  /** The person's words (plus a category noun), without operators. */
+  /** The person's words (plus a category noun), without operators and without the gender word. */
   text: string;
   /** The hosts excluded with -site:. */
   excluded: string[];
 };
 
 /**
- * The query for the web search: the cleaned words, then `-site:` for as many of
- * the main resale hosts as fit under `maxLength` (most common first).
+ * The query for the web search: the cleaned words, "womens" or "mens" when the wardrobe is
+ * for one of them (`shopFor`), then `-site:` for as many of the main resale hosts as fit
+ * under `maxLength` (most common first).
  */
 export const buildBraveQuery = (
   text: string,
-  opts: { category?: string; excludeResale?: boolean; maxLength?: number } = {},
+  opts: { category?: string; excludeResale?: boolean; maxLength?: number; shopFor?: ShopFor } = {},
 ): BuiltQuery => {
   const maxLength = opts.maxLength ?? BRAVE_QUERY_MAX;
   const base = clipAtWord(withCategoryWord(sanitizeQueryText(text), opts.category), maxLength);
-  let q = base;
+  let q = withGenderWord(base, opts.shopFor, maxLength);
   const excluded: string[] = [];
   if (opts.excludeResale && base) {
     for (const host of RESALE_QUERY_EXCLUSIONS) {

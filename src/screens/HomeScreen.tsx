@@ -12,6 +12,7 @@
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Image,
   Pressable,
@@ -43,6 +44,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getCurrentWeather, getCurrentLocation } from '../services/weatherService';
 import { WeatherData } from '../types/weather';
 import { STYLE_PREFS_KEY, StylePreference } from './StyleQuizScreen';
+import {
+  getAudienceSuggestion,
+  getWardrobeFor,
+  markAsked,
+  setWardrobeFor,
+  wardrobeForLabel,
+  type WardrobeFor,
+} from '../services/wardrobeAudience';
+import WardrobeForPicker from '../components/WardrobeForPicker';
 
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -58,6 +68,9 @@ const HomeScreen: React.FC = () => {
   const [hasProfile, setHasProfile] = useState(true); // optimistic; avoid flash
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [stylePrefs, setStylePrefs] = useState<StylePreference[]>([]);
+  // Who the wardrobe is for: undefined until read, null when the person has not said.
+  const [wardrobeFor, setWardrobeForState] = useState<WardrobeFor | null | undefined>(undefined);
+  const [audienceSuggestion, setAudienceSuggestion] = useState<'women' | 'men' | null>(null);
   const latestLoad = useRef(0);
 
   const summary = useMemo(() => (wardrobe ? summarizeWardrobe(wardrobe) : null), [wardrobe]);
@@ -78,8 +91,10 @@ const HomeScreen: React.FC = () => {
   // skeleton) is only for the very first load, not every return to this tab.
   const loadData = useCallback(async () => {
     const id = ++latestLoad.current;
+    let signedIn = false;
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      signedIn = !!session?.user;
       if (session?.user) {
         setIsAuthenticated(true);
         const meta = session.user.user_metadata;
@@ -112,6 +127,18 @@ const HomeScreen: React.FC = () => {
         }
       }
 
+      // Who the wardrobe is for, and (when nobody said) what the items so far suggest.
+      const answer = await getWardrobeFor();
+      if (id !== latestLoad.current) return;
+      setWardrobeForState(answer);
+      if (answer === null) {
+        // A guest's wardrobe is the demo one, which says nothing about them: only their own additions count.
+        const items =
+          signedIn && wardrobeRes.status === 'fulfilled' ? wardrobeRes.value.filter(i => !i.isWishlist) : [];
+        const suggestion = await getAudienceSuggestion(items);
+        if (id === latestLoad.current) setAudienceSuggestion(suggestion);
+      }
+
       // Load weather in the background (non-blocking)
       getCurrentLocation()
         .then(loc => getCurrentWeather(loc.latitude, loc.longitude))
@@ -131,6 +158,18 @@ const HomeScreen: React.FC = () => {
       loadData();
     }, [loadData]),
   );
+
+  const chooseWardrobeFor = useCallback(async (value: WardrobeFor) => {
+    const before = wardrobeFor;
+    setWardrobeForState(value);
+    try {
+      await setWardrobeFor(value);
+      await markAsked();
+    } catch {
+      setWardrobeForState(before ?? null);
+      Alert.alert("Couldn't save that", 'Please try again.');
+    }
+  }, [wardrobeFor]);
 
   const greeting = (() => {
     const hour = new Date().getHours();
@@ -385,6 +424,21 @@ const HomeScreen: React.FC = () => {
             </View>
           </Card>
         </Pressable>
+      )}
+
+      {/* Who the wardrobe is for: asked until answered; changeable in Profile. */}
+      {wardrobeFor === null && (
+        <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
+          <Card bordered>
+            <Text variant="h4">Who is this wardrobe for?</Text>
+            <Text variant="caption" color="muted" style={{ marginTop: 2, marginBottom: 12 }}>
+              {audienceSuggestion
+                ? `What you've added looks like a ${wardrobeForLabel(audienceSuggestion).toLowerCase()} wardrobe. Is that right?`
+                : "Searches bring back the right fit, and photos are read with it in mind."}
+            </Text>
+            <WardrobeForPicker value={null} onChange={chooseWardrobeFor} />
+          </Card>
+        </View>
       )}
 
       {/* Style quiz CTA — only if no style prefs set */}

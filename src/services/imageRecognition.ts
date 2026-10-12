@@ -23,6 +23,7 @@ import {
 } from './recognitionFusion';
 import { CATEGORY_NOUN } from '../utils/clothingCategories';
 import { MIN_SUGGESTION_CONFIDENCE } from '../utils/aiSuggestionSummary';
+import { getWardrobeFor, type WardrobeFor } from './wardrobeAudience';
 
 // Define pattern types for clothing
 export type PatternType = 'solid' | 'striped' | 'plaid' | 'floral' | 'polka_dot' | 'graphic' | 'other';
@@ -193,12 +194,15 @@ export const retryDelayAfter = (error: unknown): number | null => {
   return ['500', '502', '503', '504'].includes(status) ? RETRY_DELAY_MS : null;
 };
 
+/** What the vision model is told besides the photo and Vision's hints. */
+type ModelExtras = { title?: string; wardrobeFor?: WardrobeFor | null };
+
 /** One ask of the vision model: its answer, or null when it replied with nothing usable. Rejects when the call fails. */
-const askVisionModel = async (base64: string, hints: VisionAnalysis | null, title?: string): Promise<AiAnswer | null> => {
+const askVisionModel = async (base64: string, hints: VisionAnalysis | null, extra: ModelExtras): Promise<AiAnswer | null> => {
   const response = await withTimeout(
     callAiProxy<any>('openai-vision', {
       imageBase64: base64,
-      visionContext: buildVisionContext(hints, { title }),
+      visionContext: buildVisionContext(hints, extra),
     }),
     AI_CALL_TIMEOUT_MS,
   );
@@ -215,14 +219,14 @@ const readWithVisionModel = async (
   base64: string,
   hints: VisionAnalysis | null,
   failures: unknown[],
-  title?: string,
+  extra: ModelExtras = {},
 ): Promise<AiAnswer | null> => {
   try {
-    const first = await askVisionModel(base64, hints, title);
+    const first = await askVisionModel(base64, hints, extra);
     if (first) return first;
     // Answered, but with nothing the form can use (a refusal, cut-off JSON): worth one more ask.
     await sleep(RETRY_DELAY_MS);
-    return await askVisionModel(base64, hints, title);
+    return await askVisionModel(base64, hints, extra);
   } catch (error: any) {
     const delay = retryDelayAfter(error);
     console.warn('[AI Vision] error:', error?.message);
@@ -232,7 +236,7 @@ const readWithVisionModel = async (
     }
     try {
       await sleep(delay);
-      return await askVisionModel(base64, hints, title);
+      return await askVisionModel(base64, hints, extra);
     } catch (retryError: any) {
       failures.push(retryError);
       console.warn('[AI Vision] retry error:', retryError?.message);
@@ -247,6 +251,8 @@ export interface AnalyzeOptions {
    * untrusted text to quote, and backs the category, brand, type and colour the photo shows.
    */
   title?: string;
+  /** Who the wardrobe is for. Left out, it is read from the person's saved answer. */
+  wardrobeFor?: WardrobeFor | null;
 }
 
 /**
@@ -273,9 +279,11 @@ export const analyzeClothingImage = async (imageUri: string, options: AnalyzeOpt
       // so it doesn't answer for the floor or the other shoes. A slow Vision call must not hold the
       // model back though: it starts as soon as Vision answers or after VISION_HINT_WAIT_MS, whichever
       // is first (without hints in the second case), and Vision's result is still used when it arrives.
+      const wardrobeFor =
+        options.wardrobeFor !== undefined ? options.wardrobeFor : await getWardrobeFor().catch(() => null);
       const visionRun = readWithGoogleVision(base64, failures);
       const hints = await withinMs(visionRun, VISION_HINT_WAIT_MS);
-      const [vision, ai] = await Promise.all([visionRun, readWithVisionModel(base64, hints, failures, options.title)]);
+      const [vision, ai] = await Promise.all([visionRun, readWithVisionModel(base64, hints, failures, { title: options.title, wardrobeFor })]);
 
       const result = fuseRecognition(vision, ai, { title: options.title });
       if (result) {

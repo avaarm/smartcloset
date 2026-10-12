@@ -611,7 +611,7 @@ export const cleanListingTitle = (title: unknown): string | undefined => {
  */
 export const buildVisionContext = (
   vision: VisionAnalysis | null,
-  options: { title?: string } = {},
+  options: { title?: string; wardrobeFor?: 'women' | 'men' | 'both' | null } = {},
 ): Record<string, unknown> => {
   const clip = (s: string) => s.slice(0, 40);
   const ctx: Record<string, unknown> = { focus: FOCUS };
@@ -622,6 +622,8 @@ export const buildVisionContext = (
   if (vision?.result.bestGuess) ctx.bestGuess = clip(vision.result.bestGuess);
   const listingTitle = cleanListingTitle(options.title);
   if (listingTitle) ctx.listingTitle = listingTitle;
+  // Who the wardrobe is for, when the owner said: it settles which name an ambiguous piece gets.
+  if (options.wardrobeFor === 'women' || options.wardrobeFor === 'men') ctx.wardrobeFor = options.wardrobeFor;
   ctx.allowedCategories = CLOTHING_CATEGORIES;
   ctx.allowedColors = ALLOWED_COLORS;
   return ctx;

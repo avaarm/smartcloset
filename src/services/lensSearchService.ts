@@ -26,17 +26,20 @@ import { env, hasGoogleVision } from '../config/env';
 import { readImageAsBase64 } from '../platform/fileSystem';
 import { callAiProxy, classifyAiError, friendlyAiMessage } from './aiProxy';
 import { classifyHost, hostnameOf, sourceKindOf, type SourceKind } from './retailerDomains';
+import { getWardrobeFor, type WardrobeFor } from './wardrobeAudience';
 import {
   BRAVE_QUERY_MAX,
   COMPACT_QUERY_MAX,
   MIN_SHOP_RESULTS,
   SEARCH_RESULT_COUNT,
+  asShopFor,
   brandCandidates,
   buildBraveQuery,
   cleanResultTitle,
   countShopResults,
   dedupeResults,
   deriveImageQuery,
+  genderBoost,
   headFamily,
   isNonProductTitle,
   passesRelevance,
@@ -50,6 +53,7 @@ import {
   tokenize,
   type Audience,
   type RelevanceContext,
+  type ShopFor,
 } from './searchRanking';
 
 export type LensResult = {
@@ -87,6 +91,12 @@ export type LensHints = {
   subtype?: string;
   category?: string;
   audience?: Audience;
+  /**
+   * Whom the wardrobe is for. Given (even as null, "not said"), it is used as is; left out, the
+   * wardrobe's saved answer is read once for the search. 'women' and 'men' bring that gender's
+   * products first and drop the other's; 'both' and null leave the search as it was.
+   */
+  shopFor?: WardrobeFor | null;
 };
 
 export type TextSearchOptions = {
@@ -97,6 +107,23 @@ export type TextSearchOptions = {
   audience?: Audience;
   /** Also fetch second-hand listings, instead of excluding them at the source. Default false. */
   includeResale?: boolean;
+  /** Whom the wardrobe is for; see LensHints.shopFor. */
+  shopFor?: WardrobeFor | null;
+};
+
+/**
+ * Whom to shop for. An explicit answer (null included) is used as is; otherwise the wardrobe's saved
+ * answer is read. A storage error never breaks a search: it counts as no answer. Only 'women' and
+ * 'men' narrow anything.
+ */
+const resolveShopFor = async (explicit: WardrobeFor | null | undefined): Promise<ShopFor | undefined> => {
+  if (explicit !== undefined) return asShopFor(explicit);
+  try {
+    return asShopFor(await getWardrobeFor());
+  } catch (err: any) {
+    console.warn('[lens] could not read who the wardrobe is for:', err?.message?.substring(0, 120));
+    return undefined;
+  }
 };
 
 const isShoppingKind = (kind: SourceKind): boolean =>
@@ -126,6 +153,8 @@ export type LensAttrs = {
   material?: string;
   brand?: string;
   audience?: Audience;
+  /** Whom the wardrobe is for: names of the other gender are dropped, names of this one ranked a little higher. */
+  shopFor?: WardrobeFor | null;
 };
 
 // Every colour name the app can detect (utils/colorNames) has an entry unless a title
@@ -268,9 +297,10 @@ export const scoreLensResultByAttributes = (
 
 /**
  * Filter + rank lens results against detected attributes. Drops category
- * pages, children's items (unless the item is one), the wrong product type
+ * pages, children's items (unless the item is one), the wrong product type,
+ * the other gender's (when `attrs.shopFor` says whom the wardrobe is for)
  * and repeats, then orders shops first and second-hand sites last, best
- * attribute match first within each. Resale is dropped once there are enough
+ * attribute match first within each (a little ahead for the wardrobe's own gender). Resale is dropped once there are enough
  * shop results, unless `includeResale`. Returns only the top N that look like
  * they could be the user's item.
  */
@@ -284,6 +314,7 @@ export const refineLensResults = (
     audience: attrs.audience,
     subtype: attrs.subtype,
     category: attrs.category,
+    shopFor: asShopFor(attrs.shopFor),
   });
   // With a product type or brand to go on, a page from a site we know nothing
   // about has to show it in its title; otherwise it is just a page.
@@ -303,7 +334,7 @@ export const refineLensResults = (
     if (score <= 0) continue;
     if ((kind === 'unknown' || kind === 'marketplace') && needsEvidence && evidence === 0) continue;
     const next = { ...r, sourceKind: kind };
-    scores.set(next, score);
+    scores.set(next, score + genderBoost(r, ctx.shopFor));
     kept.push(next);
   }
 
@@ -323,6 +354,10 @@ const rankForDisplay = (
   scoreOf: (r: LensResult) => number,
 ): LensResult[] =>
   dedupeResults(sortByTier(results.filter(r => passesRelevance(r, ctx)), scoreOf));
+
+/** How well a result fits a search: its title's share of the search words, Brave's order, and a nod to the wanted gender. */
+const searchScore = (tokens: readonly string[], shopFor?: ShopFor) => (r: LensResult): number =>
+  titleCoverage(r.title, tokens) * 6 + r.similarity * 2 + genderBoost(r, shopFor);
 
 // ─── Photo search ───────────────────────────────────────────────────────────
 
@@ -355,6 +390,8 @@ export const searchByImage = async (
   });
 
   try {
+    // Read while the photo is read and analysed; it cannot fail, so nothing is left unhandled if the search stops early.
+    const shopForAnswer = resolveShopFor(hints.shopFor);
     const base64 = await readImageAsBase64(imageUri);
 
     let data: any;
@@ -388,9 +425,9 @@ export const searchByImage = async (
       subtype: hints.subtype,
       text: query,
       category: hints.category,
+      shopFor: await shopForAnswer,
     });
-    const tokens = queryTokens(query);
-    const relevance = (r: LensResult) => titleCoverage(r.title, tokens) * 6 + r.similarity * 2;
+    const relevance = searchScore(queryTokens(query), ctx.shopFor);
 
     // Results are the pages that hold a matching picture. visuallySimilarImages
     // are image files (titled by nothing but their host), so they would show as
@@ -441,6 +478,7 @@ export const searchByImage = async (
           category: hints.category,
           brand: hints.brand,
           audience: ctx.audience,
+          shopFor: ctx.shopFor ?? null,
         });
         ranked = rankForDisplay([...ranked, ...fromText], ctx, relevance);
       } catch (err: any) {
@@ -470,12 +508,13 @@ const TEXT_RESULT_LIMIT = 30;
  */
 const braveSearch = async (
   text: string,
-  opts: { category?: string; excludeResale: boolean },
+  opts: { category?: string; excludeResale: boolean; shopFor?: ShopFor },
 ): Promise<{ items: any[]; excludedAtSource: boolean }> => {
   const run = async (maxLength: number) => {
     const built = buildBraveQuery(text, {
       category: opts.category,
       excludeResale: opts.excludeResale,
+      shopFor: opts.shopFor,
       maxLength,
     });
     const data = await callAiProxy<any>('brave', {
@@ -531,9 +570,14 @@ const searchWeb = async (
   opts: TextSearchOptions,
 ): Promise<LensResult[]> => {
   const brands = brandCandidates(text, opts.brand);
-  const ctx = relevanceContext({ audience: opts.audience, text, category: opts.category });
+  const ctx = relevanceContext({
+    audience: opts.audience,
+    text,
+    category: opts.category,
+    shopFor: asShopFor(opts.shopFor),
+  });
   const tokens = queryTokens(text);
-  const relevance = (r: LensResult) => titleCoverage(r.title, tokens) * 6 + r.similarity * 2;
+  const relevance = searchScore(tokens, ctx.shopFor);
   const rank = (results: LensResult[]): LensResult[] =>
     rankForDisplay(
       // Brave matches on the picture's page, so a shop's title may not repeat the
@@ -550,12 +594,12 @@ const searchWeb = async (
 
   let first: Awaited<ReturnType<typeof braveSearch>>;
   try {
-    first = await braveSearch(text, { category: opts.category, excludeResale: !opts.includeResale });
+    first = await braveSearch(text, { category: opts.category, excludeResale: !opts.includeResale, shopFor: ctx.shopFor });
   } catch (err: any) {
     // An engine that refuses the -site: form must not take the whole search
     // down with it. Anything else (signed out, rate limit, offline) fails as before.
     if (opts.includeResale || !/\bbrave(?:-direct)? (?:400|422)\b/.test(String(err?.message))) throw err;
-    first = await braveSearch(text, { category: opts.category, excludeResale: false });
+    first = await braveSearch(text, { category: opts.category, excludeResale: false, shopFor: ctx.shopFor });
   }
   const firstResults = resultsFromBrave(first.items, brands, 'brave');
   let ranked = rank(firstResults);
@@ -565,7 +609,7 @@ const searchWeb = async (
   // shops back means asking again without it; the filters above still apply.
   if (first.excludedAtSource && countShopResults(ranked) < MIN_SHOP_RESULTS) {
     try {
-      const plain = await braveSearch(text, { category: opts.category, excludeResale: false });
+      const plain = await braveSearch(text, { category: opts.category, excludeResale: false, shopFor: ctx.shopFor });
       ranked = rank([...firstResults, ...resultsFromBrave(plain.items, brands, 'brave-plain')]);
     } catch (err: any) {
       console.warn('[lens] retry without exclusions failed:', err?.message?.substring(0, 120));
@@ -601,9 +645,10 @@ export const searchProductsByText = async (
 
   // Brave config lives server-side in Supabase Secrets; clients only need
   // to be signed in to invoke the proxy.
+  const shopFor = await resolveShopFor(options.shopFor);
   let ranked: LensResult[];
   try {
-    ranked = await searchWeb(trimmed, options);
+    ranked = await searchWeb(trimmed, { ...options, shopFor });
   } catch (err: any) {
     console.warn('[lens] text search failed:', err?.message?.substring(0, 120));
     return {

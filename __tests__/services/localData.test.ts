@@ -55,6 +55,9 @@ const DEVICE_OR_PER_ACCOUNT = [
   '@smartcloset_share_product_data',
   '@smartcloset_mode_onboarded',
   '@smartcloset_wishlist_budget', // `:u:<id>` per account, `:guest` for a guest
+  '@smartcloset_wardrobe_for', // who the wardrobe is for: same per-account keys
+  '@smartcloset_wardrobe_for_signals',
+  '@smartcloset_wardrobe_for_asked',
 ];
 
 // Bookkeeping for the per-person slots: who they currently belong to.

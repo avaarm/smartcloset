@@ -32,6 +32,8 @@ import {
 import { supabase } from '../config/supabase';
 import { deleteAccount } from '../services/accountDeletion';
 import { getAiConsent, setAiConsent } from '../services/aiConsent';
+import { getWardrobeFor, setWardrobeFor, markAsked, type WardrobeFor } from '../services/wardrobeAudience';
+import WardrobeForPicker from '../components/WardrobeForPicker';
 import { signOut } from '../services/authService';
 import {
   getCurrentMode,
@@ -80,6 +82,7 @@ const SettingsScreen = () => {
   const [contributions, setContributions] = useState<ProductContribution[]>([]);
   const [shareProductData, setShareProductData] = useState(false);
   const [aiPhotoAnalysis, setAiPhotoAnalysis] = useState(false);
+  const [wardrobeFor, setWardrobeForState] = useState<WardrobeFor | null>(null);
 
   useEffect(() => {
     loadBackupStats();
@@ -87,7 +90,20 @@ const SettingsScreen = () => {
     getContributionHistory().then(setContributions).catch(() => {});
     isSharingEnabled().then(setShareProductData).catch(() => {});
     getAiConsent().then(c => setAiPhotoAnalysis(c === 'granted')).catch(() => {});
+    getWardrobeFor().then(setWardrobeForState).catch(() => {});
   }, []);
+
+  const handleWardrobeFor = async (value: WardrobeFor) => {
+    const before = wardrobeFor;
+    setWardrobeForState(value);
+    try {
+      await setWardrobeFor(value);
+      await markAsked();
+    } catch {
+      setWardrobeForState(before);
+      Alert.alert("Couldn't save that", 'Please try again.');
+    }
+  };
 
   const loadAccountInfo = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -414,6 +430,18 @@ const SettingsScreen = () => {
               <View style={styles.goldDivider} />
             </View>
           )}
+        </View>
+
+        {/* ── Wardrobe ────────────────────────────────────────────────────── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Wardrobe</Text>
+          <Text style={styles.toggleLabel}>This wardrobe is for</Text>
+          <Text style={[styles.toggleDesc, { marginBottom: 14 }]}>
+            Searches bring back the right fit, and photos are read with it in mind. You can change it any time.
+          </Text>
+          <View style={{ marginBottom: 20 }}>
+            <WardrobeForPicker value={wardrobeFor} onChange={handleWardrobeFor} />
+          </View>
         </View>
 
         {/* ── Privacy ─────────────────────────────────────────────────────── */}

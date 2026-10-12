@@ -41,6 +41,7 @@ import { pickImageFromLibrary } from '../platform/imagePicker';
 import { saveClothingItem } from '../services/storage';
 import { buildWishlistItem } from '../services/wishlistItemBuilder';
 import { categoryLabel } from '../utils/clothingOptions';
+import { noteAddedItem } from '../utils/askWardrobeFor';
 import type { ClothingCategory } from '../types/clothing';
 import theme from '../styles/theme';
 import IncludeResaleToggle from '../components/IncludeResaleToggle';
@@ -182,6 +183,8 @@ const WishlistSearchModal: React.FC<Props> = ({ visible, onClose, onAdded }) => 
         // its colour, rather than guessed from the title; the button shows progress meanwhile.
         const { item } = await buildWishlistItem(r);
         await saveClothingItem(item);
+        // Counts toward who the wardrobe is for; no question here, the confirmation below is enough for one tap.
+        noteAddedItem({ category: item.category, subcategory: item.subcategory, name: item.name }, { ask: false });
         onAdded?.();
         const kind = [categoryLabel(item.category), item.subcategory].filter(Boolean).join(' · ');
         Alert.alert('Added to Wishlist', `"${r.title.substring(0, 50)}" saved as ${kind}. You can change this from the item.`, [

@@ -36,6 +36,8 @@ import {
 import MatchPickerSheet, { type PickedMatch } from './MatchPickerSheet';
 import MaterialsEditor from '../components/MaterialsEditor';
 import TypePicker from '../components/TypePicker';
+import { noteAddedItem } from '../utils/askWardrobeFor';
+import { getWardrobeFor } from '../services/wardrobeAudience';
 import {
   KeyboardDoneBar,
   KeyboardSafeScrollView,
@@ -186,6 +188,8 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   // What the form holds right now, for the analysis that finishes seconds later.
   const categoryNow = useRef(category);
   categoryNow.current = category;
+  // What the photo analysis said the item is for ('women', 'men', 'unisex'); counts toward who the wardrobe is for.
+  const aiGender = useRef<string | undefined>(undefined);
 
   // Multi-tier material composition — feeds the fabric knowledge base.
   const [materials, setMaterials] = useState<MaterialComponent[]>(
@@ -501,6 +505,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
       if (!isCurrent()) return;
       setRecognitionResult(result);
       setVisionLabels(result.rawLabels || []);
+      aiGender.current = result.isReal ? result.gender : undefined;
 
       if (redetect) {
         if (result.isReal) {
@@ -541,6 +546,9 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         // there are no detected attributes to match on, and the banner below
         // already explains why.
         if (result.isReal && !redetect) {
+          // Who the wardrobe is for steers the match search toward the right fit (read once, never blocking).
+          const wardrobeFor = await getWardrobeFor().catch(() => null);
+          if (!isCurrent()) return;
           setMatchLoading(true);
           Promise.allSettled([
             lookupKnowledgeBase(fp, semFp),
@@ -567,6 +575,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
                 // Nothing left means "no matches": the sheet says so rather than
                 // padding with anything that wasn't actually found.
                 const attrs = {
+                  shopFor: wardrobeFor,
                   color: result.color,
                   subtype: result.subtype,
                   category: result.category,
@@ -833,6 +842,13 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
           sourceUrl: pickedMatch?.sourceUrl,
           visionLabels: visionLabels.slice(0, 10),
         }).catch(err => console.warn('[AddClothing] contribution failed:', err));
+      }
+
+      // A new item counts toward who the wardrobe is for (a dress, heels, a "men's" tag...), and may prompt once.
+      if (!isEditing) {
+        noteAddedItem(
+          { category, subcategory: subcategory.trim(), name: name.trim(), aiGender: aiGender.current },
+        );
       }
 
       navigation.goBack();
