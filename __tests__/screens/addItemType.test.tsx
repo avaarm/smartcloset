@@ -414,3 +414,40 @@ describe('the wishlist form', () => {
     expect(textNodes('Purchase Date')).toHaveLength(1);
   });
 });
+
+describe('size and condition', () => {
+  it('are saved with a new item, the size cleaned', async () => {
+    await render();
+    await typeInto('Size', '  eu 38 ');
+    await act(async () => chip('Like new').props.onPress());
+    await typeName('Silk shirt');
+    await pressSave();
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ size: 'eu 38', condition: 'like_new' }));
+  });
+
+  it('are empty and unset when nothing is entered', async () => {
+    await render();
+    await typeName('Plain tee');
+    await pressSave();
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ size: '', condition: null }));
+  });
+
+  it('come back when an item is edited, and can be cleared', async () => {
+    await render({ editItem: savedItem({ size: 'M', condition: 'good' }) });
+    expect(input('Size').props.value).toBe('M');
+    expect(chip('Good').props.accessibilityState).toEqual({ selected: true });
+    await typeInto('Size', '');
+    await act(async () => chip('Good').props.onPress()); // tapping the lit chip clears it
+    await pressSave('Update Item');
+    expect(update).toHaveBeenLastCalledWith(expect.objectContaining({ size: '', condition: null }));
+  });
+
+  it('keep the tag fields of an edited item out of the write, so they are left as saved', async () => {
+    await render({ editItem: savedItem({ careInstructions: ['Dry clean only'], originCountry: 'Italy', tagText: '100% wool' }) });
+    await pressSave('Update Item');
+    const written = update.mock.calls[update.mock.calls.length - 1][0];
+    expect('careInstructions' in written).toBe(false);
+    expect('originCountry' in written).toBe(false);
+    expect('tagText' in written).toBe(false);
+  });
+});

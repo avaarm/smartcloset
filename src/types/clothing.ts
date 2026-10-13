@@ -66,6 +66,16 @@ export interface ClothingItemBase {
   category: ClothingCategory;
   /** The specific kind inside the category ("Tote", "Ankle boots", "Belt") */
   subcategory?: string;
+  /** The size on the label ("M", "8", "EU 38") */
+  size?: string;
+  /** How worn it is */
+  condition?: 'new_with_tags' | 'like_new' | 'good' | 'well_loved';
+  /** Care words read off the tag */
+  careInstructions?: string[];
+  /** The "Made in ..." country from the tag */
+  originCountry?: string;
+  /** The text read from a photo of the tag, as read */
+  tagText?: string;
   /** Brand name (optional) */
   brand?: string;
   /** URL of the item's image (optional) */

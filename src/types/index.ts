@@ -1,4 +1,5 @@
 import type { ClothingCategory, MaterialComponent, MaterialTier, Season } from './clothing';
+import type { ItemCondition } from '../utils/itemCondition';
 
 // One definition of each, in clothing.ts, so the two modules can't drift apart.
 export type { ClothingCategory, MaterialComponent, MaterialTier, Season };
@@ -9,6 +10,16 @@ export interface ClothingItem {
   category: ClothingCategory;
   /** The specific kind inside the category ("Tote", "Ankle boots", "Belt"); see utils/clothingTypes. */
   subcategory?: string;
+  /** The size on the label ("M", "8", "EU 38"); free text, at most 20 characters. */
+  size?: string;
+  /** How worn it is; shown when it is listed for a swap. */
+  condition?: ItemCondition;
+  /** Care words read off the tag ("Machine wash cold"). */
+  careInstructions?: string[];
+  /** The "Made in ..." country from the tag. */
+  originCountry?: string;
+  /** The text read from a photo of the material/care tag, as read. */
+  tagText?: string;
   retailerImage?: string;
   userImage?: string;
   brand?: string;

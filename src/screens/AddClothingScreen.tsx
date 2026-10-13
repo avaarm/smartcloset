@@ -37,6 +37,7 @@ import MatchPickerSheet, { type PickedMatch } from './MatchPickerSheet';
 import MaterialsEditor from '../components/MaterialsEditor';
 import TypePicker from '../components/TypePicker';
 import { noteAddedItem } from '../utils/askWardrobeFor';
+import { ITEM_CONDITION_LABELS, ITEM_CONDITIONS, cleanSize, type ItemCondition } from '../utils/itemCondition';
 import { getWardrobeFor } from '../services/wardrobeAudience';
 import {
   KeyboardDoneBar,
@@ -77,6 +78,7 @@ const GUTTER = 16;
 // and fails when either side changes.
 const OWN_MARGIN = { sheetSide: 16, sheetTop: 8, materialsTop: 16 } as const;
 
+const CONDITION_OPTIONS = ITEM_CONDITIONS.map(value => ({ label: ITEM_CONDITION_LABELS[value], value }));
 const CATEGORY_OPTIONS = CLOTHING_CATEGORIES.map(value => ({ label: CATEGORY_LABELS[value], value }));
 const SEASON_OPTIONS: { label: string; value: Season | 'all' }[] = [
   { label: 'All seasons', value: 'all' },
@@ -160,6 +162,9 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   const [category, setCategory] = useState<ClothingCategory>(editItem?.category || 'tops');
   // The specific kind within the category ("Tote", "Ankle boots"); '' is none.
   const [subcategory, setSubcategory] = useState<string>(editItem?.subcategory || '');
+  // The size on the label and how worn the piece is: what a swap or a resale listing needs.
+  const [size, setSize] = useState<string>(editItem?.size || '');
+  const [condition, setCondition] = useState<ItemCondition | null>(editItem?.condition || null);
   const [brand, setBrand] = useState<string>(editItem?.brand || '');
   const [imageUri, setImageUri] = useState(editItem?.userImage || editItem?.imageUrl || editItem?.retailerImage || '');
   const [color, setColor] = useState<string>(editItem?.color || '');
@@ -780,6 +785,9 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         category,
         // '' (not undefined) so clearing the type on an edit clears it in the database too.
         subcategory: subcategory.trim(),
+        size: cleanSize(size),
+        // null (not undefined) for the same reason: an edit that clears the condition clears it.
+        condition: condition ?? null,
         brand: brand.trim(),
         userImage: imageUri,
         retailerImage: imageUri,
@@ -1208,6 +1216,26 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
 
         <FormSection title="Type" hint="Optional. Pick the specific kind, or choose Other to type your own.">
           <TypePicker category={category} value={subcategory} onChange={onTypeChange} />
+        </FormSection>
+
+        <FormSection title="Size & Condition" hint="Optional. Helps when you swap or sell it.">
+          <TextInput
+            style={styles.input}
+            accessibilityLabel="Size"
+            placeholder="Size, e.g. M, 8 or EU 38"
+            value={size}
+            onChangeText={text => setSize(text.slice(0, 20))}
+            maxLength={20}
+            autoCapitalize="characters"
+            {...singleLineDoneProps}
+          />
+          <ChipSelect<ItemCondition>
+            accessibilityLabel="Condition"
+            value={condition}
+            allowClear
+            options={CONDITION_OPTIONS}
+            onChange={setCondition}
+          />
         </FormSection>
 
         <FormSection

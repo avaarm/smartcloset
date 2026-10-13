@@ -8,6 +8,7 @@ import { seedAllDemoData } from './seedDemoData';
 import { rehomeItemImages } from './localImagePaths';
 import { removeCloudImages } from './imageStorage';
 import { refreshLegacySampleData } from './sampleDataRefresh';
+import { cleanCareInstructions, cleanSize, isItemCondition } from '../utils/itemCondition';
 
 const STORAGE_KEY = '@smartcloset_items';
 const INITIALIZED_KEY = '@smartcloset_initialized_v6';
@@ -27,6 +28,11 @@ export const mapDbToClothingItem = (row: any): ClothingItem => ({
   name: row.name,
   category: row.category,
   subcategory: row.subcategory || undefined,
+  size: row.size || undefined,
+  condition: isItemCondition(row.condition) ? row.condition : undefined,
+  careInstructions: Array.isArray(row.care_instructions) && row.care_instructions.length > 0 ? row.care_instructions : undefined,
+  originCountry: row.origin_country || undefined,
+  tagText: row.tag_text || undefined,
   retailerImage: row.retailer_image,
   userImage: row.user_image,
   brand: row.brand,
@@ -55,6 +61,11 @@ const mapClothingItemToDb = (item: Partial<ClothingItem>, userId: string) => ({
   name: item.name,
   category: item.category,
   subcategory: item.subcategory?.trim() ? item.subcategory.trim().slice(0, 60) : undefined,
+  size: cleanSize(item.size) || undefined,
+  condition: isItemCondition(item.condition) ? item.condition : undefined,
+  care_instructions: cleanCareInstructions(item.careInstructions).length > 0 ? cleanCareInstructions(item.careInstructions) : undefined,
+  origin_country: item.originCountry?.trim() ? item.originCountry.trim().slice(0, 60) : undefined,
+  tag_text: item.tagText?.trim() ? item.tagText.trim().slice(0, 2000) : undefined,
   color: item.color,
   season: item.season || [],
   retailer_image: canonicalizeImageUrl(item.retailerImage),
@@ -178,7 +189,12 @@ const isMissingColumnError = (error: any, column: string): boolean =>
  * one (the migration hasn't been applied to this project yet) the write is
  * retried without its group, rather than blocking the whole item.
  */
-const MIGRATION_COLUMNS: string[][] = [['materials'], ['estimated_value', 'value_source'], ['subcategory']];
+const MIGRATION_COLUMNS: string[][] = [
+  ['materials'],
+  ['estimated_value', 'value_source'],
+  ['subcategory'],
+  ['size', 'condition', 'care_instructions', 'origin_country', 'tag_text'],
+];
 
 const writeWithoutMissingColumns = async (
   payload: Record<string, any>,
@@ -357,6 +373,15 @@ export const updateClothingItem = async (
     const valueSource = valueSourceOf(updatedItem.valueSource);
     if (valueSource !== undefined) payload.value_source = valueSource;
     // Same rule: undefined leaves the saved type alone, an empty string clears it.
+    // Size, condition and the tag fields follow the same rule: undefined leaves them alone, empty clears them.
+    if (updatedItem.size !== undefined) payload.size = cleanSize(updatedItem.size) || null;
+    if (updatedItem.condition !== undefined) payload.condition = isItemCondition(updatedItem.condition) ? updatedItem.condition : null;
+    if (updatedItem.careInstructions !== undefined) {
+      const care = cleanCareInstructions(updatedItem.careInstructions);
+      payload.care_instructions = care.length > 0 ? care : null;
+    }
+    if (updatedItem.originCountry !== undefined) payload.origin_country = updatedItem.originCountry.trim().slice(0, 60) || null;
+    if (updatedItem.tagText !== undefined) payload.tag_text = updatedItem.tagText.trim().slice(0, 2000) || null;
     if (updatedItem.subcategory !== undefined) {
       payload.subcategory = updatedItem.subcategory.trim() ? updatedItem.subcategory.trim().slice(0, 60) : null;
     }
