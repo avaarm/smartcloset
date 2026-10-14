@@ -11,4 +11,4 @@
  * re-exports the native shape so `tsc` is happy.
  */
 
-export { readImageAsBase64 } from './fileSystem.native';
+export { readImageAsBase64, discardTempImage } from './fileSystem.native';

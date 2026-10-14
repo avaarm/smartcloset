@@ -26,53 +26,98 @@
 </head>
 <body>
   <h1>Privacy Policy</h1>
-  <p class="updated">Smart Closet · Last updated October 4, 2026</p>
+  <p class="updated">Smart Closet · Last updated October 13, 2026</p>
 
-  <p>This policy explains what information Smart Closet ("the app", "we") collects, how it's used, and who it's shared with. Smart Closet is a wardrobe management app that lets you catalog your clothing, get AI-assisted styling suggestions, and optionally connect with a personal stylist or friends.</p>
+  <p>This policy explains what information Smart Closet ("the app", "we") collects, how it's used, and who it's shared with. Smart Closet is a wardrobe management app that lets you catalog your clothing, get AI-assisted styling suggestions, and optionally connect with a personal stylist or friends and swap pieces of clothing with them.</p>
 
   <h2>Information we collect</h2>
   <table>
     <tr><th>Category</th><th>What</th><th>Why</th></tr>
     <tr><td>Account</td><td>Name, email address</td><td>Sign-in via email, Google, or Apple; identifying your account</td></tr>
-    <tr><td>Wardrobe content</td><td>Photos of clothing, brand/color/material/price you enter</td><td>The core feature — cataloging and organizing your wardrobe</td></tr>
+    <tr><td>Wardrobe content</td><td>Photos of clothing; brand, color, material, price, size, condition, care instructions and country of origin you enter or scan; the text of a tag you scan; your notes</td><td>The core feature — cataloging and organizing your wardrobe</td></tr>
     <tr><td>Style profile</td><td>Skin tone, undertone, body type, style preferences (self-reported or estimated from a photo you provide)</td><td>Personalized outfit and color recommendations</td></tr>
     <tr><td>Location</td><td>Approximate location (rounded to about 1 km), only while the app is in use. It is sent to the weather service Open-Meteo to get your forecast and is not stored by us</td><td>Weather-appropriate outfit suggestions</td></tr>
-    <tr><td>Camera &amp; photo library</td><td>Access only when you choose to photograph or select an item</td><td>Adding clothing items and outfit photos</td></tr>
+    <tr><td>Camera &amp; photo library</td><td>Access only when you choose to photograph or select an item or a clothing tag</td><td>Adding clothing items, reading clothing tags and adding outfit photos</td></tr>
     <tr><td>Social &amp; marketplace</td><td>Friend connections, messages, and appointments if you use the stylist marketplace or friend-sharing features</td><td>Connecting you with friends or a stylist you choose to work with</td></tr>
+    <tr><td>Label scans (optional)</td><td>A photo of a clothing tag, read for its text. The photo is not kept; the text it contained is kept with the item, visible only to you</td><td>Filling in materials, care, size and country of origin</td></tr>
+    <tr><td>Quality ratings (optional)</td><td>Your star ratings and the words you choose about how a piece feels, wears and fits; a private note; ratings of brands you own something from</td><td>Letting you remember how things really are. Where brand insights are available, and only with your agreement (off by default), included in brand insights shown to other members</td></tr>
+    <tr><td>Your agreement</td><td>If you are asked whether to add your ratings to brand insights: your answer, which version of the text you saw, the date, and, if you agree, that you confirmed you are 18 or older</td><td>Recording your choice</td></tr>
+    <tr><td>Clothing swaps (optional)</td><td>For each piece you open to swap: a copy of its photo with location and camera details removed, and its name, brand, size, condition, materials, care instructions, country of origin and season, plus your short note. Your swap offers and the messages in them. Which version of the swap terms you agreed to, and when. If you join community swaps: a public alias, and a record that you confirmed you are 18 or over and agreed to the photo check</td><td>Letting you swap pieces with friends and, if you choose, with other members</td></tr>
     <tr><td>Shared product details (optional, off by default)</td><td>Product name, category, brand, store, color, material, the price you paid and the retail price, a product link, and image fingerprints (a coded summary of a photo, not the photo itself)</td><td>A shared product database that helps other members identify the same item faster. Only if you turn this on in Settings</td></tr>
-    <tr><td>Usage &amp; diagnostics</td><td>Crash reports and basic app usage</td><td>Fixing bugs and improving reliability</td></tr>
+    <tr><td>Usage limits</td><td>Daily counts of how many times your account used AI photo analysis and search, rated items or took limited swap actions. Numbers only, never the content</td><td>Keeping the service within its limits and stopping misuse</td></tr>
   </table>
 
   <h2>How we use AI features</h2>
-  <p>The first time a photo would be sent, SmartCloset asks for your permission, and you can change your choice any time in <strong>Settings → Privacy → AI photo analysis</strong>. If you say no, nothing is sent and you can add items by entering the details yourself. When AI analysis is on and you photograph or search with a clothing item, the photo may be sent to third-party AI providers to identify its category, color, brand, and material, and to power reverse-image and text-based product search:</p>
+  <p>The first time a photo would be sent, SmartCloset asks for your permission, and you can change your choice any time in <strong>Settings → Privacy → AI photo analysis</strong>. If you say no, nothing is sent and you can add items by entering the details yourself. The one exception is the safety check on photos you list for community swaps, which you agree to separately (see Clothing swaps below). When AI analysis is on and you photograph or search with a clothing item, the photo may be sent to third-party AI providers to identify its category, color, brand, and material, and to power reverse-image and text-based product search:</p>
   <ul>
-    <li><strong>Google Cloud Vision API</strong> — image labeling and web/reverse-image search, and, only if you use color analysis, analysing a selfie you choose in order to estimate skin tone</li>
+    <li><strong>Google Cloud Vision API</strong> — image labeling and web/reverse-image search, and, only if you use color analysis, analysing a selfie you choose in order to estimate skin tone. It also reads the text on a clothing tag you photograph, and checks photos you list for community swaps for unsafe content and people (see Clothing swaps below); the swap check happens even if you turned off AI photo analysis</li>
     <li><strong>OpenAI (GPT-4 Vision)</strong> — detailed garment identification from photos</li>
     <li><strong>Brave Search API</strong> — text-based product search results</li>
     <li><strong>Open-Meteo</strong> — weather forecast for your approximate location (no photos or personal details are sent)</li>
   </ul>
   <p>These providers process the image or query to return results to the app; we don't control their retention practices beyond what's stated in their own privacy policies. We do not sell your photos or personal data to anyone, for any purpose.</p>
+  <p>If you scan a clothing tag, the photo of the tag is sent to Google Cloud Vision to read its text. The photo is not kept.</p>
 
   <h2>Shared product database (optional)</h2>
   <p>This is off unless you turn it on in <strong>Settings → Community → Share product details</strong>. When it is on, each time you add an item, its product details (name, category, brand, store, color, material, the price you paid and the retail price, and a product link if you picked one) are added to a database that other SmartCloset members can search when they add a similar item. Other members see these product details without your name or email.</p>
   <p><strong>What is never shared this way:</strong> your photos, your name, your email address, your wardrobe as a whole, your outfits, or your style and body profile.</p>
   <p>Internally the entries are stored with your account ID so that you stay in control: you can turn sharing off at any time, choose to remove everything you have already shared, and deleting your account removes it too. The shared database is not sold and is not used for advertising. Items you add while sharing is off are used only on your own account.</p>
 
+  <h2>Quality ratings and brand insights (optional)</h2>
+  <p>You can rate items you own and brands you have bought from. Your ratings are private to your account by default, and a rating of an item is deleted when you delete the item. A private note you add to a rating is just for you.</p>
+  <p><strong>Brand insights</strong> are a separate, optional step, and your version of the app may not offer them yet. Where it does, you can choose to add your ratings (Settings → Community → Add my ratings to brand insights, off by default, and only if you are 18 or older). Your scores and the words you chose (such as "soft" or "runs small") are then combined with other members' ratings of the same brand. They are counted with the brand, the type of item and, for items whose fabric you scanned from the tag, the main fabric. They are never shown with your name, email, photos, notes or closet, and nothing you write is shown to anyone else. Your private notes are never used.</p>
+  <p>A score is shown to other members only when at least 10 different members have contributed to it and at least 10 of them have had their account for more than a month; a finer breakdown (such as one fabric or the fit split) needs at least 10 members as well. Only accounts that are at least a week old, have a confirmed email address and have worn the piece they rated (for a rating of a brand, something from that brand) are counted. Member counts are shown as ranges and scores are rounded. Scores are refreshed about once a day.</p>
+  <p>You can stop at any time. Turning the setting off, or choosing Remove what I've added, takes your ratings out of the scores right away; scores already shown on other people's phones can take up to 24 hours to update. Deleting a rating, an item or your account also removes it. We cannot take back what another member has already seen.</p>
+  <p>Scores are members' opinions and are not verified. We do not sell this data and we do not share it with brands or retailers.</p>
+
+  <h2>Clothing swaps (optional)</h2>
+  <p>Swaps let you trade a piece of clothing with another member, item for item. SmartCloset never handles money and is not a party to a swap. Swaps with people who are not your friends (community swaps) are opened separately and may not be available yet.</p>
+  <p><strong>Who can see what.</strong> A piece appears on the swap board only after you open it to swap, and only to the audience you choose: your accepted friends, or, if community swaps are open and you have joined, other members who have joined. They see its photo, name, brand, size, condition, materials, care instructions, country of origin, season and your short note. In a swap they never see what you paid, the notes you keep on the piece, how often you wear it, the text of its label, your ratings, your wishlist, your email address or your location. Friends see your usual name; community members see only the alias you choose.</p>
+  <p><strong>Photos.</strong> When you open a piece to swap, we store a copy of its photo, with location and camera details removed, in a separate area used only for swaps. It is shown through links that stop working after ten minutes. If you list a piece for the community, the photo is also checked for unsafe content and people by Google Cloud Vision before it appears, and you agree to this check when you join. Photos you list for friends only are never sent to Google.</p>
+  <p><strong>Messages.</strong> Messages in a swap are stored on our servers and are not end-to-end encrypted. We read them only if someone reports them or to keep the service running. Please keep your address and phone number out of messages until you trust the person.</p>
+  <p><strong>Age.</strong> Community swaps are for people 18 and over. We store the time you confirmed this, not your date of birth.</p>
+  <p><strong>How long we keep it.</strong></p>
+  <table>
+    <tr><th>What</th><th>How long</th></tr>
+    <tr><td>Messages in a swap</td><td>Deleted about 30 days after the swap ends</td></tr>
+    <tr><td>The swap record (names and sizes of the pieces, dates)</td><td>Deleted about 90 days after the swap ends</td></tr>
+    <tr><td>A listing and its photo copy</td><td>Deleted about 30 days after the listing ends, or when you delete your account. A listing that was reported is kept about 90 days after the report, and one that is under review until we decide</td></tr>
+    <tr><td>Counters that limit spam</td><td>2 days</td></tr>
+    <tr><td>Reports about a swap, including a copy of the listing or the last 30 messages</td><td>Kept only to enforce our rules; deleted with either account</td></tr>
+  </table>
+  <p>If you delete your account, your listings and messages are deleted. The other person in a swap keeps a record of it in their list, with your name removed, naming the pieces and the dates, until it is deleted on the schedule above. Copies in routine backups are overwritten on their normal schedule.</p>
+
+  <h2>How long we keep it</h2>
+  <ul>
+    <li><strong>Ratings and the notes you write with them</strong> — until you delete them, delete the item, or delete your account.</li>
+    <li><strong>Your answer about brand insights</strong> — while your account exists.</li>
+    <li><strong>Brand scores</strong> — refreshed about daily; they hold combined figures only and nothing about individual members.</li>
+    <li><strong>Text read from a tag</strong> — with the item it belongs to, until you clear it or delete the item.</li>
+    <li><strong>Usage counts</strong> — numbers only. Swap counters are deleted after 2 days and ratings counters after about a week; the daily count of AI requests stays with your account until you delete it.</li>
+    <li><strong>Swaps</strong> — see the table under Clothing swaps.</li>
+    <li><strong>Backups</strong> — copies in routine backups are overwritten on their normal schedule.</li>
+  </ul>
+
   <h2>Where your data is stored</h2>
-  <p>Your account data, wardrobe items, and photos are stored using Supabase (hosted on AWS infrastructure), with row-level security so only you can access your own data — with one exception: if you add a friend and they accept, your wardrobe becomes visible to that specific friend (read-only), and you can remove that access at any time. Your photos are kept in private storage and are shown through temporary, expiring links; they are only available to you and to friends you have accepted.</p>
+  <p>Your account data, wardrobe items, and photos are stored using Supabase (hosted on AWS infrastructure), with row-level security so only you can access your own data — with one exception: if you add a friend and they accept, your wardrobe becomes visible to that specific friend (read-only), and you can remove that access at any time. In the app, your photos are shown to you and to friends you have accepted and, for pieces you open to swap, to the audience you chose under Clothing swaps. A photo's web address is not a password, so please don't share links to your photos.</p>
+  <p>Your ratings and notes are never visible to friends. By notes we mean the private note you can add when you rate a piece.</p>
 
   <h2>Community &amp; safety</h2>
-  <p>You can report or block another member from their friend request or closet. A report stores your account ID, the reported account's ID, where you saw them, the reason you chose, and any details you add (up to 500 characters). Reports are used only to review and enforce our community guidelines, are visible only to us, and are never shown to the person you reported. Blocking is private: the person you block isn't told, only you can see your list of blocked people, and blocking ends any friend request or friendship between you. Reports and blocks are deleted along with either account.</p>
+  <p>You can report or block another member from their friend request or closet, or from a swap listing or conversation. A report stores your account ID, the reported account's ID, where you saw them, the reason you chose, and any details you add (up to 500 characters). A report about a swap listing or conversation also keeps a copy of that listing or of the last 30 messages, so we can act on it. Reports are used only to review and enforce our community guidelines, are visible only to us, and are never shown to the person you reported. Blocking is private: the person you block isn't told, only you can see your list of blocked people, and blocking ends any friend request or friendship between you. Reports and blocks are deleted along with either account.</p>
+  <p>Where brand scores are shown, you can report one that looks wrong or manipulated from the brand page. That report stores your account ID, the brand and the reason you chose, is read only by us, and is deleted with your account.</p>
 
   <h2>Your choices</h2>
   <ul>
-    <li><strong>Delete your account</strong> — Settings → Delete Account permanently removes your account and all associated data (wardrobe items, outfits, style profile, friend connections) from our systems immediately. This cannot be undone.</li>
+    <li><strong>Delete your account</strong> — Settings → Delete Account permanently removes your account and all associated data (wardrobe items, outfits, ratings, style profile, friend connections, swap listings, offers and messages) from our systems. Copies in routine backups are overwritten on their normal schedule. This cannot be undone.</li>
+    <li><strong>Your ratings</strong> — Settings → Community lets you delete all your ratings and, where brand insights are available, stop adding your ratings or remove what you added. Settings → Export Data includes your ratings.</li>
+    <li><strong>Label scans</strong> — you can edit the care instructions and country of origin of any item when you edit it, and clear the stored tag text on the item's page (Label, then Tag text, then Clear tag text).</li>
+    <li><strong>Your swap data</strong> — Settings → Export Data includes your swap listings, your offers and your own messages, never the other person's.</li>
     <li><strong>Location, camera, and photo access</strong> — controlled entirely through iOS Settings; the app functions without location access (weather suggestions are simply omitted).</li>
     <li><strong>Guest mode</strong> — you can use core wardrobe features without creating an account; that data stays on your device only.</li>
   </ul>
 
   <h2>Children's privacy</h2>
-  <p>Smart Closet is not directed at children under 13, and we do not knowingly collect personal information from children under 13.</p>
+  <p>Smart Closet is not directed at children under 13, and we do not knowingly collect personal information from children under 13. Community swaps are for people 18 and over. Adding ratings to brand insights is for people 18 or older.</p>
 
   <h2>Changes to this policy</h2>
   <p>If this policy changes materially, we'll update the date at the top of this page.</p>

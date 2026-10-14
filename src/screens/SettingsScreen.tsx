@@ -46,6 +46,14 @@ import {
 import { AccountType } from '../types/stylist';
 import { useAccountMode } from '../context/AccountModeContext';
 import { PRO_MODES_ENABLED } from '../config/features';
+import { TAG_MODEL_FALLBACK_ENABLED } from '../config/ratingFlags';
+import RatingSharingRows from '../components/RatingSharingRows';
+import SwapSettingsSection from '../components/SwapSettingsSection';
+
+// What the permission prompt (services/aiConsent.ts) says about tag photos; the wording only promises what the build does.
+const TAG_AI_SENTENCE = TAG_MODEL_FALLBACK_ENABLED
+  ? 'Photos of clothing tags and labels are read by Google Cloud Vision, and the words it finds (not the photo) may be sent to OpenAI to sort out the fabric lines.'
+  : 'Photos of clothing tags and labels are read by Google Cloud Vision to fill in materials, care and country of origin.';
 
 // ─── Luxury palette (matches StylistDashboard / SignIn) ───────────────────────
 const GOLD = '#C4975A';
@@ -192,13 +200,16 @@ const SettingsScreen = () => {
     }
     Alert.alert(
       'Use AI to identify your items?',
-      'SmartCloset will send the photo you choose to Google Cloud Vision and OpenAI to fill in details such as category, color, brand and material, and to find similar items online. If you use color analysis, your selfie is sent to Google Cloud Vision to estimate skin tone. Your photos are used only to analyse them. You can turn this off any time.',
+      `SmartCloset will send the photo you choose to Google Cloud Vision and OpenAI to fill in details such as category, color, brand and material, and to find similar items online. ${TAG_AI_SENTENCE} If you use color analysis, your selfie is sent to Google Cloud Vision to estimate skin tone. Your photos are used only to analyse them. You can turn this off any time.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Allow',
           onPress: () => {
-            setAiConsent('granted').then(() => setAiPhotoAnalysis(true)).catch(() => {});
+            // The stronger answer is stored only when the text shown above covers sending tag text to OpenAI.
+            (TAG_MODEL_FALLBACK_ENABLED ? setAiConsent('granted', { tagText: true }) : setAiConsent('granted'))
+              .then(() => setAiPhotoAnalysis(true))
+              .catch(() => {});
           },
         },
       ],
@@ -255,7 +266,7 @@ const SettingsScreen = () => {
   const handleDeleteAccount = async () => {
     Alert.alert(
       'Delete Account',
-      'This permanently deletes your account, all clothing items, outfits, body profile, stylist data, and any uploaded images. This cannot be undone.\n\nTo confirm, you\'ll be asked to type DELETE.',
+      'This permanently deletes your account, all clothing items, outfits, ratings, body profile, stylist data, swap listings, offers and messages, and any uploaded images. This cannot be undone.\n\nTo confirm, you\'ll be asked to type DELETE.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -452,7 +463,7 @@ const SettingsScreen = () => {
               <View style={{ flex: 1, marginRight: 16 }}>
                 <Text style={styles.toggleLabel}>AI photo analysis</Text>
                 <Text style={styles.toggleDesc}>
-                  Sends photos you add or search with (and a selfie, if you use color analysis) to Google Cloud Vision and OpenAI. If off, you enter details yourself.
+                  Sends photos you add or search with (and a selfie, if you use color analysis) to Google Cloud Vision and OpenAI. {TAG_AI_SENTENCE} If off, you enter details yourself.
                 </Text>
               </View>
               <Switch
@@ -499,21 +510,25 @@ const SettingsScreen = () => {
           </View>
 
           {isAuthenticated && (
-            <View style={styles.toggleRow}>
-              <View style={{ flex: 1, marginRight: 16 }}>
-                <Text style={styles.toggleLabel}>Share product details</Text>
-                <Text style={styles.toggleDesc}>
-                  Off by default. Shares product info only — never photos, name, email or your closet.
-                </Text>
+            <>
+              <View style={styles.toggleRow}>
+                <View style={{ flex: 1, marginRight: 16 }}>
+                  <Text style={styles.toggleLabel}>Share product details</Text>
+                  <Text style={styles.toggleDesc}>
+                    Off by default. Shares product info only — never photos, name, email or your closet.
+                  </Text>
+                </View>
+                <Switch
+                  value={shareProductData}
+                  onValueChange={handleToggleSharing}
+                  trackColor={{ false: BORDER, true: GOLD }}
+                  thumbColor={IVORY}
+                />
               </View>
-              <Switch
-                value={shareProductData}
-                onValueChange={handleToggleSharing}
-                trackColor={{ false: BORDER, true: GOLD }}
-                thumbColor={IVORY}
-              />
-            </View>
+              <RatingSharingRows />
+            </>
           )}
+          {isAuthenticated && <SwapSettingsSection />}
         </View>
 
         {/* ── Data & Backup ───────────────────────────────────────────────── */}
@@ -646,7 +661,7 @@ const SettingsScreen = () => {
                 <Text style={[styles.dangerButtonText, { color: '#922B21' }]}>Delete Account</Text>
               </TouchableOpacity>
               <Text style={styles.dangerNote}>
-                Permanently deletes your account, wardrobe, body profile, and all uploaded images. Cannot be undone.
+                Permanently deletes your account, wardrobe, ratings, body profile, swap listings and messages, and all uploaded images. Cannot be undone.
               </Text>
             </>
           )}

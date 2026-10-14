@@ -1,0 +1,30 @@
+-- GATED. This file lives in supabase/held/, outside supabase/migrations, so `supabase db push` can
+-- never apply it by accident. Releasing it is a prerequisite of Phase 1 (design 8.1): tag scanning
+-- starts filling clothing_items.tag_text, and this policy is what would let an accepted friend read it.
+--
+-- Check before releasing: no build still in use reads a friend's wardrobe through the clothing_items
+-- table. Builds from 20261005 onward read friends only through get_friend_closet()
+-- (src/services/friendService.ts), which returns a fixed list of columns; an older build that still
+-- reads the table directly would show an empty friend closet after this runs.
+--
+-- To release (after the owner has answered question 1 of the design's section 11.2):
+--   newest=$(ls supabase/migrations | grep -oE '^[0-9]{14}' | sort | tail -1)
+--   now=$(date -u +%Y%m%d%H%M%S); v=$(( now > newest ? now : newest + 1 ))
+--   mv supabase/held/drop_legacy_friend_wardrobe_policy.sql \
+--      supabase/migrations/${v}_drop_legacy_friend_wardrobe_policy.sql
+--   supabase db push --dry-run     # must list exactly this one file
+--   supabase db push
+-- The new version is later than every migration already applied; a version older than the newest
+-- applied one is skipped by `supabase db push` unless --include-all is passed.
+--
+-- Why it matters here: this policy lets an accepted friend SELECT every column of the other
+-- person's owned rows, including cost, notes, purchase date, wear history and, since
+-- 20261013000000, tag_text, size, condition, care instructions and country of origin. Row-level
+-- security cannot hide single columns, so there is no narrower replacement policy;
+-- get_friend_closet() is the column-restricted door and already exists.
+--
+-- Wishlist items, ratings and consents are not affected (ratings live in their own owner-only
+-- tables). Storage access for friends ("friends can read wardrobe images") is a different policy
+-- and is not touched. Safe to run twice.
+
+drop policy if exists "Friends can view each other's wardrobe" on public.clothing_items;

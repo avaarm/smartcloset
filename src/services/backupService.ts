@@ -5,16 +5,24 @@ import { ClothingItem } from '../types';
 import { supabase } from '../config/supabase';
 import { getClothingItems } from './storage';
 import { getSavedOutfits, type Outfit } from './outfitService';
+import { exportMyRatings } from './ratingService';
+import type { RatingsExport } from '../types/rating';
+import { exportMySwapData } from './swapService';
+import type { SwapExport } from '../types/swap';
 
 const STORAGE_KEY = '@smartcloset_items';
 const OUTFITS_KEY = '@smartcloset_saved_outfits';
-const BACKUP_VERSION = '1.0';
+const BACKUP_VERSION = '1.1';
 
 export interface BackupData {
   version: string;
   timestamp: string;
   items: ClothingItem[];
   outfits: Outfit[];
+  /** The member's own ratings, notes and consent answers. Absent when they could not be read. */
+  ratings?: RatingsExport;
+  /** What the member did in swaps (their listings, swaps and own messages). Absent for guests, offline, or before swaps existed. */
+  swap?: SwapExport;
   metadata: {
     /** Items the user owns; wishlist entries are counted in wishlistCount instead. */
     totalItems: number;
@@ -36,11 +44,29 @@ export const exportData = async (): Promise<BackupData> => {
     // The file keeps the wishlist (a restore must bring it back), but it is not part of the closet count.
     const ownedCount = items.filter(item => !item.isWishlist).length;
 
+    // Ratings come from the server too; if they can't be read the rest still exports.
+    let ratings: RatingsExport | undefined;
+    try {
+      ratings = await exportMyRatings();
+    } catch {
+      ratings = undefined;
+    }
+
+    // Swap data comes from the server and only exists for signed-in members; if it can't be read the rest still exports.
+    let swap: SwapExport | undefined;
+    try {
+      swap = await exportMySwapData();
+    } catch {
+      swap = undefined;
+    }
+
     const backupData: BackupData = {
       version: BACKUP_VERSION,
       timestamp: new Date().toISOString(),
       items,
       outfits,
+      ...(ratings ? { ratings } : {}),
+      ...(swap ? { swap } : {}),
       metadata: {
         totalItems: ownedCount,
         wishlistCount: items.length - ownedCount,

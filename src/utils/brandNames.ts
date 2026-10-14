@@ -5,9 +5,11 @@
  */
 
 import { BRAND_TIERS } from './itemValueTables';
+import { brandKeyRaw } from './brandKey';
 import { containsPhrase } from './wordMatch';
 
-const compact = (s: string): string => s.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]/g, '');
+// The shared brand key, so "Hermes" and "Hermès" (or "Fjallraven" and "Fjällräven") reach one entry.
+const compact = (s: string): string => brandKeyRaw(s) ?? '';
 
 // Every known name once, longest first so "Christian Louboutin" wins over a shorter name inside it.
 const KNOWN_BRANDS: string[] = Array.from(new Set(Object.values(BRAND_TIERS).flat()))

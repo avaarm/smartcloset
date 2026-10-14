@@ -20,6 +20,7 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useSwapBadge } from '../hooks/useSwapBadge';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {
   Badge,
@@ -152,6 +153,9 @@ const HomeScreen: React.FC = () => {
     }
   }, []);
 
+  // Before Home's own focus effect below: Home's tests keep only the last registered focus callback.
+  const swapBadge = useSwapBadge(isAuthenticated);
+
   // Runs on mount and on every return to this tab.
   useFocusEffect(
     useCallback(() => {
@@ -226,6 +230,12 @@ const HomeScreen: React.FC = () => {
             sub: 'Share your closet',
             icon: 'people-outline',
             onPress: () => navigation.navigate('Friends'),
+          },
+          {
+            label: 'Swap',
+            sub: swapBadge > 0 ? `${swapBadge} need${swapBadge === 1 ? 's' : ''} you` : 'Trade with friends',
+            icon: 'swap-horizontal-outline',
+            onPress: () => navigation.navigate('SwapBoard'),
           },
         ]
       : []),

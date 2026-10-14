@@ -117,6 +117,90 @@ jest.mock('../../src/services/messagingService', () => ({
   markThreadAsRead: jest.fn(async () => undefined),
 }));
 
+// Swap (appended by pass B): a signed-in member who can swap, one accepted swap, one open piece. Plain
+// functions rather than jest.fn(), so restoreAllMocks cannot empty them between cases.
+jest.mock('../../src/services/swapService', () => {
+  const { SWAP_TERMS_VERSION } = require('../../src/config/swapRules');
+  const settings = {
+    swapsEnabled: true,
+    termsAccepted: true,
+    termsCurrent: true,
+    currentTermsVersion: SWAP_TERMS_VERSION,
+    communityAvailable: false,
+    communityJoined: false,
+    alias: null,
+    adultConfirmed: false,
+    suspended: false,
+    needsYou: 0,
+  };
+  const piece = (over: object) => ({
+    listingId: 'l1',
+    side: 'offer',
+    mine: true,
+    name: 'Blue blazer',
+    size: 'M',
+    condition: 'good',
+    photoPath: 'mine.jpg',
+    photoPending: false,
+    removalPending: false,
+    ...over,
+  });
+  const swap = {
+    id: 's1',
+    status: 'accepted',
+    closedReason: null,
+    role: 'proposer',
+    pairKind: 'friends',
+    otherLabel: 'Bea',
+    createdAt: '2026-10-01T10:00:00Z',
+    expiresAt: '2026-10-31T10:00:00Z',
+    closedAt: null,
+    iDone: false,
+    theyDone: false,
+    autoCompleted: false,
+    items: [piece({}), piece({ listingId: 'l2', side: 'request', mine: false, name: 'Linen shirt', photoPath: 'theirs.jpg' })],
+    messages: [],
+    actions: { canAccept: false, canDecline: false, canCancel: true, canComplete: true, canMessage: true, messagesLeft: 190 },
+  };
+  const mine = {
+    id: 'm1',
+    itemId: 'item-m1',
+    audience: 'friends',
+    status: 'active',
+    name: 'Blue blazer',
+    size: 'M',
+    condition: 'good',
+    photoPath: 'mine.jpg',
+    listedAt: '2026-10-01T00:00:00Z',
+    expiresAt: '2099-01-01T00:00:00Z',
+    openOffers: 0,
+    inAcceptedSwap: false,
+    stale: false,
+  };
+  return {
+    getSwapSettings: async () => settings,
+    getSwap: async () => swap,
+    browseSwapListings: async () => ({ items: [], nextCursor: null }),
+    listMySwapListings: async () => [mine],
+    proposeSwap: async () => 's1',
+    publishSwapListing: async () => undefined,
+    updateSwapListingNote: async () => undefined,
+    acceptSwapTerms: async () => undefined,
+    joinSwapCommunity: async () => undefined,
+    reportSwapContent: async () => undefined,
+    blockSwapMember: async () => undefined,
+    respondToSwap: async () => 'accepted',
+    cancelSwap: async () => undefined,
+    sendSwapMessage: async () => 1,
+    completeSwapHandoff: async () => ({ completed: false, receivedItemIds: [], photosPending: 0, removedItemIds: [], removalsPending: 0 }),
+  };
+});
+jest.mock('../../src/services/swapPhotoUrls', () => ({
+  signSwapPhotos: async () => new Map(),
+  forgetSwapPhoto: () => undefined,
+  clearSwapPhotoCache: () => undefined,
+}));
+
 import { KEYBOARD_DONE_ID } from '../../src/components/KeyboardSafe';
 import { KeyboardLift } from '../../src/components/KeyboardLift';
 import { REPORT_REASONS } from '../../src/config/communityGuidelines';
@@ -138,6 +222,14 @@ import ClientsListScreen from '../../src/screens/ClientsListScreen';
 import RecommendationsScreen from '../../src/screens/RecommendationsScreen';
 import StylistMarketplaceScreen from '../../src/screens/StylistMarketplaceScreen';
 import UserSafetySheet from '../../src/components/UserSafetySheet';
+import RateItemSheet, { RATE_NOTE_ACCESSORY_ID } from '../../src/components/RateItemSheet';
+import SwapThreadScreen, { SWAP_MESSAGE_ACCESSORY_ID } from '../../src/screens/SwapThreadScreen';
+import SwapBoardScreen from '../../src/screens/SwapBoardScreen';
+import SwapOfferSheet from '../../src/components/SwapOfferSheet';
+import ListForSwapSheet from '../../src/components/ListForSwapSheet';
+import SwapSafetySheet from '../../src/components/SwapSafetySheet';
+import SwapJoinCommunitySheet from '../../src/components/SwapJoinCommunitySheet';
+import { SWAP_REPORT_REASONS } from '../../src/config/swapRules';
 
 type Tree = renderer.ReactTestRenderer;
 
@@ -200,6 +292,8 @@ type Case = {
    */
   safe: Safe;
   params?: any;
+  /** The accessory id of a sheet that has its own Done bar; the default is the shared one the screen renders. */
+  doneId?: string;
 };
 
 const nav = () => ({ goBack: jest.fn(), navigate: jest.fn(), setOptions: jest.fn() });
@@ -333,6 +427,100 @@ const CASES: Case[] = [
     },
     safe: 'lift',
   },
+  // Appended by the ratings pass. It has its own Done bar (the item screen already renders the shared one).
+  {
+    name: 'Rate item sheet',
+    element: () => (
+      <RateItemSheet
+        visible
+        item={{ id: 'b1', name: 'Andiamo shopper', brand: 'Coach' }}
+        wearCount={0}
+        initial={null}
+        consentGranted={false}
+        onRequestConsent={async () => false}
+        onClose={jest.fn()}
+        onSaved={jest.fn()}
+        onRemoved={jest.fn()}
+      />
+    ),
+    safe: 'avoiding',
+    doneId: RATE_NOTE_ACCESSORY_ID,
+  },
+  // Appended by swap pass B.
+  // The composer has an accessory id of its own: the report sheet opened from the same screen renders the shared Done bar.
+  {
+    name: 'Swap thread composer',
+    element: () => <SwapThreadScreen />,
+    params: { swapId: 's1' },
+    safe: 'avoiding',
+    doneId: SWAP_MESSAGE_ACCESSORY_ID,
+  },
+  {
+    name: 'Swap offer sheet',
+    element: () => (
+      <SwapOfferSheet
+        visible
+        target={{
+          id: 't1',
+          ownerLabel: 'Bea',
+          ownerKind: 'friend',
+          audience: 'friends',
+          name: 'Linen shirt',
+          category: 'tops',
+          size: 'S',
+          condition: 'like_new',
+          photoPath: 't1.jpg',
+          listedAt: '2026-10-01T00:00:00Z',
+          mine: false,
+        }}
+        onClose={jest.fn()}
+        onSent={jest.fn()}
+        onOpenPieces={jest.fn()}
+      />
+    ),
+    safe: 'lift',
+  },
+  {
+    name: 'Open a piece to swap sheet',
+    element: () => (
+      <ListForSwapSheet
+        visible
+        item={{
+          id: 'item-1',
+          name: 'Linen Shirt',
+          category: 'tops',
+          color: 'white',
+          season: ['summer'],
+          dateAdded: '2026-01-01T00:00:00.000Z',
+          isWishlist: false,
+          brand: 'Everlane',
+          size: 'M',
+          condition: 'good',
+          userImage: 'https://x.supabase.co/storage/v1/object/public/wardrobe-images/u1/1700000000000.jpg',
+        }}
+        onClose={jest.fn()}
+        onEditPiece={jest.fn()}
+      />
+    ),
+    safe: 'lift',
+  },
+  {
+    name: 'Swap report details sheet',
+    element: () => (
+      <SwapSafetySheet visible refType="listing" refId="l1" label="Bea" onClose={jest.fn()} onBlocked={jest.fn()} />
+    ),
+    open: async tree => {
+      await pressLabel(tree, 'Report');
+      await pressLabel(tree, SWAP_REPORT_REASONS[0].label);
+    },
+    safe: 'lift',
+  },
+  {
+    name: 'Join community swaps sheet',
+    element: () => <SwapJoinCommunitySheet visible onJoined={jest.fn()} onClose={jest.fn()} />,
+    safe: 'lift',
+  },
+  { name: 'Swap board search', element: () => <SwapBoardScreen />, safe: 'below' },
 ];
 
 beforeEach(() => {
@@ -400,7 +588,7 @@ describe.each(CASES)('$name', (testCase: Case) => {
     for (const input of inputs) {
       const { keyboardType, multiline, returnKeyType, blurOnSubmit, inputAccessoryViewID } = input.props;
       if (multiline || NO_RETURN_KEY_TYPES.includes(keyboardType)) {
-        expect(inputAccessoryViewID).toBe(KEYBOARD_DONE_ID);
+        expect(inputAccessoryViewID).toBe(testCase.doneId ?? KEYBOARD_DONE_ID);
       } else {
         expect(RETURN_KEYS).toContain(returnKeyType);
         // Return either moves on to the next field or closes the keyboard.
@@ -411,9 +599,10 @@ describe.each(CASES)('$name', (testCase: Case) => {
     // The bar is rendered once; a form may show it before the step that needs it.
     const bars = tree.root.findAllByType(InputAccessoryView);
     expect(bars.length).toBeLessThanOrEqual(1);
-    if (inputs.some(i => i.props.inputAccessoryViewID === KEYBOARD_DONE_ID)) {
+    const doneId = testCase.doneId ?? KEYBOARD_DONE_ID;
+    if (inputs.some(i => i.props.inputAccessoryViewID === doneId)) {
       expect(bars).toHaveLength(1);
-      expect(bars[0].props.nativeID).toBe(KEYBOARD_DONE_ID);
+      expect(bars[0].props.nativeID).toBe(doneId);
     }
   });
 });

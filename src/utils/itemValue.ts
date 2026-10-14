@@ -18,6 +18,7 @@ import {
   MATERIAL_MULTIPLIER,
   TIER_MULTIPLIER,
 } from './itemValueTables';
+import { canonicalFibre } from './materialNames';
 
 export type ValueSource = 'paid' | 'retail' | 'match' | 'brand' | 'category';
 
@@ -118,7 +119,11 @@ const materialMultiplier = (item: ValueInputs): number => {
     // or when no percentages were entered): a 5% cashmere blend is not cashmere.
     const dominant = shell.reduce((best, m) => ((m.percentage ?? 0) > (best.percentage ?? 0) ? m : best));
     const hit = phraseMatches(normalize(dominant.name), materialIndex.index, materialIndex.maxWords)[0];
-    return hit ? hit.value : 1;
+    if (hit) return hit.value;
+    // Only when the phrases above find nothing: a name that is another way to say a fibre ("polyamide", "lambswool")
+    // is valued like it. Names the lookup already knows ("vegan leather", "velvet", "merino") keep their own value.
+    const fibre = canonicalFibre(dominant.name);
+    return Object.prototype.hasOwnProperty.call(MATERIAL_MULTIPLIER, fibre) ? MATERIAL_MULTIPLIER[fibre] : 1;
   }
   const text = normalize([item.material, item.name, ...(Array.isArray(item.tags) ? item.tags : [])].join(' '));
   const hit = phraseMatches(text, materialIndex.index, materialIndex.maxWords)[0];

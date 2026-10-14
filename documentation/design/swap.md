@@ -6,6 +6,8 @@ Feature: people swap pieces of clothing with each other, item for item. Friends 
 
 Revision 2 (2026-10-13). A second review found thirteen gaps in the first version of this document. All are resolved here: migration numbers and shared files are settled with `documentation/design/quality-ratings.md` (10.1), the migrations that wait for a decision no longer sit in the folder `supabase db push` applies (4.1), the original-photo bucket claim is gated (G0), moderation holds are sticky (4.4), a block no longer shows (2.4, 3.9), consent is recorded against the text the member saw (6.3), the sweep no longer trusts an unverified token (5.1), the text and completeness rules run again at commit (4.1, `swap_validate_item`), a one-sided "We swapped!" no longer locks the other member in (3.6), reports reach a person (11.3), account deletion works on a fresh database (4.1), PNG photos can be listed (5.2) and the community photo check fails closed on UNKNOWN (5.1). Section 0 says what was re-run.
 
+Revision 3 (2026-10-13). Reconciled with `quality-ratings.md` and `documentation/design/BUILD-PLAN.md`, which runs the two builds together: the ratings migrations moved to `20261014000000` to `20261014000399` (swap keeps `20261015000000` to `20261015000500`, 4.1, 10.1); every shared file has one owner or an ordered pass (10.1); the streams are named SW0 to SW6 (this document's S0 to S6), POL (S7, shared with ratings) and pass B (the lead's integration); `backupService.ts` is edited by SW0 first and carries the version bump (4.7, 6.1, Appendix C); the policy drop has one copy, owned by the ratings foundation stream Q0 (4.1, Appendix A); a released held file may sit in the migrations folder under its release version (4.1, Appendix F); the privacy manifest also declares purchase history (8.3); the thread composer has an accessory id of its own (7.5). Section 0 says what was re-run.
+
 ## Contents
 
 0. What was verified, and what was not
@@ -15,7 +17,7 @@ Revision 2 (2026-10-13). A second review found thirteen gaps in the first versio
 4. Data model and migrations
 5. Photos, the `swap-media` function and the hand-off
 6. Client API: types, rules, errors, service, hooks
-7. UI: components, screens, routes, and the lines the lead adds
+7. UI: components, screens, routes, and the lines pass B adds
 8. Privacy, safety and compliance changes
 9. Test plan
 10. Implementation streams, file ownership and merge order
@@ -42,17 +44,20 @@ The SQL, the pure TypeScript and the Jest tests below are not sketches: they wer
 | Metadata stripping | JPEGs made by Pillow (Exif with GPS and orientation, ICC profile, comment, progressive scan, trailing bytes) and PNGs made by Pillow (text, XMP, Exif, resolution, ICC profile, palette with transparency, trailing bytes), cleaned and decoded again | Pixels identical, GPS, camera and text gone, rotation, colour profile and transparency kept |
 | Pure TypeScript | `npm run typecheck` (`tsc -p tsconfig.native.json`) on a copy of the repo with these files in place | No errors. The first version's `swapService.test.ts` had one (a spread of a zero-argument mock); fixed |
 | Jest | 188 tests in 18 suites (the first version: 144 in 15) in a copy of the repo: service, errors, photo links, wording, hooks, two components, backup export, migration text and migration versions, edge helpers (JPEG, PNG, secret compare, moderation), edge function source, policy and manifest. The whole repository suite (149 suites, 3,566 tests) also passes with these files and the swap-only shared edits in place | All pass |
-| The lead's edits to shared files (7.7) | The swap-only edit applied to a copy of today's tree and each file's existing suites run (Home, item screen, Settings, route and keyboard guards, `App`, `AppModeGate`, `authService`, `accountDeletion`, `backupService`): all pass. The diffs in Appendix D are written against the tree after the ratings pass (10.1), which does not exist yet: they were generated from a simulation of the ratings edits taken from `quality-ratings.md` 6.3 and 5.9, and `patch --dry-run` applies them cleanly to that simulation | Pass; the post-ratings diffs must be re-checked by the lead against the real tree (10.1) |
+| Pass B's edits to shared files (7.7) | The swap-only edit applied to a copy of today's tree and each file's existing suites run (Home, item screen, Settings, route and keyboard guards, `App`, `AppModeGate`, `authService`, `accountDeletion`, `backupService`): all pass. The diffs in Appendix D for `App.tsx`, the item screen and Settings are written against the tree after the ratings pass A (10.1), which does not exist yet: they were generated from a simulation of the ratings edits taken from `quality-ratings.md` 6.3, and `patch --dry-run` applies them cleanly to that simulation. The diffs for the privacy page, the manifest, Home, the friend closet screen, the account files, `delete-account` and `backupService.ts` apply to today's files (the last one because SW0 now goes first) | Pass; pass B's diffs must be re-checked against the real tree after pass A (10.1) |
+| Revision 3: both features together | The three ratings migrations (`20261014000000`, `20261014000200`, `20261014000300`, text from `quality-ratings.md`) and the six swap migrations applied to one scratch PostgreSQL 16 loaded with every existing repo migration and the same kind of Supabase stub, in version order and then in the reverse order, each twice | Clean every time, so the order is operational only (`supabase db push` applies in version order) |
+| Revision 3: scripts on that database | The swap scenarios on the database that also holds the ratings tables and functions; the ratings scenario script (empty, then after `populated_seed.sql`), leak check, grants audit and brand-key parity on the database that also holds the swap objects; a deletion scenario in which one member has both ratings and swap data | Swap: 61, 54, 64, 15, 105, 16 checks and 6 in the policy script, the same as before; the deletion scenario 17 (the 15 of `s4_deletion` and 2 for ratings rows). Ratings: `ALL PASSED` twice, leak check zeros, 49 brand keys with 0 mismatches. (The ratings scenarios need the policy drop applied, which was done by hand on that scratch database) |
+| Revision 3: changed tests and diffs | The Jest suites of this document in a scratch copy of today's tree with the Appendix C and D diffs applied (19 suites, 194 tests, the existing `backupService` suite included), and the changed version and held-file tests against a released drop, a second copy, an unversioned copy, a file inside the other range, a duplicate version and a later alias migration; every diff that applies to today's files was applied with `patch`; the Settings diff was applied to a simulation of ratings pass A | All as intended (the negative cases fail, the release form passes) |
 
 Not run, so treat as unverified until a person has done it:
 
-- the migrations on a real Supabase local stack (`supabase start`) or on the live project: they were run on a PostgreSQL 16 stub of Supabase, which reproduces the roles, the default grants and `auth.uid()` from `request.jwt.claims` but is not Supabase. Stream S1's first task is to run `supabase db reset` and the scripts on the real local stack (the checklist is in section 10);
+- the migrations on a real Supabase local stack (`supabase start`) or on the live project: they were run on a PostgreSQL 16 stub of Supabase, which reproduces the roles, the default grants and `auth.uid()` from `request.jwt.claims` but is not Supabase. Stream SW1's first task is to run `supabase db reset` and the scripts on the real local stack (the checklist is in section 10);
 - the `swap-media` function under Deno (it type-checks with shims, and its decision functions are tested);
 - the report digest (`swap_send_report_digest`) with `pg_net` and Vault: only its counting and its quiet failure where they are missing were run;
 - the storage read policy and signed links through the real Supabase Storage API (the policy is tested as SQL; the signing path is the same one the existing friend-photo policy relies on, but it must be proved with a real `createSignedUrls` call, see ship gate G4);
 - `supabase db query --linked` (the scripts use only plain SQL; the CLI shows just the last result set, so the scripts end with one `select` and raise on failure);
 - every React screen and sheet other than `SwapPhoto` and `SwapStatusBadge` (they are specified, not written);
-- the live state of `wardrobe-images` after gate G0 (the second review's read-only catalogue query on the linked project showed the bucket flagged public; it was not repeated here), whether `pg_cron` and `pg_net` exist on the project, the backup retention period, Apple's age-rating wording, and the live definition of `styling_recommendations` (the prerequisite migration takes the repository guide's definition and S1 compares it with the live table).
+- the live state of `wardrobe-images` after gate G0 (the second review's read-only catalogue query on the linked project showed the bucket flagged public; it was not repeated here), whether `pg_cron` and `pg_net` exist on the project, the backup retention period, Apple's age-rating wording, and the live definition of `styling_recommendations` (the prerequisite migration takes the repository guide's definition and SW1 compares it with the live table).
 
 Two harness notes for whoever runs the SQL scripts. First, `s4_deletion.sql` prints `WARNING: swap_on_item_gone: ... violates foreign key constraint` lines. They are expected: the fixtures are created inside the same transaction that deletes the account, so PostgreSQL re-checks a foreign key it would normally skip. In production those triggers succeed, and the exception handler exists so that they could never block a deletion anyway. Second, the scripts create auth users with only an id, email, name and created date; if the live `auth.users` has triggers or required columns that reject that, adjust `10_fixture_users.sql` only.
 
@@ -260,7 +265,7 @@ The complete SQL is in Appendix A. This section is the map: what each file does,
 
 ### 4.1 Files, in the order they are applied
 
-**Versions.** A migration's version is the number before the first underscore, and it is the primary key of the table in which `supabase db push` records what ran, so two files with the same version make `db push` and `db reset` fail. The swap files use `20261015000000` to `20261015000500`. The ratings design (`quality-ratings.md` 4.1) uses `20261016000000` to `20261016000399`. The newest migration that already exists is `20261013000000`. Neither design depends on the other. The swap files sort before the ratings files, so the natural order is swap first; if the ratings migrations have already been pushed, `supabase db push` refuses the older swap versions ("found local migration files to be inserted before the last migration on remote") unless `--include-all` is passed, which is then safe only because the dry run is read first and shows exactly the swap files. `__tests__/migrationVersions.test.ts` fails when two files share a version, so a collision cannot be merged unnoticed.
+**Versions.** A migration's version is the number before the first underscore, and it is the primary key of the table in which `supabase db push` records what ran, so two files with the same version make `db push` and `db reset` fail. The swap files use `20261015000000` to `20261015000500`. The ratings design (`quality-ratings.md` 4.1) uses `20261014000000` to `20261014000399`. The newest migration that already exists is `20261013000000`. Neither design depends on the other's SQL. The ratings files sort before the swap files, so the natural order is ratings first, and both features' files go in one `supabase db push` (BUILD-PLAN.md). If the swap files were pushed on their own first, a later push of the ratings files would be refused by `supabase db push` ("found local migration files to be inserted before the last migration on remote") unless `--include-all` is passed, which is then safe only because the dry run is read first and shows exactly the ratings files. `__tests__/migrationVersions.test.ts` (owned by Q0, the ratings foundation stream; its text is in Appendix F) fails when two files share a version or when a file sits inside the other feature's range, so a collision cannot be merged unnoticed.
 
 **What may sit in `supabase/migrations/`.** `supabase db push` (the documented deploy path, `supabase/README.md`) applies every pending file in that folder in version order and has no way to skip one, so the folder holds only files that are safe to apply the moment they are pushed. Anything that waits for a decision lives in `supabase/held/` and is moved into the folder, with a new version, when the decision is made (below). In the first version of this document the policy drop and the term-list template sat in the folder: `db push` would have run the drop unreviewed, and would have recorded the empty term template as applied, so the owner's later edit of that file would never have run.
 
@@ -273,14 +278,14 @@ The complete SQL is in Appendix A. This section is the map: what each file does,
 | `20261015000400_swap_moderation.sql` | Report contexts and reasons; `report_swap_content`; `block_swap_member`, `list_swap_blocks`, `unblock_swap_member`; `export_my_swap_data`; admin functions (hold, release, remove, suspend, unsuspend, switches); `swap_report_backlog` and `swap_send_report_digest`; `swap_moderation_queue` | foundation |
 | `20261015000500_swap_community.sql` | `join_swap_community`, `leave_swap_community`, `narrow_swap_listing`. Changes nothing for anyone until `community_enabled` is turned on | moderation |
 
-**Held, never applied by `db push`** (`supabase/held/`; `__tests__/swapMigrations.test.ts` fails if either appears in the migrations folder):
+**Held, never applied by `db push`** (`supabase/held/`; `__tests__/swapMigrations.test.ts` fails if either appears in the migrations folder under any name except the release form `<14 digits>_<name>.sql` of 4.1, and fails if a file exists in both places):
 
 | File | Contents | Released by |
 | --- | --- | --- |
-| `drop_legacy_friend_wardrobe_policy.sql` | Drops the table-level friends policy on `clothing_items`. The same file as `quality-ratings.md` 4.3: whichever feature adds it first creates it, with the one statement shown; the other leaves it alone. Swaps do not depend on it | The owner's answer to open question 4 (12.2) |
+| `drop_legacy_friend_wardrobe_policy.sql` | Drops the table-level friends policy on `clothing_items`. **Owned by Q0** (the ratings foundation stream; its text is `quality-ratings.md` 4.3). Swap keeps no copy: SW1 neither creates nor edits it, `swapMigrations.test.ts` only reads it, and `s7_legacy_policy.sql` repeats its one statement inline. Swaps do not depend on it | The owner's answer to open question 4 (12.2) |
 | `wardrobe_images_private.sql` | Creates the `wardrobe-images` bucket as private, or flags the existing one private, so the repository owns the flag | Gate G0 (11.1), after the checks there |
 
-**Releasing a held file.** Give it a version later than every file already in `supabase/migrations/`, which a bare `date` does not guarantee here because the ranges above are dated ahead:
+**Releasing a held file.** Give it a version later than every file already in `supabase/migrations/`, which a bare `date` does not guarantee here because the ranges above are dated ahead (the file leaves `supabase/held/`, so there is never more than one copy):
 
 ```
 newest=$(ls supabase/migrations | grep -oE '^[0-9]{14}' | sort | tail -1)
@@ -383,7 +388,7 @@ A rate counter that raises rolls its own increment back, so only successful acti
 
 - Deleting an account needs no change to `delete_user_account()` (which, however, deletes from `public.styling_recommendations`, a table no earlier migration creates; the prerequisite file of 4.1 makes that work on a fresh database): members, listings, messages, counters cascade; the member's side of every swap becomes empty; open swaps close as `unavailable`; a swap with nobody left is deleted by its own trigger. Listing photos are queued (a trigger on `swap_listings`) and removed by `delete-account` after the account is gone, with `swap-media`'s sweep as backstop (it also removes photos nothing refers to). This was run against the real function (`s4_deletion.sql`).
 - The survivor keeps an anonymous record of a swap (piece names, dates), labelled "Former member". A deleted member's messages are gone from the survivor's thread.
-- Export Data gains an optional `swap` section from `export_my_swap_data()`: the member's terms and community consents with times, their listings, their swaps with piece names, and only their own messages. Never the other member's words or identity. The file version becomes `1.1`, bumped once, by whichever of the ratings and swap passes lands first (10.1; the diff in Appendix D assumes the ratings pass went first and does not bump); import ignores the section.
+- Export Data gains an optional `swap` section from `export_my_swap_data()`: the member's terms and community consents with times, their listings, their swaps with piece names, and only their own messages. Never the other member's words or identity. The file version becomes `1.1`, bumped once, by SW0 in wave 1, before the ratings pass A adds its own section (10.1; Appendix C has the diff against today's file); import ignores the section.
 
 ### 4.8 Old builds
 
@@ -431,7 +436,7 @@ Described step by step in 3.7. Photo copy details: the app asks `swap-photos` fo
 
 ## 6. Client API: types, rules, errors, service, hooks
 
-All of this is written and verified in Appendix C. Stream S0 owns it and merges first; every other stream imports only from it.
+All of this is written and verified in Appendix C. Stream SW0 owns it and merges first; every other stream imports only from it.
 
 ### 6.1 Files
 
@@ -445,7 +450,7 @@ All of this is written and verified in Appendix C. Stream S0 owns it and merges 
 | `src/utils/swapFormat.ts` | Wording for statuses, closed swaps, system lines, listing facts; `newClientRef()` (uuid v4) |
 | `src/hooks/useSwapAccess.ts` | `useSwapAccess()` returning `{ access, refresh, acceptTerms }` where `access.state` is `loading`, `guest`, `paused`, `not_deployed`, `suspended`, `update_required`, `needs_terms`, `ready` or `error`. `update_required` means the server's terms version is not `SWAP_TERMS_VERSION` |
 | `src/hooks/useSwapBadge.ts` | `useSwapBadge(enabled)` returning a number; never throws, never logs |
-| `src/services/backupService.ts` (existing, edited) | Adds the optional `swap` section. The file version is `1.1`, bumped once by whichever of the ratings and swap passes lands first (10.1) |
+| `src/services/backupService.ts` (existing, edited) | Adds the optional `swap` section and bumps the file version to `1.1`, once, here (SW0 goes first; the ratings pass A later adds only its own section, 10.1) |
 
 ### 6.2 Service functions
 
@@ -478,14 +483,14 @@ Every function throws `SwapError('not_authenticated')` for a guest before any ne
 - A write that failed keeps its input and reuses its `clientRef` on retry.
 - Photos: never use a path from `wardrobe-images` for another member's listing; always `SwapPhoto` or `signSwapPhotos`.
 - Do not store anything from this feature in AsyncStorage (`localData.test.ts` enumerates keys). Consent and state live on the server.
-- Consent is recorded against the text the member was shown. The service sends `SWAP_TERMS_VERSION` and nothing else, and `useSwapAccess` only offers the terms (`needs_terms`) when the server's version equals it; otherwise the state is `update_required` and nothing that records consent is called. Never read `currentTermsVersion` from the settings to send it back. (In the first version `acceptTerms` sent the server's value, so a bumped server version or an older build recorded agreement to text the member had not read.) This work is in stream S0 and must merge before S3 to S6 start, because they all import the hook.
+- Consent is recorded against the text the member was shown. The service sends `SWAP_TERMS_VERSION` and nothing else, and `useSwapAccess` only offers the terms (`needs_terms`) when the server's version equals it; otherwise the state is `update_required` and nothing that records consent is called. Never read `currentTermsVersion` from the settings to send it back. (In the first version `acceptTerms` sent the server's value, so a bumped server version or an older build recorded agreement to text the member had not read.) This work is in stream SW0 and must merge before SW3 to SW6 start, because they all import the hook.
 - Do not add navigation to shared components; screens pass callbacks. Components under `ItemDetails` and `Settings` use `useEffect`, never navigation hooks (those screens' tests mock navigation minimally).
 
 ---
 
-## 7. UI: components, screens, routes, and the lines the lead adds
+## 7. UI: components, screens, routes, and the lines pass B adds
 
-Visual rules: new standalone screens use `Screen`, `Card`, `Text`, `Button`, `Badge`, `Avatar`, `EmptyState`, `Skeleton`, `Sheet` from `../ui` and `useTheme()`, the same way `FriendsScreen` does. A component mounted inside `ItemDetailsScreen` copies that screen's section metrics (padding 20, title 20 and weight 700, card radius 12, accent `#C4975A`). Per-person menus are sibling `Pressable`s of the card, never nested. Keyboard rules: a multiline field spreads `keyboardDoneProps` and its file renders exactly one `<KeyboardDoneBar />`; every other field has `returnKeyType`; sheets with fields use `KeyboardLift`; a screen with a composer uses `<Screen keyboardAvoiding>`. `keyboardGuard.test.tsx` checks these statically for every new file.
+Visual rules: new standalone screens use `Screen`, `Card`, `Text`, `Button`, `Badge`, `Avatar`, `EmptyState`, `Skeleton`, `Sheet` from `../ui` and `useTheme()`, the same way `FriendsScreen` does. A component mounted inside `ItemDetailsScreen` copies that screen's section metrics (padding 20, title 20 and weight 700, card radius 12, accent `#C4975A`). Per-person menus are sibling `Pressable`s of the card, never nested. Keyboard rules: a multiline field spreads `keyboardDoneProps` and its file renders exactly one `<KeyboardDoneBar />` (one exception, the thread composer in 7.5, which has an id of its own); every other field has `returnKeyType`; sheets with fields use `KeyboardLift`; a screen with a composer uses `<Screen keyboardAvoiding>`. `keyboardGuard.test.tsx` checks these statically for every new file.
 
 ### 7.1 Routes (all in `HomeStack`, flat files in `src/screens`)
 
@@ -509,10 +514,10 @@ There is no sixth tab. Every `navigate()` the swap screens make is to a route re
 | MySwaps row | SwapThread | `navigate('SwapThread', { swapId })` |
 | MySwaps empty | SwapBoard | `navigate('SwapBoard')` |
 | SwapThread, after finishing | ItemDetails | `navigate('ItemDetails', { item })` after `getClothingItem(id)` |
-| Item screen card | MySwaps | callback prop; the lead supplies `navigate('Home', { screen: 'MySwaps' })`, the only form that passes the route audit from all three stacks that host `ItemDetails` |
+| Item screen card | MySwaps | callback prop; pass B supplies `navigate('Home', { screen: 'MySwaps' })`, the only form that passes the route audit from all three stacks that host `ItemDetails` |
 | Guest lines | SignIn | `navigate('SignIn')` from stack screens; `navigate('Home', { screen: 'SignIn' })` from the item screen |
 
-### 7.2 Shared parts (stream S3)
+### 7.2 Shared parts (stream SW3)
 
 | File | Props | Behaviour |
 | --- | --- | --- |
@@ -525,7 +530,7 @@ There is no sixth tab. Every `navigate()` the swap screens make is to a route re
 | `src/components/SwapBlockedSheet.tsx` | `{ visible; onClose }` | Lists `listSwapBlocks()` with Unblock; empty text "You haven't blocked anyone from swaps." |
 | `src/components/SwapSettingsSection.tsx` | none | For Settings, signed-in only. Reads `getSwapSettings()` with `.catch` (Settings tests mock only auth), renders nothing when swaps are unavailable. When `communityAvailable` and the server's terms version equals `SWAP_TERMS_VERSION` (otherwise the row is hidden: the member could not be shown what they would agree to): a "Community swaps" switch row. Turning on opens `SwapJoinCommunitySheet`; turning off confirms ("Your pieces go back to friends only and swaps with people who are not friends end") and calls `leaveSwapCommunity`. No navigation, no AsyncStorage |
 
-### 7.3 Listing (stream S4)
+### 7.3 Listing (stream SW4)
 
 | File | Props | Behaviour |
 | --- | --- | --- |
@@ -533,7 +538,7 @@ There is no sixth tab. Every `navigate()` the swap screens make is to a route re
 | `src/components/ListForSwapSheet.tsx` | `{ visible; item?: ClothingItem; editListing?: MySwapListing; onClose; onChanged?; onEditPiece?: (item) => void }` | With `item`: the form of 3.3. Without `item` and `editListing`: first a grid of the member's owned pieces that have a bucket photo and are not listed, then the form. With `editListing`: only the note field and Save (`updateSwapListingNote`). Single-line note (140), `returnKeyType="done"`. Uses `publishSwapListing` and maps its errors; `unsupported_image` and `photo_too_large` show "Replace photo" (calls `onEditPiece`) instead of a retry; `listing_held` shows its message and no retry |
 | `src/components/MyPiecesList.tsx` | `{ onChanged?: () => void }` | The member's listings from `listMySwapListings`: photo, name, audience and status badges, open offers count, stale nudge with "Update" (republish with the current audience), "Edit note" (opens `ListForSwapSheet` with `editListing`), "Renew", "Withdraw" (confirm), "Narrow to friends" for Community listings. "Open another piece" button opens `ListForSwapSheet` without an item |
 
-### 7.4 The rack (stream S5)
+### 7.4 The rack (stream SW5)
 
 | File | Props | Behaviour |
 | --- | --- | --- |
@@ -542,33 +547,33 @@ There is no sixth tab. Every `navigate()` the swap screens make is to a route re
 | `src/screens/SwapBoardScreen.tsx` | route params | 3.4 and the state table in 3.10; menu opens guidelines, blocked sheet, email support |
 | `src/screens/SwapListingScreen.tsx` | route params | Large photo, owner line, facts from `listingFacts`, note, "Offer a swap" (or "This is your piece" with "See in My swaps" when `mine`), "More from <owner>" (browse with `sameOwnerAs`, up to 10), ellipsis opening `SwapSafetySheet`. `swap_unavailable`: "No longer available" with a way back. After a block it goes back |
 
-### 7.5 Inbox and thread (stream S6)
+### 7.5 Inbox and thread (stream SW6)
 
 | File | Props | Behaviour |
 | --- | --- | --- |
 | `src/components/SwapTicket.tsx` | `{ detail: SwapDetail }` | Two columns "You give" and "You get" with `SwapPhoto`, name, size, condition; a status badge; a handoff line while accepted |
 | `src/components/SwapCompleteSheet.tsx` | `{ visible; giveNames; getNames; busy; onConfirm({ keepGiven }); onClose }` | "Only tap this once you have actually swapped. <get> will be added to your closet, and <give> will be removed from it." with a switch "Keep mine in my closet" (default off) and buttons "Yes, we swapped!" and "Not yet" |
 | `src/screens/MySwapsScreen.tsx` | route params | Segments Swaps and My pieces (`MyPiecesList`). Swaps: sections in `BUCKET_ORDER`, rows with thumbnail, `swapTitle`, other label, `SwapStatusBadge`, a dot when `attention`. Past is limited to 10 with "Show older". Menu as on the board. Pull to refresh |
-| `src/screens/SwapThreadScreen.tsx` | route params | Header with the other member's label and an ellipsis opening `SwapSafetySheet` (`refType: 'swap'`); `SwapTicket`; a status line (`closedExplanation` when closed); action buttons drawn only from `actions` (Accept, Decline, Cancel offer or Cancel swap, "We swapped!"; "Cancel swap" is also offered after the other member has tapped, with the confirmation "They already tapped We swapped!. Cancel only if you didn't hand your piece over."); `closedExplanation` receives `iDone`; the collapsible "Swap safely" card; messages (system lines from `systemLineText`, the other member's messages long-press to report with `messageId`, payment-talk warning chip); quick-reply chips; a multiline composer (500, counter, "Send message") that keeps its text on failure. Polls every `SWAP_THREAD_POLL_MS` while focused and active, merging by message id. On `swap_terms_required` opens `SwapTermsSheet` and retries the action after acceptance. On open, if `photoPending` or `removalPending` items exist, shows a "Finish up" banner and tries once automatically. After finishing: "Swapped!" with "See it in my closet" |
+| `src/screens/SwapThreadScreen.tsx` | route params | Header with the other member's label and an ellipsis opening `SwapSafetySheet` (`refType: 'swap'`); `SwapTicket`; a status line (`closedExplanation` when closed); action buttons drawn only from `actions` (Accept, Decline, Cancel offer or Cancel swap, "We swapped!"; "Cancel swap" is also offered after the other member has tapped, with the confirmation "They already tapped We swapped!. Cancel only if you didn't hand your piece over."); `closedExplanation` receives `iDone`; the collapsible "Swap safely" card; messages (system lines from `systemLineText`, the other member's messages long-press to report with `messageId`, payment-talk warning chip); quick-reply chips; a multiline composer (500, counter, "Send message") that keeps its text on failure. **The composer has its own accessory id**, not the shared one: the file exports `SWAP_MESSAGE_ACCESSORY_ID = 'smartcloset-swap-message-done'`, puts `inputAccessoryViewID={SWAP_MESSAGE_ACCESSORY_ID}` on the field, renders exactly one `<KeyboardActionBar nativeID={SWAP_MESSAGE_ACCESSORY_ID} label="Done" onPress={() => Keyboard.dismiss()} />` and no `<KeyboardDoneBar />`. The reason is `SwapSafetySheet`, opened from this screen while the composer is mounted: it renders a `KeyboardDoneBar` with the shared id, and two accessory views with one id on screen can leave the composer without its bar when the sheet closes (`quality-ratings.md` 6.2 explains the same hazard on the item screen). `keyboardGuard.test` accepts this (a multiline field with its own `inputAccessoryViewID`) Polls every `SWAP_THREAD_POLL_MS` while focused and active, merging by message id. On `swap_terms_required` opens `SwapTermsSheet` and retries the action after acceptance. On open, if `photoPending` or `removalPending` items exist, shows a "Finish up" banner and tries once automatically. After finishing: "Swapped!" with "See it in my closet" |
 
 ### 7.6 Accessibility labels the tests rely on
 
 `Go back`, `My swaps`, `Swap menu`, `Friends`, `Community`, `Open <name>`, `Report or block <ownerLabel>`, `Offer a swap`, `Send offer`, `Accept`, `Decline`, `Cancel offer`, `Cancel swap`, `We swapped`, `Message`, `Send message`, `Report details`, `Open to swap`, `Withdraw`, `Renew`, `Update`, and the text of each quick reply.
 
-### 7.7 What the lead adds to shared files (one serialised pass, after S0 to S6 have merged)
+### 7.7 What pass B adds to shared files (one serialised pass, after SW0 to SW6 and the ratings pass A have merged)
 
-No engineer edits these files. Several of them are also edited by the ratings design, so **the order of the passes matters and is settled in 10.1**: the ratings integration pass goes first, and the swap pass starts from the tree it leaves. The diffs in Appendix D are written against that tree (generated from a simulation of the ratings edits in `quality-ratings.md` 6.3 and 5.9; line numbers in a diff are only hints, the context lines are the anchors, and `patch` applies by context). If the ratings pass is not in yet, the same edits go at the same landmarks of today's file. Every change below was applied to a copy of the repo and the existing suites for that file were run against it (results in the last column).
+No stream but pass B edits these files (the one row that names another stream, `backupService.ts`, says so). Several of them are also edited by the ratings design, so **the order of the passes matters and is settled in 10.1**: the ratings integration pass goes first, and the swap pass starts from the tree it leaves. The diffs in Appendix D are written against that tree (generated from a simulation of the ratings edits in `quality-ratings.md` 6.3; line numbers in a diff are only hints, the context lines are the anchors, and `patch` applies by context). If the ratings pass is not in yet, the same edits go at the same landmarks of today's file. Every change below was applied to a copy of the repo and the existing suites for that file were run against it (results in the last column).
 
 | File | Change | Diff | Existing suites run with the change |
 | --- | --- | --- | --- |
-| `App.tsx` | Four imports after the `BrandReportScreen` import that the ratings pass adds after `FriendClosetScreen` (after `FriendClosetScreen` itself if the ratings pass is not in), four `Stack.Screen` entries in `HomeStack` right after `FriendCloset` | `lead_app.diff` | `navigationRoutes`, `addItemHeader`, `keyboardGuard`, `App`, `AppModeGate`: pass |
-| `src/screens/HomeScreen.tsx` | `const swapBadge = useSwapBadge(isAuthenticated);` and one more cell, "Swap", inside the existing signed-in spread | `lead_home.diff` | `HomeScreen`, `homeWardrobeFor`, `WishlistSeparation`, `wardrobeTotalStrip`: pass |
-| `src/screens/ItemDetailsScreen.tsx` | `<SwapListingCard ... />` in its own `!item.isWishlist &&` block **directly after the `ItemQualityCard` element**, which the ratings pass puts directly after the `ItemValueCard` block (card order under the value card: `ItemQualityCard`, then `SwapListingCard`); callbacks `handleEdit`, `navigate('Home', { screen: 'MySwaps' })`, `navigate('Home', { screen: 'SignIn' })`. The import goes directly after the `@react-navigation/native` import, so it never touches the four imports the ratings pass adds at the end of the block | `lead_item.diff` | `ItemDetails`, `ItemDetailsValue`, `categoryLabelsShown`: pass (with a stand-in card that behaves as specified in 7.3) |
-| `src/screens/SettingsScreen.tsx` | `{isAuthenticated && <SwapSettingsSection />}` as the last child of the Community section, after the `isAuthenticated &&` block that holds "Share product details" (and, after the ratings pass, `<RatingSharingRows />`); the delete-account text names both features' data: "... all clothing items, outfits, ratings, body profile, stylist data, swap listings, offers and messages, and any uploaded images ..." | `lead_settings.diff` | `Settings`, `settingsWardrobeFor`: pass |
-| `src/screens/FriendClosetScreen.tsx` | "Pieces open to swap" row as the list header | `lead_friendcloset.diff` | no test exists for this screen; type-checked |
-| `src/services/authService.ts`, `src/services/accountDeletion.ts` | `clearSwapPhotoCache()` next to `clearSignedImageCache()` | `lead_account.diff` | `authService`, `accountDeletion`, `imageUrls`, `localData`: pass |
-| `src/services/backupService.ts` (stream S0) | The optional `swap` section. It does **not** touch `BACKUP_VERSION`: the bump to `'1.1'` is made once by the ratings pass (or, if swap lands first, by this edit, and the ratings pass then drops it) | Appendix C | `backupService`, `backupSwapExport`: pass |
-| `__tests__/screens/keyboardScreens.test.tsx` | Add cases (this test lists screens explicitly): SwapThread (`avoiding`), SwapOfferSheet (`lift`), ListForSwapSheet (`lift`), SwapSafetySheet reached through Report (`lift`), SwapJoinCommunitySheet (`lift`), SwapBoard search (`below`). Append-only, after the ratings cases | written by the lead against the finished components | itself |
+| `App.tsx` | Four imports after the `BrandReportScreen` import that the ratings pass adds after `FriendClosetScreen` (after `FriendClosetScreen` itself if the ratings pass is not in), four `Stack.Screen` entries in `HomeStack` right after `FriendCloset` | `pass_b_app.diff` | `navigationRoutes`, `addItemHeader`, `keyboardGuard`, `App`, `AppModeGate`: pass |
+| `src/screens/HomeScreen.tsx` | `const swapBadge = useSwapBadge(isAuthenticated);` and one more cell, "Swap", inside the existing signed-in spread | `pass_b_home.diff` | `HomeScreen`, `homeWardrobeFor`, `WishlistSeparation`, `wardrobeTotalStrip`: pass |
+| `src/screens/ItemDetailsScreen.tsx` | `<SwapListingCard ... />` in its own `!item.isWishlist &&` block **directly after the `ItemQualityCard` element**, which the ratings pass puts directly after the `ItemValueCard` block (card order under the value card: `ItemQualityCard`, then `SwapListingCard`); callbacks `handleEdit`, `navigate('Home', { screen: 'MySwaps' })`, `navigate('Home', { screen: 'SignIn' })`. The import goes directly after the `@react-navigation/native` import, so it never touches the four imports the ratings pass adds at the end of the block | `pass_b_item.diff` | `ItemDetails`, `ItemDetailsValue`, `categoryLabelsShown`: pass (with a stand-in card that behaves as specified in 7.3) |
+| `src/screens/SettingsScreen.tsx` | `{isAuthenticated && <SwapSettingsSection />}` as the last child of the Community section, after the `isAuthenticated &&` block that holds "Share product details" (and, after the ratings pass, `<RatingSharingRows />`); the delete-account text names both features' data: "... all clothing items, outfits, ratings, body profile, stylist data, swap listings, offers and messages, and any uploaded images ...", and so does the Danger Zone note: "Permanently deletes your account, wardrobe, ratings, body profile, swap listings and messages, and all uploaded images. Cannot be undone." | `pass_b_settings.diff` | `Settings`, `settingsWardrobeFor`: pass |
+| `src/screens/FriendClosetScreen.tsx` | "Pieces open to swap" row as the list header | `pass_b_friendcloset.diff` | no test exists for this screen; type-checked |
+| `src/services/authService.ts`, `src/services/accountDeletion.ts` | `clearSwapPhotoCache()` next to `clearSignedImageCache()` | `pass_b_account.diff` | `authService`, `accountDeletion`, `imageUrls`, `localData`: pass |
+| `src/services/backupService.ts` (stream SW0, **wave 1, before both passes**) | The optional `swap` section **and** the bump of `BACKUP_VERSION` to `'1.1'`, made here once; the ratings pass A later adds only its own `ratings` section above the swap lines | Appendix C (against today's file) | `backupService`, `backupSwapExport`: pass |
+| `__tests__/screens/keyboardScreens.test.tsx` | Add cases (this test lists screens explicitly): SwapThread (`avoiding`, with `doneId: SWAP_MESSAGE_ACCESSORY_ID`, the optional field pass A adds), SwapOfferSheet (`lift`), ListForSwapSheet (`lift`), SwapSafetySheet reached through Report (`lift`), SwapJoinCommunitySheet (`lift`), SwapBoard search (`below`). Append-only, after the ratings cases | written by pass B against the finished components | itself |
 
 Three things the run taught, all load-bearing:
 
@@ -576,7 +581,7 @@ Three things the run taught, all load-bearing:
 - Components mounted in `ItemDetailsScreen` and `SettingsScreen` must not use navigation hooks or read anything but their own props and the swap service. Those screens' tests mock navigation minimally and mock `supabase` with only `auth` (Settings) or not at all (ItemDetails), so a guest path that returns before any call, and `.catch` on every read, are what keep them green.
 - The two features' edits to one file are different edits at different landmarks, but a diff written against today's file stops applying once the other feature's edit is in (the swap card's diff had the value card's closing `)}` in its context, which the ratings card now follows). That is why the order is fixed and the diffs are regenerated against the tree after the first pass.
 
-After each pass the lead runs everything in 9.4, and the ratings design's list of existing suites.
+After each pass the lead runs everything in 9.4, and the ratings design's list of existing suites. The `Stack.Screen` lines, the item card and the Settings lines are pass B's; the version bump and the swap export are not (they were SW0's, in wave 1).
 
 
 ---
@@ -585,9 +590,9 @@ After each pass the lead runs everything in 9.4, and the ratings design's list o
 
 Policy first: the owner's stated order is policy, then build. Everything in this section ships before the build is distributed (gate G1).
 
-### 8.1 `docs/privacy.html` (stream S7)
+### 8.1 `docs/privacy.html` (stream POL)
 
-The page is edited once with both features' text (10.1 has the combined wording where the two edit the same sentence). Apply the swap part from the diff in Appendix D (`privacy.diff`). In summary it:
+The page is edited once with both features' text (10.1 has the combined wording where the two edit the same sentence). Apply the swap part from the diff in Appendix D (`privacy.diff`; the lines both features edit already carry the combined wording of 10.1, which wins if the two ever differ). POL does this in the same edit as the ratings text. In summary it:
 
 - updates the date and the introduction;
 - adds size, condition, care instructions and country of origin to the Wardrobe content row (the foundation migration added them and the page never said so);
@@ -612,11 +617,11 @@ Test: `__tests__/privacyManifest.test.ts` (Appendix F) fails if the page loses i
 - `COMMUNITY_GUIDELINES` (Friends) and its "Only add people you know" rule are not changed: the friends feature is unchanged, and swaps have their own guidelines. This avoids a false statement when the community tier opens.
 - `friendService`, `UserSafetySheet`, `BlockedUsersSheet` and `FriendsScreen` are not touched, so their tests are unaffected.
 
-### 8.3 iOS privacy manifest and App Store Connect (stream S7 and the lead)
+### 8.3 iOS privacy manifest and App Store Connect (stream POL; App Store Connect is the owner's, by hand)
 
-- `ios/smartcloset/PrivacyInfo.xcprivacy`: add the data type `NSPrivacyCollectedDataTypeEmailsOrTextMessages` (linked, not tracking, app functionality). The diff is `plist.diff` in Appendix D; the file was parsed as a property list afterwards. Photos, other user content, user id, name and email are already declared; tracking stays false; no push, so no device identifier. `NSPrivacyCollectedDataTypePurchaseHistory` is arguably already owed for prices stored today; add it in the same edit if the owner agrees.
-- `Info.plist`: no change. Camera and photo strings stay accurate.
-- App Store Connect, by hand: the privacy label must match the manifest (add Emails or Text Messages, linked, app functionality); the age-rating questionnaire now has user-generated content and messaging answered yes; confirm the resulting tier on screen (the wording changes between questionnaire versions).
+- `ios/smartcloset/PrivacyInfo.xcprivacy`: add the data type `NSPrivacyCollectedDataTypeEmailsOrTextMessages` (linked, not tracking, app functionality). The diff is `plist.diff` in Appendix D; the file was parsed as a property list afterwards. Photos, other user content, user id, name and email are already declared; tracking stays false; no push, so no device identifier. `NSPrivacyCollectedDataTypePurchaseHistory` is owed for the prices the app stores today (cost and retail price): the diff adds it in the same edit (linked, not tracking, app functionality), and the App Store Connect label gets "Purchase History" to match. **Default taken** until the owner says otherwise (12.2, question 12).
+- `Info.plist`: no change for swaps (POL edits ratings' two strings in the same pass, 10.1). The camera and photo strings stay accurate.
+- App Store Connect, by hand: the privacy label must match the manifest (add Emails or Text Messages and Purchase History, both linked, app functionality); the age-rating questionnaire now has user-generated content and messaging answered yes; confirm the resulting tier on screen (the wording changes between questionnaire versions).
 - App Review notes: describe where swaps are (Home, Swap), that listings, threads and messages have Report and Block, that new reports are reviewed by a person with the aim of 24 hours (and that the reviewer is alerted by an hourly message while any wait, G5), that the terms and guidelines are in app, that contact is the support address, and that the community tier is switched off on the server for this build (change this text if it is switched on before submission). Say exactly what filtering is live. In the friends-only build that is: scam and payment wording is refused in every text field the other person reads (built into the database, applied to folded text), and reports and blocks. Do **not** say that an objectionable-term list or the photo safety check is in force until it is: the term list (at least 50 reviewed terms) and the Google photo check belong to the community tier and are loaded and switched on at G6. If the owner loads the list before submission (open question 3), the notes may claim it. Demo account credentials are entered in App Store Connect only, never in a file. Provide two demo accounts that are friends with a few pieces each.
 
 ### 8.4 Consent
@@ -649,51 +654,52 @@ The feature records no events, view counts, search terms, device identifiers or 
 
 ## 9. Test plan
 
-Rule for everyone: add new test files; do not edit existing test files except where section 7.7 says the lead does. Signed-in UI cannot be driven in the simulator (it cannot type passwords), so signed-in flows are Jest with mocked services, and database behaviour is the BEGIN/ROLLBACK scripts.
+Rule for everyone: add new test files; do not edit existing test files except where section 7.7 says pass B (or, for the pieces it names, another stream) does. Signed-in UI cannot be driven in the simulator (it cannot type passwords), so signed-in flows are Jest with mocked services, and database behaviour is the BEGIN/ROLLBACK scripts.
 
 ### 9.1 Written and passing (Appendix F)
 
 | File | Stream | What it proves |
 | --- | --- | --- |
-| `__tests__/functions/jpegMetadata.test.ts` | S2 | Location, camera, comments, IPTC, multi-picture data and trailing bytes are removed; picture data is byte for byte; colour profile and Adobe flag kept; rotation preserved as a 36-byte Exif block; progressive scans; idempotent; truncated and non-JPEG input rejected |
-| `__tests__/functions/pngMetadata.test.ts` | S2 | Text, Exif, XMP, time, size, private and animation chunks and trailing bytes removed; header, palette, transparency, colour chunks and pixel data kept byte for byte across several pixel chunks; idempotent; wrong signature, missing header, no pixel data, zero size, a bad checksum on a kept chunk, an unknown critical chunk and truncation refused |
-| `__tests__/functions/sameSecret.test.ts` | S2 | The same secret is accepted; any other value, a different length, a missing side and a hand-made token that only claims to be the service role are refused |
-| `__tests__/functions/swapModeration.test.ts` | S2 | Thresholds for adult, violence, medical, racy; large face rejected, small printed face allowed; every malformed answer fails closed, including an UNKNOWN verdict for any of the four judged categories, an unknown word, and a `faceAnnotations` that is not a list; no `faceAnnotations` (the normal "no face" answer) passes |
-| `__tests__/functions/swapMediaFunction.test.ts` | S2 | Source-text rules: strict request fields; path from the database; check, then download, upload, commit in order; JPEG or PNG chosen by the first bytes, each stored with its own content type; only community photos go to Google and every failure path is 503; commit failure removes the object; the sweep compares the bearer token with the service key as a secret and never decodes it; logs are fixed strings |
-| `__tests__/services/swapService.test.ts` | S0 | Guests fail before any call; every function's rpc name and parameters; terms and community join always send `SWAP_TERMS_VERSION`, whatever a caller tries to pass; mapping; cursor and page size; error mapping with detail and hint; publish error parsing; the whole hand-off (photo copy, retry, give up, keep mine, removal failure) |
-| `__tests__/services/swapErrors.test.ts` | S0 | Every code, rate-limit bucket, PGRST202, offline; messages never contain codes, the word "block" or "report" for neutral endings; `listing_held` and "Replace the photo" wording |
-| `__tests__/services/swapPhotoUrls.test.ts` | S0 | Ten minute links, reuse, nothing written to AsyncStorage, forget and clear, quiet failure |
-| `__tests__/utils/swapFormat.test.ts` | S0 | Statuses from each side, neutral wording for `unavailable`, what a cancellation means to a member who already tapped, system lines, listing facts, titles, uuid shape |
-| `__tests__/hooks/useSwapBadge.test.tsx`, `useSwapAccess.test.tsx` | S0 | Count, signed-out, failure silence; each access state; terms acceptance sends no version (the service sends the build's); a newer server version, an older one, and a member who agreed on another phone all give `update_required` and record nothing; paused and suspended still win |
-| `__tests__/components/SwapPhoto.test.tsx`, `SwapStatusBadge.test.tsx` | S3 | Link, placeholder, one refresh then give up; status words |
-| `__tests__/swapMigrations.test.ts` | S1 | RLS and revokes on all ten tables; no policies on swap tables; the one storage policy; private bucket, JPEG and PNG; exact list of functions granted to `authenticated` and to `service_role`; search_path pinned; old friend and account functions untouched; cascades and the two set-null participants; no private column in any result list; the policy drop, the bucket flag and the term list stay out of the migrations folder, and the two held files stay one statement each; the prerequisite table is created only if missing; text is folded before any rule reads it; holds are sticky (no expiry of held, `held_by`, suspension release limited, `listing_held`); one validator used before and after the photo copy; cancel by whoever has not tapped; blocked pairs never filtered out |
-| `__tests__/migrationVersions.test.ts` | S1 | Every file in `supabase/migrations` has a version and no two share one (the version is the primary key `supabase db push` keeps); the swap range holds only swap files; held files are not migrations. Covers every feature that adds migrations, the ratings design included |
-| `__tests__/swapRulesInStepWithSql.test.ts` | S1 | `SWAP_LIMITS`, text lengths, terms version, report reasons and alias pattern equal what the SQL says |
-| `__tests__/privacyManifest.test.ts` | S7 | Manifest declares swap messages and still tracks nothing; the policy has its swap section and no longer says photos are only available to you and friends; the page does not claim "private storage" for original photos until the bucket has been made private (G0) |
+| `__tests__/functions/jpegMetadata.test.ts` | SW2 | Location, camera, comments, IPTC, multi-picture data and trailing bytes are removed; picture data is byte for byte; colour profile and Adobe flag kept; rotation preserved as a 36-byte Exif block; progressive scans; idempotent; truncated and non-JPEG input rejected |
+| `__tests__/functions/pngMetadata.test.ts` | SW2 | Text, Exif, XMP, time, size, private and animation chunks and trailing bytes removed; header, palette, transparency, colour chunks and pixel data kept byte for byte across several pixel chunks; idempotent; wrong signature, missing header, no pixel data, zero size, a bad checksum on a kept chunk, an unknown critical chunk and truncation refused |
+| `__tests__/functions/sameSecret.test.ts` | SW2 | The same secret is accepted; any other value, a different length, a missing side and a hand-made token that only claims to be the service role are refused |
+| `__tests__/functions/swapModeration.test.ts` | SW2 | Thresholds for adult, violence, medical, racy; large face rejected, small printed face allowed; every malformed answer fails closed, including an UNKNOWN verdict for any of the four judged categories, an unknown word, and a `faceAnnotations` that is not a list; no `faceAnnotations` (the normal "no face" answer) passes |
+| `__tests__/functions/swapMediaFunction.test.ts` | SW2 | Source-text rules: strict request fields; path from the database; check, then download, upload, commit in order; JPEG or PNG chosen by the first bytes, each stored with its own content type; only community photos go to Google and every failure path is 503; commit failure removes the object; the sweep compares the bearer token with the service key as a secret and never decodes it; logs are fixed strings |
+| `__tests__/services/swapService.test.ts` | SW0 | Guests fail before any call; every function's rpc name and parameters; terms and community join always send `SWAP_TERMS_VERSION`, whatever a caller tries to pass; mapping; cursor and page size; error mapping with detail and hint; publish error parsing; the whole hand-off (photo copy, retry, give up, keep mine, removal failure) |
+| `__tests__/services/backupSwapExport.test.ts` | SW0 | The swap section is included when the server can be read, left out for a guest, offline or a server without swaps (the export still succeeds), the file version is `1.1`, and restoring a backup with a swap section ignores it |
+| `__tests__/services/swapErrors.test.ts` | SW0 | Every code, rate-limit bucket, PGRST202, offline; messages never contain codes, the word "block" or "report" for neutral endings; `listing_held` and "Replace the photo" wording |
+| `__tests__/services/swapPhotoUrls.test.ts` | SW0 | Ten minute links, reuse, nothing written to AsyncStorage, forget and clear, quiet failure |
+| `__tests__/utils/swapFormat.test.ts` | SW0 | Statuses from each side, neutral wording for `unavailable`, what a cancellation means to a member who already tapped, system lines, listing facts, titles, uuid shape |
+| `__tests__/hooks/useSwapBadge.test.tsx`, `useSwapAccess.test.tsx` | SW0 | Count, signed-out, failure silence; each access state; terms acceptance sends no version (the service sends the build's); a newer server version, an older one, and a member who agreed on another phone all give `update_required` and record nothing; paused and suspended still win |
+| `__tests__/components/SwapPhoto.test.tsx`, `SwapStatusBadge.test.tsx` | SW3 | Link, placeholder, one refresh then give up; status words |
+| `__tests__/swapMigrations.test.ts` | SW1 | RLS and revokes on all ten tables; no policies on swap tables; the one storage policy; private bucket, JPEG and PNG; exact list of functions granted to `authenticated` and to `service_role`; search_path pinned; old friend and account functions untouched; cascades and the two set-null participants; no private column in any result list; the policy drop, the bucket flag and the term list stay out of the migrations folder until released (the policy drop is Q0's file and is only read here; a released one appears once, in release form, never beside a held copy), and the two held files stay one statement each; the prerequisite table is created only if missing; text is folded before any rule reads it; holds are sticky (no expiry of held, `held_by`, suspension release limited, `listing_held`); one validator used before and after the photo copy; cancel by whoever has not tapped; blocked pairs never filtered out |
+| `__tests__/migrationVersions.test.ts` | Q0 (one file for both features; the text is in Appendix F) | Every file in `supabase/migrations` has a version and no two share one (the version is the primary key `supabase db push` keeps); the ratings range and the swap range hold only their own files; held files are not migrations, and a released one is accepted only as `<14 digits>_<name>.sql` with no second copy in `supabase/held`. Covers every feature that adds migrations |
+| `__tests__/swapRulesInStepWithSql.test.ts` | SW1 | `SWAP_LIMITS`, text lengths, terms version, report reasons and alias pattern equal what the SQL says |
+| `__tests__/privacyManifest.test.ts` | POL | Manifest declares swap messages and purchase history, and still tracks nothing; the policy has its swap section and no longer says photos are only available to you and friends; the page does not claim "private storage" for original photos until the bucket has been made private (G0) |
 
 ### 9.2 To be written by the UI streams (names are fixed so merges do not collide)
 
-S3 (`__tests__/components/`):
+SW3 (`__tests__/components/`):
 - `SwapSafetySheet.test.tsx`: menu offers Report and Block and not Remove friend; the report walk calls `reportSwapContent({ refType, refId, reason, details, messageId })`; shows the thanks text; block calls `blockSwapMember` then `onBlocked`; errors use `swapErrorMessage`; a result arriving after dismissal is ignored; state resets when reopened; exactly one `KeyboardDoneBar` and `inputAccessoryViewID` on the details field.
 - `SwapTermsSheet.test.tsx`: all six headings; "I agree" calls `acceptSwapTerms()` (no version) then `onAccepted`; mismatch message; never opened by a screen in `update_required`.
 - `SwapJoinCommunitySheet.test.tsx`: Join disabled until alias (3 or more) and both ticks; trims the alias; calls `joinSwapCommunity` without a version; maps `alias_taken`, `alias_invalid`, `account_too_new`.
 - `SwapBlockedSheet.test.tsx`, `SwapGuidelinesSheet.test.tsx`, `SwapSettingsSection.test.tsx` (renders nothing when `getSwapSettings` rejects or community is unavailable; hides the community switch when the server's terms version is not `SWAP_TERMS_VERSION`; join and leave flows; no `console.error` with only auth mocked).
 
-S4:
+SW4:
 - `SwapListingCard.test.tsx`: guest shows the sign-in line and calls `onSignIn` with no rpc; open, listed, locked, held, expired, stale states; disabled without a photo; renders no `TextInput`; silent when swaps are paused or not deployed.
 - `ListForSwapSheet.test.tsx`: preview; Community chip only when available; picking it before joining opens the join step; publish called with audience and note; `photo_rejected`/`people`, `listing_incomplete`, `moderation_unavailable`, `listing_held` messages; `unsupported_image` and `photo_too_large` offer "Replace photo" (calls `onEditPiece`) and no retry; note capped at 140; busy state; edit-note mode.
 - `MyPiecesList.test.tsx`: rows, renew, withdraw (confirm), narrow, update, empty state.
 
-S5:
+SW5:
 - `SwapCard.test.tsx`: the menu button is a sibling of the card button, not a descendant.
 - `SwapOfferSheet.test.tsx`: one to three selectable, a fourth ignored; stranger pieces disabled unless Community; at most two extras; `clientRef` identical across a failed and a retried send; error messages; `keyboardDoneProps` and one bar.
 - `SwapBoardScreen.test.tsx`: every access state in 3.10; skeleton; empty friends and community; filters re-query; paging cursor; `LoadError` full and banner; `friendId` param; segment hidden unless available; card press and menu.
 - `SwapListingScreen.test.tsx`: facts; offer button versus "This is your piece"; unavailable state; goes back after a block.
 
-S6:
+SW6:
 - `SwapTicket.test.tsx`, `SwapCompleteSheet.test.tsx` (keep-mine switch passes `keepGiven`).
 - `MySwapsScreen.test.tsx`: section order, the dot, past limited to ten, empty state, error, pieces segment.
-- `SwapThreadScreen.test.tsx`: buttons come only from `actions` (including "Cancel swap" for the member who has not tapped after the other has, with its confirmation); accept returning `unavailable` shows the message; the composer keeps text on failure and reuses `clientRef`; polling with fake timers merges by id; "We swapped!" calls `completeSwapHandoff` with `keepGiven`; "Finish up" banner; terms retry; long-press report passes `messageId`; closed swap has no composer; a swap with a blocked member opens as a closed shell with no photos and no buttons; payment warning chip; exactly one `KeyboardDoneBar`.
+- `SwapThreadScreen.test.tsx`: buttons come only from `actions` (including "Cancel swap" for the member who has not tapped after the other has, with its confirmation); accept returning `unavailable` shows the message; the composer keeps text on failure and reuses `clientRef`; polling with fake timers merges by id; "We swapped!" calls `completeSwapHandoff` with `keepGiven`; "Finish up" banner; terms retry; long-press report passes `messageId`; closed swap has no composer; a swap with a blocked member opens as a closed shell with no photos and no buttons; payment warning chip; exactly one `KeyboardActionBar` whose `nativeID` equals the composer's `inputAccessoryViewID` and is not the shared id, and no `KeyboardDoneBar`.
 
 ### 9.3 SQL behaviour scripts (Appendix E)
 
@@ -712,7 +718,7 @@ Run with `scripts/run-swap-sql-tests.sh` (Appendix D). Each scenario is one tran
 
 The scenario scripts do not apply the held files. To run them: on a real local stack, `supabase db reset` (applies every file in `supabase/migrations`, the prerequisite included; without it `s4_deletion` cannot pass) and then `SWAP_TEST_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres scripts/run-swap-sql-tests.sh`; against the linked project, the same script without the variable, which uses `supabase db query --linked`. The scripts only ever `create` inside a transaction they roll back; after a live run, check that `select to_regclass('t.log')` is null.
 
-### 9.4 Existing suites to run after each stream and after the lead's pass
+### 9.4 Existing suites to run after each stream and after pass B
 
 - Guards (under a second): `npx jest __tests__/navigationRoutes.test.ts __tests__/screens/keyboardGuard.test.tsx __tests__/addItemHeader.test.ts`.
 - Home: `HomeScreen`, `homeWardrobeFor`, `WishlistSeparation`, `wardrobeTotalStrip`, `AppModeGate`, `App`.
@@ -724,27 +730,27 @@ The scenario scripts do not apply the held files. To run them: on a real local s
 
 ### 9.5 Manual walkthrough on two real phones (TestFlight, ship gate G4)
 
-Two accounts that are friends, A and B, and a stranger C. Check, in order: terms sheet; open a piece with a geotagged photo and confirm the stored copy has no location (download it from the bucket in the dashboard and inspect it); B sees it and signs a link that stops working after about ten minutes; B offers; A accepts; both pieces vanish from the rack; message both ways and see the 15 second refresh; payment wording is refused; A taps "We swapped!" and B's piece appears in A's closet with its photo (kill the app halfway on one attempt and finish from "Finishing touches"); B taps it; both closets are right and the given pieces are gone; delete a piece mid-swap; block mid-swap and see the neutral message on the other phone; report a listing and a message and see the rows in the dashboard queue with evidence; delete B's account and see A's record read "Former member"; C sees nothing. Also: list a piece whose photo is a screenshot (a PNG) and see it appear for B; put one of your own listings on hold from the dashboard and confirm the owner cannot renew, withdraw or list it again; as A, tap "We swapped!" and see that B can still cancel (and that A then sees the explanation); block B and confirm B's phone still shows the swap, closed and neutral. Repeat the report and block steps with the community tier on, using aliases.
+Two accounts that are friends, A and B, and a stranger C. Check, in order: terms sheet; open a piece with a geotagged photo and confirm the stored copy has no location (download it from the bucket in the dashboard and inspect it); B sees it and signs a link that stops working after about ten minutes; B offers; A accepts; both pieces vanish from the rack; message both ways and see the 15 second refresh; payment wording is refused; A taps "We swapped!" and B's piece appears in A's closet with its photo (kill the app halfway on one attempt and finish from "Finishing touches"); B taps it; both closets are right and the given pieces are gone; delete a piece mid-swap; block mid-swap and see the neutral message on the other phone; report a listing and a message and see the rows in the dashboard queue with evidence; delete B's account and see A's record read "Former member"; C sees nothing. Also: list a piece whose photo is a screenshot (a PNG) and see it appear for B; put one of your own listings on hold from the dashboard and confirm the owner cannot renew, withdraw or list it again; as A, tap "We swapped!" and see that B can still cancel (and that A then sees the explanation); block B and confirm B's phone still shows the swap, closed and neutral. Repeat the report and block steps with the community tier on, using aliases. On a physical iPhone, type in the thread composer, open the report sheet from the thread menu, close it, and confirm the composer still shows its Done bar (Jest cannot see two accessory views fighting over one id; the composer's own id, 7.5, is what prevents it).
 
 ---
 
 ## 10. Implementation streams, file ownership and merge order
 
-Eight streams plus the lead. No file appears twice. A stream edits only the files it owns; to use another stream's file it imports it through the contract in sections 6 and 7 and mocks it in its own tests. Agents share one working tree and must not commit; the lead merges.
+Seven build streams (SW0 to SW6), the shared policy stream POL and integration pass B, run together with the ratings design's streams (BUILD-PLAN.md has the combined table and the waves). No file appears twice: where a file has to change twice, the changes are ordered passes (10.1). A stream edits only the files it owns; to use another stream's file it imports it through the contract in sections 6 and 7 and mocks it in its own tests. Agents share one working tree and must not commit; the lead merges. This document's earlier names for the streams were S0 to S7 and "the lead".
 
 | Stream | Owns | Needs | Done when |
 | --- | --- | --- | --- |
-| **S0 Contract** (first) | `src/types/swap.ts`, `src/config/swapRules.ts`, `src/services/swapErrors.ts`, `src/services/swapPhotoUrls.ts`, `src/services/swapService.ts`, `src/utils/swapFormat.ts`, `src/hooks/useSwapBadge.ts`, `src/hooks/useSwapAccess.ts`, `src/services/backupService.ts` (swap section; the version bump belongs to whichever of the ratings and swap passes lands first, 10.1), tests `__tests__/services/swapErrors.test.ts`, `swapPhotoUrls.test.ts`, `swapService.test.ts`, `__tests__/utils/swapFormat.test.ts`, `__tests__/hooks/useSwapBadge.test.tsx`, `useSwapAccess.test.tsx`, `__tests__/services/backupSwapExport.test.ts` | nothing | Appendix C files are in place and their tests pass under the repo's own Jest and `tsc`; **the consent fix is in and merged before S3 to S6 start, because they all import the hook**: `useSwapAccess` has the `update_required` state, `acceptSwapTerms()` and `joinSwapCommunity()` send `SWAP_TERMS_VERSION` and take no version; `backupService` exports the `swap` section (`try/catch`, omitted on failure, never fails the export) with a new test |
-| **S1 Database** | the prerequisite `supabase/migrations/20261015000000_styling_recommendations_if_missing.sql`, the five swap migrations `20261015000100` to `20261015000500`, the held `supabase/held/wardrobe_images_private.sql` and (unless the ratings stream has already added the identical file) `supabase/held/drop_legacy_friend_wardrobe_policy.sql`, everything in `supabase/tests/swaps/`, `scripts/run-swap-sql-tests.sh`, `__tests__/swapMigrations.test.ts`, `__tests__/swapRulesInStepWithSql.test.ts`, `__tests__/migrationVersions.test.ts` | S0 (the rules test imports `swapRules.ts`) | **First task, before anything else is trusted: `supabase start`, `supabase db reset`, then the scripts, on the real local stack.** Check on it: (1) the prerequisite table matches the live `styling_recommendations` (compare columns; correct the file); (2) the `wardrobe-images` bucket exists locally (run the held bucket file once, or create it private); (3) the fixture inserts into `auth.users` (id, email, name, created date only) are accepted by the real table and its triggers; (4) `pg_cron`, `pg_net` and Vault may be absent locally: `swap_send_report_digest()` must return false and nothing else may depend on them; (5) the default grants for `anon`, `authenticated` and `service_role` and row-level security on `storage.objects` are as the stub assumed; (6) the database is UTF-8 with a locale that treats non-Latin letters as letters (the text filter uses `normalize` and `[[:alnum:]]`; the Cyrillic term in `s5_moderation_community` fails under a C locale). Then: scripts pass against the local database; migrations applied twice cleanly; `supabase db push --dry-run` lists exactly the six files; a `supabase db query --linked` dry run of `s6_catalog` passes; **applying to the live project is the lead's act (gate G2)** |
-| **S2 Edge** | `supabase/functions/swap-media/index.ts`, `supabase/functions/_shared/jpegMetadata.ts`, `supabase/functions/_shared/pngMetadata.ts`, `supabase/functions/_shared/sameSecret.ts`, `supabase/functions/_shared/swapModeration.ts`, `supabase/functions/delete-account/index.ts` (the diff), `supabase/config.toml` (add `[functions.swap-media] verify_jwt = true`), `.github/workflows/swap-sweep.yml` (only if `pg_cron` is unavailable), `__tests__/functions/*` | S1 function names (contract only) | Tests pass; function deployed to a test project and a publish (a JPEG and a PNG), a Community rejection and a sweep exercised once by hand, including a sweep with a hand-made token, which must be refused; **deploy to the live project is gate G3** |
-| **S3 Shared UI** | `src/components/SwapPhoto.tsx`, `SwapStatusBadge.tsx`, `SwapSafetySheet.tsx`, `SwapGuidelinesSheet.tsx`, `SwapTermsSheet.tsx`, `SwapJoinCommunitySheet.tsx`, `SwapBlockedSheet.tsx`, `SwapSettingsSection.tsx`, tests in `__tests__/components/` | S0 | Props as in 7.2; tests in 9.1 and 9.2; the guard tests pass |
-| **S4 Listing UI** | `src/components/SwapListingCard.tsx`, `ListForSwapSheet.tsx`, `MyPiecesList.tsx`, tests | S0, S3 | As 7.3; the card proven inside a rendered `ItemDetailsScreen` in a scratch test (zero text fields, no network as a guest) |
-| **S5 Rack UI** | `src/components/SwapCard.tsx`, `SwapOfferSheet.tsx`, `src/screens/SwapBoardScreen.tsx`, `src/screens/SwapListingScreen.tsx`, tests | S0, S3 | As 7.4 |
-| **S6 Inbox and thread UI** | `src/components/SwapTicket.tsx`, `SwapCompleteSheet.tsx`, `src/screens/MySwapsScreen.tsx`, `src/screens/SwapThreadScreen.tsx`, tests | S0, S3, S4 (`MyPiecesList` by its props only) | As 7.5 |
-| **S7 Policy and compliance** | `docs/privacy.html`, `ios/smartcloset/PrivacyInfo.xcprivacy`, `docs/MODERATION.md`, `__tests__/privacyManifest.test.ts` | the owner's decisions in section 12 | Files changed as the diffs and the combined wording in 10.1 say; `docs/MODERATION.md` as in 11.4; **published before the build (gate G1)**. Collects the owner's objectionable-term list (at least 50 reviewed terms, needed before the community switch) and hands it to the lead as the dashboard statement of 11.4 or as a new migration with a later version (never as an edit to an applied file) |
-| **Lead** (last) | `App.tsx`, `src/screens/HomeScreen.tsx`, `src/screens/ItemDetailsScreen.tsx`, `src/screens/SettingsScreen.tsx`, `src/screens/FriendClosetScreen.tsx`, `src/services/authService.ts`, `src/services/accountDeletion.ts`, `__tests__/screens/keyboardScreens.test.tsx` | all of the above | The lines in 7.7 and the checks in 9.4; applies migrations, deploys functions, App Store Connect |
+| **SW0 Contract** (W1, first) | `src/types/swap.ts`, `src/config/swapRules.ts`, `src/services/swapErrors.ts`, `src/services/swapPhotoUrls.ts`, `src/services/swapService.ts`, `src/utils/swapFormat.ts`, `src/hooks/useSwapBadge.ts`, `src/hooks/useSwapAccess.ts`, `src/services/backupService.ts` (the whole of the Appendix C diff against today's file: the swap section **and** the bump of `BACKUP_VERSION` to `'1.1'`; the ratings pass A adds its own section later and never touches the version), tests `__tests__/services/swapErrors.test.ts`, `swapPhotoUrls.test.ts`, `swapService.test.ts`, `__tests__/utils/swapFormat.test.ts`, `__tests__/hooks/useSwapBadge.test.tsx`, `useSwapAccess.test.tsx`, `__tests__/services/backupSwapExport.test.ts` | nothing | Appendix C files are in place and their tests pass under the repo's own Jest and `tsc`; **the consent fix is in and merged before SW3 to SW6 start, because they all import the hook**: `useSwapAccess` has the `update_required` state, `acceptSwapTerms()` and `joinSwapCommunity()` send `SWAP_TERMS_VERSION` and take no version; `backupService` exports the `swap` section (`try/catch`, omitted on failure, never fails the export) with a new test |
+| **POL Policy and compliance** (W1; shared with ratings, whose spec stream 9 it is) | `docs/privacy.html`, `ios/smartcloset/PrivacyInfo.xcprivacy`, `ios/smartcloset/Info.plist` (ratings' two strings), `docs/MODERATION.md`, `__tests__/privacyManifest.test.ts`, and the ratings policy tests `__tests__/docs/privacyPolicy.test.ts`, `__tests__/config/privacyManifest.test.ts`, `__tests__/config/infoPlist.test.ts` (written together with the one above; none asserts the other feature's superseded text) | the owner's decisions in section 12, each with a default in BUILD-PLAN.md | Files changed as the diffs and the combined wording in 10.1 say; `docs/MODERATION.md` as in 11.4; **published before the build (gate G1)**. Collects the owner's objectionable-term list (at least 50 reviewed terms, needed before the community switch) and hands it to the lead as the dashboard statement of 11.4 or as a new migration with a later version (never as an edit to an applied file) |
+| **SW1 Database** (W2) | the prerequisite `supabase/migrations/20261015000000_styling_recommendations_if_missing.sql`, the five swap migrations `20261015000100` to `20261015000500`, the held `supabase/held/wardrobe_images_private.sql`, everything in `supabase/tests/swaps/`, `scripts/run-swap-sql-tests.sh`, `__tests__/swapMigrations.test.ts`, `__tests__/swapRulesInStepWithSql.test.ts`. **Not SW1's:** `supabase/held/drop_legacy_friend_wardrobe_policy.sql` and `__tests__/migrationVersions.test.ts` belong to Q0 (ratings foundation, wave 1); SW1 reads them and never creates or edits them | SW0 (the rules test imports `swapRules.ts`); Q0's two files above, already in place | **First task, before anything else is trusted: `supabase start`, `supabase db reset`, then the scripts, on the real local stack. In this build that stack is not available to the agent: the scripts run on a scratch PostgreSQL 16 with the Supabase stub described in section 0, and checks (1) to (6) below that need the real stack are listed in SW1's report for the lead, not claimed.** Check on it: (1) the prerequisite table matches the live `styling_recommendations` (compare columns; correct the file); (2) the `wardrobe-images` bucket exists locally (run the held bucket file once, or create it private); (3) the fixture inserts into `auth.users` (id, email, name, created date only) are accepted by the real table and its triggers; (4) `pg_cron`, `pg_net` and Vault may be absent locally: `swap_send_report_digest()` must return false and nothing else may depend on them; (5) the default grants for `anon`, `authenticated` and `service_role` and row-level security on `storage.objects` are as the stub assumed; (6) the database is UTF-8 with a locale that treats non-Latin letters as letters (the text filter uses `normalize` and `[[:alnum:]]`; the Cyrillic term in `s5_moderation_community` fails under a C locale). Then: scripts pass against the local database; migrations applied twice cleanly; `supabase db push --dry-run` lists exactly the six files (in the combined release it lists those six plus the three ratings files, BUILD-PLAN.md; SW1 does not run it); a `supabase db query --linked` dry run of `s6_catalog` passes; **applying to the live project is the lead's act (gate G2)** |
+| **SW2 Edge** (W2) | `supabase/functions/swap-media/index.ts`, `supabase/functions/_shared/jpegMetadata.ts`, `supabase/functions/_shared/pngMetadata.ts`, `supabase/functions/_shared/sameSecret.ts`, `supabase/functions/_shared/swapModeration.ts`, `supabase/functions/delete-account/index.ts` (the diff), `supabase/config.toml` (add `[functions.swap-media] verify_jwt = true`), `.github/workflows/swap-sweep.yml` (only if `pg_cron` is unavailable), `__tests__/functions/*` | SW1 function names (contract only; SW1 is in the same wave) | Tests pass; function deployed to a test project and a publish (a JPEG and a PNG), a Community rejection and a sweep exercised once by hand, including a sweep with a hand-made token, which must be refused; **deploy to the live project is gate G3** |
+| **SW3 Shared UI** (W3) | `src/components/SwapPhoto.tsx`, `SwapStatusBadge.tsx`, `SwapSafetySheet.tsx`, `SwapGuidelinesSheet.tsx`, `SwapTermsSheet.tsx`, `SwapJoinCommunitySheet.tsx`, `SwapBlockedSheet.tsx`, `SwapSettingsSection.tsx`, tests in `__tests__/components/` | SW0 | Props as in 7.2; tests in 9.1 and 9.2; the guard tests pass |
+| **SW4 Listing UI** (W4) | `src/components/SwapListingCard.tsx`, `ListForSwapSheet.tsx`, `MyPiecesList.tsx`, tests | SW0, SW3 | As 7.3; the card proven inside a rendered `ItemDetailsScreen` in a scratch test (zero text fields, no network as a guest) |
+| **SW5 Rack UI** (W4) | `src/components/SwapCard.tsx`, `SwapOfferSheet.tsx`, `src/screens/SwapBoardScreen.tsx`, `src/screens/SwapListingScreen.tsx`, tests | SW0, SW3 | As 7.4 |
+| **SW6 Inbox and thread UI** (W4) | `src/components/SwapTicket.tsx`, `SwapCompleteSheet.tsx`, `src/screens/MySwapsScreen.tsx`, `src/screens/SwapThreadScreen.tsx`, tests | SW0, SW3, SW4 (`MyPiecesList` by its props only; SW4 is in the same wave, so mock it) | As 7.5 |
+| **Pass B** (integration; the lead's stream, after wave 4 and after the ratings pass A) | `App.tsx` (four imports, four `HomeStack` routes), `src/screens/HomeScreen.tsx`, `src/screens/ItemDetailsScreen.tsx` (the card), `src/screens/SettingsScreen.tsx` (the section and the two strings), `src/screens/FriendClosetScreen.tsx`, `src/services/authService.ts`, `src/services/accountDeletion.ts`, `__tests__/screens/keyboardScreens.test.tsx` (appended cases) | all of the above, and pass A | The lines in 7.7 and the checks in 9.4; applies migrations, deploys functions, App Store Connect |
 
-Merge order: S0, then S1, then S2 and S7 (any time after S1 for S2; S7 has no code dependency and should go as early as the owner's text is ready), then S3, S4, S5, S6, then the lead (after the ratings integration pass, 10.1). Streams S4, S5 and S6 can be built in parallel with each other once S3's props are fixed, because they meet only at the documented props.
+Waves (the ratings streams in brackets): W1 is SW0 and POL (Q0); W2 is SW1 and SW2 (Q1, Q2, Q6); W3 is SW3 (Q5, Q7); W4 is SW4, SW5 and SW6 (Q3, Q4); then the ratings pass A, then pass B. SW1 and SW2 meet only at the function names; SW4, SW5 and SW6 meet only at the documented props (SW6 mocks `MyPiecesList`), so streams inside a wave run in parallel. POL has no code dependency and goes with W1 so that the policy is ready first.
 
 Shared rules of engagement for the UI streams:
 
@@ -755,28 +761,31 @@ Shared rules of engagement for the UI streams:
 
 ### 10.1 What this design shares with the quality-ratings design
 
-`documentation/design/quality-ratings.md` (read for this revision as it stood on 2026-10-13, 17:12) is a second feature built at the same time. Its sections 4.1, 4.9 and 10.2 describe the same overlaps from its side. If either document changes, redo this section and those three in the same change. What is settled:
+`documentation/design/quality-ratings.md` (reconciled with this document on 2026-10-13; `documentation/design/BUILD-PLAN.md` holds the combined stream table, the waves and the release order) is a second feature built at the same time. Its sections 4.1, 4.9 and 10.2 describe the same overlaps from its side. If either document changes, redo this section and those three, and BUILD-PLAN.md, in the same change. What is settled:
 
 | Topic | Settled | Where |
 | --- | --- | --- |
-| Migration versions | Swaps: `20261015000000` to `20261015000500`. Ratings: `20261016000000` to `20261016000399`. A held file takes a release-day version later than every file in the folder. `__tests__/migrationVersions.test.ts` fails on any duplicate version. (`quality-ratings.md` 4.1, 4.9, 10.2 and question 12 still quote the old swap range `20261014000000` to `20261014000600`; update those four mentions there; the ranges do not collide either way) | 4.1; ratings 4.1 |
-| Consent | Swap keeps its own, on `swap_members`, and does not use `consent_purposes`, `user_consents` or `consent_in_force()`; ratings does not use `swap_members`. Both record the version of the text the member was shown and refuse a stale one. (Ratings 4.1 says its consents file goes "before swaps": swaps do not use it, so that ordering is not needed) | 8.4; ratings 4.4, 4.9 |
+| Migration versions | Ratings: `20261014000000` to `20261014000399`. Swaps: `20261015000000` to `20261015000500`. The ratings files sort first and both features' files go in one `supabase db push`. A held file takes a release-day version later than every file in the folder and may enter the folder only in that release form. `__tests__/migrationVersions.test.ts` (Q0's, one file for both features) fails on a duplicate version or a file inside the other feature's range. The ranges are the same in both documents now | 4.1; ratings 4.1, 4.9, 10.2 |
+| Consent | Swap keeps its own, on `swap_members`, and does not use `consent_purposes`, `user_consents` or `consent_in_force()`; ratings does not use `swap_members`. Both record the version of the text the member was shown and refuse a stale one. Swaps do not use the ratings consents file, so nothing is ordered around it | 8.4; ratings 4.4, 4.9 |
 | Database objects | No table, function or view name is used by both | ratings 4.9 |
-| The legacy friends policy drop | One file, `supabase/held/drop_legacy_friend_wardrobe_policy.sql`, never in the migrations folder; released once, by the procedure in 4.1. Swaps do not depend on it | 4.1; ratings 4.3 |
-| Order of the passes on shared files | The ratings integration pass (its stream 10) first, then the swap lead pass, one pass per file at a time. The swap diffs are written against the tree after the ratings pass. If swap must land first, the ratings pass rebases onto it at the same landmarks | 7.7; ratings 10.2 |
+| The legacy friends policy drop | One file, `supabase/held/drop_legacy_friend_wardrobe_policy.sql`, **owned by Q0** (text in ratings 4.3), not in the migrations folder until the owner releases it once, by the procedure in 4.1, when it leaves `supabase/held/`. Swaps keep no copy and do not depend on it | 4.1; ratings 4.3 |
+| Order of the passes on shared files | Ratings pass A (its spec stream 10) first, then swap's pass B, one pass per file at a time. Pass B's diffs for `App.tsx`, the item screen and Settings are written against the tree after pass A. `backupService.ts` is the one exception: SW0 edits it in wave 1, pass A follows | 7.7; ratings 10.2 |
 | Cards on Item Details | Under the value card: `ItemQualityCard`, then `SwapListingCard` | 7.7; ratings 6.3 |
-| `BACKUP_VERSION` | `'1.1'`, bumped once by whichever pass lands first; the other adds only its optional section | 4.7; ratings 5.9 |
-| Settings | `<RatingSharingRows />` right after the "Share product details" row; `<SwapSettingsSection />` as the last child of the Community section; one delete-account sentence naming both | 7.7; ratings 6.3 |
-| `docs/privacy.html` | Edited once, by one person, with both features' text, and published before either build is submitted. One "Last updated" date. Where both edit the same sentence the combined wording below is used. `__tests__/privacyManifest.test.ts` (here) and `__tests__/docs/privacyPolicy.test.ts` (ratings) are written together; neither asserts the other feature's superseded text | below |
-| `PrivacyInfo.xcprivacy` | Swap adds `EmailsOrTextMessages` (and `PurchaseHistory` if the owner agrees); ratings changes nothing | 8.3; ratings 8.3 |
-| `Info.plist` | Ratings only (camera and photo strings) | ratings 8.3 |
-| `keyboardScreens.test.tsx` | Append-only: each feature appends its cases at the end; the `doneId` change is made once, by the ratings pass | 7.7; ratings 6.5 |
+| `BACKUP_VERSION` | `'1.1'`, bumped once, by SW0 (wave 1); ratings pass A adds only its optional section | 4.7; ratings 5.9 |
+| Settings | `<RatingSharingRows />` right after the "Share product details" row; `<SwapSettingsSection />` as the last child of the Community section; the delete-account alert and the Danger Zone note each name both features' data, edited by pass A and then pass B | 7.7; ratings 6.3, 10.2 |
+| `docs/privacy.html` | Edited once, by POL, with both features' text, and published before either build is submitted. One "Last updated" date. Where both edit the same sentence the combined wording below is used (the Appendix D diff already carries it for those lines). `__tests__/privacyManifest.test.ts` (here) and `__tests__/docs/privacyPolicy.test.ts` (ratings) are POL's and are written together; neither asserts the other feature's superseded text | below |
+| `PrivacyInfo.xcprivacy` | POL adds `EmailsOrTextMessages` and `PurchaseHistory` (default taken, 8.3); ratings adds nothing | 8.3; ratings 8.3 |
+| `Info.plist` | Ratings' camera and photo strings, edited by POL | ratings 8.3 |
+| `keyboardScreens.test.tsx` | Append-only: pass A first (the `doneId` change is made once, there), pass B appends its cases at the end | 7.7; ratings 6.5 |
+| `supabase/audit.sql` | Q1 only. Swap's tables have row-level security and no policies by design, so the audit's "no policies" check would flag them; they are never added to its owner-table list (`s6_catalog.sql` and `swapMigrations.test.ts` cover them) | ratings 4.1, 10.2 |
+| `supabase/config.toml`, `delete-account` | SW2 only (`[functions.swap-media]`, the photo cleanup diff); ratings adds nothing | 5.1; ratings 10.2 |
+| `package.json`, `package-lock.json`, `jest.config.js`, `tsconfig*.json` | Neither feature edits them | ratings 10 |
 
 Combined wording for `docs/privacy.html`, by landmark (the swap-only text is the diff in Appendix D; the ratings text is `quality-ratings.md` 8.2):
 
 | Landmark | Combined wording |
 | --- | --- |
-| Last updated | The publish date of the combined page |
+| Last updated | The publish date of the combined page (the date in the Appendix D diff is an example) |
 | Introduction | The swap sentence ("...optionally connect with a personal stylist or friends and swap pieces of clothing with them") |
 | Wardrobe content row | The ratings wording, which already covers the swap fields: "Photos of clothing; brand, color, material, price, size, condition, care instructions and country of origin you enter or scan; the text of a tag you scan; your private notes" |
 | New table rows | After "Social & marketplace": Label scans, Quality ratings, Your agreement (ratings), then Clothing swaps (swap) |
@@ -785,8 +794,9 @@ Combined wording for `docs/privacy.html`, by landmark (the swap-only text is the
 | Community & safety | The swap sentence about the copy of a listing or of the last 30 messages, then the ratings sentence about reporting a brand score |
 | Delete your account | "...(wardrobe items, outfits, ratings, style profile, friend connections, swap listings, offers and messages) from our systems. Copies in routine backups are overwritten on their normal schedule" plus the real backup window once known |
 | Children's privacy | "Community swaps are for people 18 and over. Adding ratings to brand insights is for people 18 or older." |
-| Sections | "Clothing swaps (optional)" (with its own retention table) and "Quality ratings and brand insights (optional)"; the ratings "How long we keep it" section gets one line pointing to the swap table |
-| Usage & diagnostics row | Changed once, by the ratings pass (swap leaves it) |
+| Sections | After "Shared product database (optional)": "Quality ratings and brand insights (optional)", then "Clothing swaps (optional)" (with its own retention table); the ratings "How long we keep it" section gets one line pointing to the swap table |
+| Label scans sentence | "visible only to you" only if the legacy policy drop has been released (a `*_drop_legacy_friend_wardrobe_policy.sql` is in `supabase/migrations/`) on the day POL publishes; otherwise the fallback in ratings 8.2, and the page is edited again when the drop is released |
+| Usage & diagnostics row | Changed once, by POL (swap leaves it; the build has no crash SDK, ratings 8.2) |
 
 ---
 
@@ -794,9 +804,11 @@ Combined wording for `docs/privacy.html`, by landmark (the swap-only text is the
 
 ### 11.1 Order
 
+The gates below can be worked in any order up to the build, but the build waits for G1 to G5. `documentation/design/BUILD-PLAN.md` fixes the combined order with the ratings work: apply the migrations (G2), publish the privacy page (G1), deploy `swap-media` (G3), build, then the switches.
+
 1. **G0 Storage claim (before G1 where possible; it never blocks swaps).** The second review's catalogue query on the linked project showed `wardrobe-images` flagged public (re-run it first: `select id, public from storage.buckets where id = 'wardrobe-images'`), so the privacy page must not call the original photos private until this passes. Steps: (a) confirm the oldest build still in use shows photos through signed links (`src/services/imageUrls.ts`, commit `ec5956c`, 2026-10-02: builds from then on sign; an older build shows the stored address and would lose its photos); (b) release `supabase/held/wardrobe_images_private.sql` by the procedure in 4.1 (it creates the bucket private or flags it private, so the repository owns the flag); (c) fetch an existing photo's public address with no credentials (`curl -s -o /dev/null -w '%{http_code}' <address>`): it must not be 200; (d) open your own closet and a friend's closet on the oldest build in use: photos still load. Until G0 passes, the page carries the reworded sentence (8.1) and says nothing about private storage for originals. If the owner decides not to flip the flag, the wording stays as it is.
-2. **G1 Policy:** S7 merged and `docs/privacy.html` published (it is served from GitHub Pages at `PRIVACY_POLICY_URL`) with both features' text (10.1); App Store Connect label and age rating edited; review notes written (8.3: say only what filtering is live).
-3. **G2 Database:** `supabase db push --dry-run` against `ipgndphqbuftuxstoitk` must list **exactly** these files and nothing else: `20261015000000_styling_recommendations_if_missing.sql`, `20261015000100_swap_foundation.sql`, `20261015000200_swap_listings.sql`, `20261015000300_swap_lifecycle.sql`, `20261015000400_swap_moderation.sql`, `20261015000500_swap_community.sql` (plus the ratings files if that feature ships in the same release, 10.1; if the ratings files are already on the project, `db push` also needs `--include-all` for these older versions, and the dry run with that flag must still show exactly these six). Anything else in the list (a held file that was moved, a stray file) stops the release. Then `supabase db push`, before any build that contains swaps is distributed. Run the scripts against it (`scripts/run-swap-sql-tests.sh`, which uses `BEGIN ... ROLLBACK`), confirm `to_regclass('t.log')` is null afterwards. The term list and the policy drop are not part of G2.
+2. **G1 Policy:** POL merged and `docs/privacy.html` published (it is served from GitHub Pages at `PRIVACY_POLICY_URL`) with both features' text (10.1); App Store Connect label and age rating edited; review notes written (8.3: say only what filtering is live).
+3. **G2 Database:** `supabase db push --dry-run` against `ipgndphqbuftuxstoitk` must list **exactly** these files and nothing else: `20261015000000_styling_recommendations_if_missing.sql`, `20261015000100_swap_foundation.sql`, `20261015000200_swap_listings.sql`, `20261015000300_swap_lifecycle.sql`, `20261015000400_swap_moderation.sql`, `20261015000500_swap_community.sql`, preceded, when the ratings files have not been pushed yet, by `20261014000000_ratings_hardening.sql`, `20261014000200_consents_and_quota.sql` and `20261014000300_quality_ratings.sql` (BUILD-PLAN.md: in the combined release the list is those nine, in that order, with no `--include-all`). If the ratings files are already on the project, the list is the six swap files and the swap versions are newer, so no flag is needed; if swap were pushed first on its own, the later ratings push would need `--include-all` and a dry run read first. Anything else in the list (a held file that was moved, a stray file) stops the release. Then `supabase db push`, before any build that contains swaps is distributed. Run the scripts against it (`scripts/run-swap-sql-tests.sh`, which uses `BEGIN ... ROLLBACK`), confirm `to_regclass('t.log')` is null afterwards. The term list and the policy drop are not part of G2.
 4. **G3 Functions:** deploy `swap-media` and the updated `delete-account` (`supabase functions deploy swap-media delete-account`); the existing `GOOGLE_VISION_API_KEY` secret is reused. Prove the sweep check once: a POST of `{"action":"sweep"}` with a hand-made unsigned token (`role: service_role` in its payload) must be refused (401 from the platform while `verify_jwt` is on, 403 from the function itself if it is ever turned off), and the same POST with the service key must answer 200.
 5. **G4 Two-account TestFlight walkthrough** (9.5), including one real `createSignedUrls` call from the second phone and the geotagged photo check.
 6. **G5 Scheduling and alerting (required before the build):** schedule the sweep and the report alert (11.3). Verify the alert once with a real test report: it must reach the person who will review reports. Until the sweep is scheduled, the policy's retention wording is "about" and member reads still run the upkeep, so nothing is wrong, only slower to delete; the alert has no such fallback, which is why it gates the build.
@@ -836,7 +848,7 @@ Each hour, if any report about a swap listing or conversation has waited more th
 
 Fallback for the sweep: `.github/workflows/swap-sweep.yml` (Appendix D), which needs the service key as a GitHub secret. Prefer the first; the key is powerful. The alert has no fallback in this design: if `pg_cron`, `pg_net` or Vault is missing, someone must read `swap_moderation_queue` on a schedule (put it in the owner's calendar), or the 24-hour aim in `SWAP_TERMS`, `SWAP_GUIDELINES` and the safety sheet is reworded to "as soon as we can" until an alert exists.
 
-### 11.4 `docs/MODERATION.md` (stream S7 writes this file with this content)
+### 11.4 `docs/MODERATION.md` (stream POL writes this file with this content)
 
 ```markdown
 # Swap moderation
@@ -915,6 +927,8 @@ Rate counters are per member, so many accounts can still send spam; the answers 
 
 ### 12.2 Open questions
 
+Until the owner answers, `documentation/design/BUILD-PLAN.md` lists the default taken for each question here and in the ratings design, so the build does not wait.
+
 1. Is a friends-only first release acceptable, with the community tier switched on later? (Recommended. If not, section 11.1 step 8 (G6) moves before the build, and the report queue must be staffed first.)
 2. Who reviews reports within 24 hours, and where should the hourly alert go (a chat webhook, an email gateway)? The alert is built (`swap_send_report_digest`) and needs only that address in Vault; without it nobody is told when a report arrives.
 3. Who supplies and approves the objectionable-term list (at least 50 terms) before the community switch can turn on? And do you want it loaded before the first submission, so the review notes can claim a term filter? Without it the first build claims only the built-in scam and payment filtering (8.3).
@@ -931,7 +945,7 @@ Rate counters are per member, so many accounts can still send spam; the answers 
 14. Do you want editing an open offer (revise) in the first release rather than cancel and resend?
 15. When the ratings feature is built: should a completed swap invite a rating of the received piece? Nothing in this design reads swap data for any rating, brand or analytics purpose, and a swap hand-off creates a new closet row with no rating, note or tag text (the ratings design agrees, its 4.9).
 16. Is the built-in filtering (scam, payment and contact wording, applied to folded text) enough for App Review guideline 1.2 on the friends-only first build, or do you want the term list loaded first? This decides whether 8.3 may claim a term filter.
-17. Does the live `styling_recommendations` table match the definition in `documentation/SUPABASE_MIGRATION_GUIDE.md` that the prerequisite migration uses? (S1 compares the columns and corrects the file before it merges; on the live project the file does nothing.)
+17. Does the live `styling_recommendations` table match the definition in `documentation/SUPABASE_MIGRATION_GUIDE.md` that the prerequisite migration uses? (SW1 compares the columns and corrects the file before it merges; on the live project the file does nothing.)
 
 ---
 
@@ -993,12 +1007,12 @@ Every file below was run or compiled as described in section 0. The path on the 
 
 | Appendix | Contents | Streams |
 | --- | --- | --- |
-| A | The six migration files (a prerequisite and five swap files) and the two held files (the policy drop and the bucket flag), which `supabase db push` never applies | S1 |
-| B | `swap-media`, its four pure helpers (JPEG and PNG metadata, the secret compare, the photo decision), and the `delete-account` change | S2 |
-| C | Types, rules, errors, photo links, service, wording, hooks, the two shared components, the backup change | S0 (S3 for the two components) |
-| D | Scripts, workflow, and the diffs for policy, manifest and the lead's files | S1, S2, S7, lead |
-| E | SQL behaviour scripts | S1 |
-| F | Jest tests that are written and passing | S0, S1, S2, S3, S7 |
+| A | The six migration files (a prerequisite and five swap files) and the held bucket file, which `supabase db push` never applies; the policy drop is Q0's file (a pointer only) | SW1 (Q0 for the drop) |
+| B | `swap-media`, its four pure helpers (JPEG and PNG metadata, the secret compare, the photo decision), and the `delete-account` change | SW2 |
+| C | Types, rules, errors, photo links, service, wording, hooks, the two shared components, the backup change | SW0 (SW3 for the two components) |
+| D | Scripts, workflow, and the diffs for policy, manifest and pass B's files | SW1, SW2, POL, pass B |
+| E | SQL behaviour scripts | SW1 |
+| F | Jest tests that are written and passing | SW0, SW1, SW2, SW3, POL (`migrationVersions.test.ts` is Q0's) |
 
 
 ---
@@ -1007,7 +1021,7 @@ Every file below was run or compiled as described in section 0. The path on the 
 
 The files in `supabase/migrations` are applied in file-name order. Each is idempotent. Their header comments explain what they do and what they depend on. The two files in `supabase/held` are never applied by `supabase db push`; see 4.1 for how one is released.
 
-#### `supabase/migrations/20261015000000_styling_recommendations_if_missing.sql  (stream S1; a prerequisite that does nothing on the live project)`
+#### `supabase/migrations/20261015000000_styling_recommendations_if_missing.sql  (stream SW1; a prerequisite that does nothing on the live project)`
 
 ````sql
 -- Prerequisite for the swap migrations (and for account deletion on any new database):
@@ -1022,7 +1036,7 @@ The files in `supabase/migrations` are applied in file-name order. Each is idemp
 --
 -- This creates the table, with row-level security on and the two policies of that guide, only when it
 -- is missing. On the live project the table exists, so the whole block does nothing. The definition
--- below is the guide's. Before this file merges, stream S1 compares it with the live table
+-- below is the guide's. Before this file merges, stream SW1 compares it with the live table
 -- (select column_name, data_type, is_nullable from information_schema.columns where table_schema =
 -- 'public' and table_name = 'styling_recommendations') and corrects this file to match; the three
 -- columns delete_user_account() uses are id, client_id and stylist_id.
@@ -1063,7 +1077,7 @@ end
 $$;
 ````
 
-#### `supabase/migrations/20261015000100_swap_foundation.sql  (stream S1)`
+#### `supabase/migrations/20261015000100_swap_foundation.sql  (stream SW1)`
 
 ````sql
 -- Clothing swaps, part 1 of 5: foundation.
@@ -2196,7 +2210,7 @@ revoke all on function public.can_view_swap_photo(text) from public, anon;
 grant execute on function public.can_view_swap_photo(text) to authenticated;
 ````
 
-#### `supabase/migrations/20261015000200_swap_listings.sql  (stream S1)`
+#### `supabase/migrations/20261015000200_swap_listings.sql  (stream SW1)`
 
 ````sql
 -- Clothing swaps, part 2 of 5: settings, listings and the rack.
@@ -2798,7 +2812,7 @@ revoke all on function public.swap_known_photo_paths(text[]) from public, anon, 
 grant execute on function public.swap_known_photo_paths(text[]) to service_role;
 ````
 
-#### `supabase/migrations/20261015000300_swap_lifecycle.sql  (stream S1)`
+#### `supabase/migrations/20261015000300_swap_lifecycle.sql  (stream SW1)`
 
 ````sql
 -- Clothing swaps, part 3 of 5: proposals, threads and the hand-off.
@@ -3537,7 +3551,7 @@ end
 $$;
 ````
 
-#### `supabase/migrations/20261015000400_swap_moderation.sql  (stream S1)`
+#### `supabase/migrations/20261015000400_swap_moderation.sql  (stream SW1)`
 
 ````sql
 -- Clothing swaps, part 4 of 5: reports, blocks and moderation tools.
@@ -4038,7 +4052,7 @@ revoke all on public.swap_moderation_queue from public, anon, authenticated;
 grant select on public.swap_moderation_queue to service_role;
 ````
 
-#### `supabase/migrations/20261015000500_swap_community.sql  (stream S1)`
+#### `supabase/migrations/20261015000500_swap_community.sql  (stream SW1)`
 
 ````sql
 -- Clothing swaps, part 5 of 5: the community tier (members who are not friends).
@@ -4178,41 +4192,17 @@ end
 $$;
 ````
 
-#### `supabase/held/drop_legacy_friend_wardrobe_policy.sql  (stream S1; held: never applied by `supabase db push`; the same file as quality-ratings.md 4.3)`
+#### `supabase/held/drop_legacy_friend_wardrobe_policy.sql  (stream Q0, not SW1; held: never applied by `supabase db push`)`
+
+This file is owned by Q0, the ratings foundation stream, and its text is the one in `quality-ratings.md` 4.3. It is not repeated here so that there is a single source: the one statement is
 
 ````sql
--- GATED. This file lives in supabase/held/, outside supabase/migrations, so `supabase db push` can never
--- apply it by accident (db push applies every pending file in supabase/migrations in version order and has
--- no way to hold one back). It is the same file as quality-ratings.md 4.3: whichever of the two features
--- adds it first creates it, with the one statement below; the other leaves it alone. Swaps do not depend on
--- it, and neither does the ratings migration work; Phase 1 of the ratings design (scan text) does.
---
--- Retire the table-level friends policy on clothing_items. Accepted friends already read each other's
--- closets through get_friend_closet(), which lists its columns by name. This older policy still lets a
--- friend SELECT every column of the other person's owned rows through the table API: what they paid,
--- private notes, wear history and the size, condition and tag text added later. Row-level security cannot
--- hide single columns, so there is no narrower policy to write instead.
---
--- Do not release until the owner has confirmed that no build still in use reads a friend's clothing_items
--- rows directly. Every build since the friend-closet RPC (20261005000100) calls get_friend_closet(); an
--- older build would show an empty friend closet after this runs.
---
--- To release:
---   newest=$(ls supabase/migrations | grep -oE '^[0-9]{14}' | sort | tail -1)
---   now=$(date -u +%Y%m%d%H%M%S); v=$(( now > newest ? now : newest + 1 ))
---   mv supabase/held/drop_legacy_friend_wardrobe_policy.sql \
---      supabase/migrations/${v}_drop_legacy_friend_wardrobe_policy.sql
---   supabase db push --dry-run     # must list exactly this one file
---   supabase db push
--- The new version is later than every migration already applied; a version older than the newest applied
--- one is skipped by db push unless --include-all is passed (do not pass it without reading the dry run).
---
--- Safe to run twice.
-
 drop policy if exists "Friends can view each other's wardrobe" on public.clothing_items;
 ````
 
-#### `supabase/held/wardrobe_images_private.sql  (stream S1; held: released by gate G0, never by `db push`)`
+SW1 neither creates nor edits the file. `__tests__/swapMigrations.test.ts` reads it (or, once the owner has released it, its release form in `supabase/migrations/`) and fails if it holds anything but that statement; `supabase/tests/swaps/s7_legacy_policy.sql` repeats the same statement inline.
+
+#### `supabase/held/wardrobe_images_private.sql  (stream SW1; held: released by gate G0, never by `db push`)`
 
 ````sql
 -- GATED. This file lives in supabase/held/, outside supabase/migrations, so `supabase db push` can
@@ -4254,7 +4244,7 @@ on conflict (id) do update set public = false;
 
 The two `_shared` files import nothing, so Deno (the function) and Jest (the tests) run the same code.
 
-#### `supabase/functions/swap-media/index.ts  (stream S2)`
+#### `supabase/functions/swap-media/index.ts  (stream SW2)`
 
 ````ts
 // Supabase Edge Function: swap-media
@@ -4480,7 +4470,7 @@ Deno.serve(async (req: Request) => {
 });
 ````
 
-#### `supabase/functions/_shared/jpegMetadata.ts  (stream S2)`
+#### `supabase/functions/_shared/jpegMetadata.ts  (stream SW2)`
 
 ````ts
 /**
@@ -4624,7 +4614,7 @@ export const stripJpegMetadata = (input: Uint8Array): JpegCleanResult => {
 };
 ````
 
-#### `supabase/functions/_shared/pngMetadata.ts  (stream S2)`
+#### `supabase/functions/_shared/pngMetadata.ts  (stream SW2)`
 
 ````ts
 /**
@@ -4719,7 +4709,7 @@ export const stripPngMetadata = (input: Uint8Array): PngCleanResult => {
 };
 ````
 
-#### `supabase/functions/_shared/sameSecret.ts  (stream S2)`
+#### `supabase/functions/_shared/sameSecret.ts  (stream SW2)`
 
 ````ts
 /**
@@ -4739,7 +4729,7 @@ export const sameSecret = (a: string | null | undefined, b: string | null | unde
 };
 ````
 
-#### `supabase/functions/_shared/swapModeration.ts  (stream S2)`
+#### `supabase/functions/_shared/swapModeration.ts  (stream SW2)`
 
 ````ts
 /**
@@ -4822,7 +4812,7 @@ export const decideSwapPhoto = (a: VisionAnnotation | undefined, width: number, 
 };
 ````
 
-#### `supabase/functions/delete-account/index.ts  (stream S2; unified diff)`
+#### `supabase/functions/delete-account/index.ts  (stream SW2; unified diff)`
 
 ````diff
 --- a/supabase/functions/delete-account/index.ts
@@ -4889,7 +4879,7 @@ export const decideSwapPhoto = (a: VisionAnnotation | undefined, width: number, 
 ````
 
 
-#### `supabase/config.toml`  (stream S2; add)
+#### `supabase/config.toml`  (stream SW2; add)
 
 ````toml
 [functions.swap-media]
@@ -4901,7 +4891,7 @@ verify_jwt = true
 
 ## Appendix C: client code
 
-#### `src/types/swap.ts  (stream S0)`
+#### `src/types/swap.ts  (stream SW0)`
 
 ````ts
 /**
@@ -5154,7 +5144,7 @@ export interface SwapExport {
 }
 ````
 
-#### `src/config/swapRules.ts  (stream S0)`
+#### `src/config/swapRules.ts  (stream SW0)`
 
 ````ts
 /**
@@ -5307,7 +5297,7 @@ export const SWAP_PAUSED_MESSAGE = 'Swaps are paused right now. Please check bac
 export const SWAP_NOT_DEPLOYED_MESSAGE = 'Swaps aren’t available yet in this version. Please try again later.';
 ````
 
-#### `src/services/swapErrors.ts  (stream S0)`
+#### `src/services/swapErrors.ts  (stream SW0)`
 
 ````ts
 import type { SwapErrorCode } from '../types/swap';
@@ -5433,7 +5423,7 @@ export const swapErrorMessage = (error: unknown, fallback: string): string => {
 };
 ````
 
-#### `src/services/swapPhotoUrls.ts  (stream S0)`
+#### `src/services/swapPhotoUrls.ts  (stream SW0)`
 
 ````ts
 /**
@@ -5490,7 +5480,7 @@ export const clearSwapPhotoCache = (): void => {
 };
 ````
 
-#### `src/services/swapService.ts  (stream S0)`
+#### `src/services/swapService.ts  (stream SW0)`
 
 ````ts
 /**
@@ -5849,7 +5839,7 @@ export const getItemSwapState = async (itemId: string): Promise<{ listing: MySwa
 };
 ````
 
-#### `src/utils/swapFormat.ts  (stream S0)`
+#### `src/utils/swapFormat.ts  (stream SW0)`
 
 ````ts
 /**
@@ -5964,7 +5954,7 @@ export const swapTitle = (give: string[], get: string[]): string => {
 };
 ````
 
-#### `src/hooks/useSwapBadge.ts  (stream S0)`
+#### `src/hooks/useSwapBadge.ts  (stream SW0)`
 
 ````ts
 import { useCallback, useState } from 'react';
@@ -5995,7 +5985,7 @@ export const useSwapBadge = (enabled: boolean): number => {
 };
 ````
 
-#### `src/hooks/useSwapAccess.ts  (stream S0)`
+#### `src/hooks/useSwapAccess.ts  (stream SW0)`
 
 ````ts
 import { useCallback, useRef, useState } from 'react';
@@ -6086,7 +6076,7 @@ export const useSwapAccess = () => {
 };
 ````
 
-#### `src/components/SwapPhoto.tsx  (stream S3)`
+#### `src/components/SwapPhoto.tsx  (stream SW3)`
 
 ````tsx
 /**
@@ -6165,7 +6155,7 @@ const styles = StyleSheet.create({
 export default SwapPhoto;
 ````
 
-#### `src/components/SwapStatusBadge.tsx  (stream S3)`
+#### `src/components/SwapStatusBadge.tsx  (stream SW3)`
 
 ````tsx
 import React from 'react';
@@ -6195,32 +6185,36 @@ export const SwapStatusBadge: React.FC<SwapStatusBadgeProps> = ({ status, closed
 export default SwapStatusBadge;
 ````
 
-#### `src/services/backupService.ts  (stream S0; unified diff, against the tree after the ratings pass: 10.1)`
+#### `src/services/backupService.ts  (stream SW0, wave 1; unified diff against today's file, bump included: 10.1)`
 
 ````diff
 --- a/src/services/backupService.ts
 +++ b/src/services/backupService.ts
-@@ -7,6 +7,8 @@
+@@ -5,16 +5,20 @@
+ import { supabase } from '../config/supabase';
+ import { getClothingItems } from './storage';
  import { getSavedOutfits, type Outfit } from './outfitService';
- import { exportMyRatings } from './ratingService';
- import type { RatingsExport } from '../types/rating';
 +import { exportMySwapData } from './swapService';
 +import type { SwapExport } from '../types/swap';
  
  const STORAGE_KEY = '@smartcloset_items';
  const OUTFITS_KEY = '@smartcloset_saved_outfits';
-@@ -19,6 +21,8 @@
+-const BACKUP_VERSION = '1.0';
++const BACKUP_VERSION = '1.1';
+ 
+ export interface BackupData {
+   version: string;
+   timestamp: string;
+   items: ClothingItem[];
    outfits: Outfit[];
-   /** The member's own ratings. Absent for guests, offline, or before ratings existed. */
-   ratings?: RatingsExport;
 +  /** What the member did in swaps (their listings, swaps and own messages). Absent for guests, offline, or before swaps existed. */
 +  swap?: SwapExport;
    metadata: {
      /** Items the user owns; wishlist entries are counted in wishlistCount instead. */
      totalItems: number;
-@@ -47,12 +51,21 @@
-       ratings = undefined;
-     }
+@@ -36,11 +40,20 @@
+     // The file keeps the wishlist (a restore must bring it back), but it is not part of the closet count.
+     const ownedCount = items.filter(item => !item.isWishlist).length;
  
 +    // Swap data comes from the server and only exists for signed-in members; if it can't be read the rest still exports.
 +    let swap: SwapExport | undefined;
@@ -6235,7 +6229,6 @@ export default SwapStatusBadge;
        timestamp: new Date().toISOString(),
        items,
        outfits,
-       ...(ratings ? { ratings } : {}),
 +      ...(swap ? { swap } : {}),
        metadata: {
          totalItems: ownedCount,
@@ -6247,7 +6240,7 @@ export default SwapStatusBadge;
 
 ## Appendix D: scripts, workflow and diffs
 
-#### `scripts/run-swap-sql-tests.sh  (stream S1; mark executable)`
+#### `scripts/run-swap-sql-tests.sh  (stream SW1; mark executable)`
 
 ````bash
 #!/usr/bin/env bash
@@ -6295,7 +6288,7 @@ done
 exit $failed
 ````
 
-#### `supabase/tests/swaps/race.sh  (stream S1; mark executable; local database only)`
+#### `supabase/tests/swaps/race.sh  (stream SW1; mark executable; local database only)`
 
 ````bash
 #!/usr/bin/env bash
@@ -6373,7 +6366,7 @@ echo "$won / $lost / swaps holding a reservation: $reserved"
 [ "$won" = "first:accepted" ] && [ "$lost" = "second:unavailable" ] && [ "$reserved" = "1" ] && echo "RACE OK" || { echo "RACE FAILED" >&2; exit 1; }
 ````
 
-#### `.github/workflows/swap-sweep.yml  (stream S2; only if pg_cron is unavailable)`
+#### `.github/workflows/swap-sweep.yml  (stream SW2; only if pg_cron is unavailable)`
 
 ````yaml
 # Daily upkeep for swaps: deletes the photos of deleted listings, removes photos nothing refers to,
@@ -6403,7 +6396,7 @@ jobs:
             -d '{"action":"sweep"}'
 ````
 
-#### `docs/privacy.html  (stream S7; unified diff against today's page, merged by hand with the ratings text: 10.1)`
+#### `docs/privacy.html  (stream POL; unified diff against today's page, swap's part only: POL adds the ratings text by hand, 10.1; the lines both features edit already carry the combined wording)`
 
 ````diff
 --- a/docs/privacy.html
@@ -6423,7 +6416,7 @@ jobs:
      <tr><th>Category</th><th>What</th><th>Why</th></tr>
      <tr><td>Account</td><td>Name, email address</td><td>Sign-in via email, Google, or Apple; identifying your account</td></tr>
 -    <tr><td>Wardrobe content</td><td>Photos of clothing, brand/color/material/price you enter</td><td>The core feature — cataloging and organizing your wardrobe</td></tr>
-+    <tr><td>Wardrobe content</td><td>Photos of clothing, and the brand, color, material, size, condition, care instructions, country of origin, price and notes you enter</td><td>The core feature — cataloging and organizing your wardrobe</td></tr>
++    <tr><td>Wardrobe content</td><td>Photos of clothing; brand, color, material, price, size, condition, care instructions and country of origin you enter or scan; the text of a tag you scan; your private notes</td><td>The core feature — cataloging and organizing your wardrobe</td></tr>
      <tr><td>Style profile</td><td>Skin tone, undertone, body type, style preferences (self-reported or estimated from a photo you provide)</td><td>Personalized outfit and color recommendations</td></tr>
      <tr><td>Location</td><td>Approximate location (rounded to about 1 km), only while the app is in use. It is sent to the weather service Open-Meteo to get your forecast and is not stored by us</td><td>Weather-appropriate outfit suggestions</td></tr>
      <tr><td>Camera &amp; photo library</td><td>Access only when you choose to photograph or select an item</td><td>Adding clothing items and outfit photos</td></tr>
@@ -6437,7 +6430,7 @@ jobs:
    <p>The first time a photo would be sent, SmartCloset asks for your permission, and you can change your choice any time in <strong>Settings → Privacy → AI photo analysis</strong>. If you say no, nothing is sent and you can add items by entering the details yourself. When AI analysis is on and you photograph or search with a clothing item, the photo may be sent to third-party AI providers to identify its category, color, brand, and material, and to power reverse-image and text-based product search:</p>
    <ul>
 -    <li><strong>Google Cloud Vision API</strong> — image labeling and web/reverse-image search, and, only if you use color analysis, analysing a selfie you choose in order to estimate skin tone</li>
-+    <li><strong>Google Cloud Vision API</strong> — image labeling and web/reverse-image search, and, only if you use color analysis, analysing a selfie you choose in order to estimate skin tone. It also checks photos you list for community swaps for unsafe content and people (see Clothing swaps below); that check happens even if you turned off AI photo analysis</li>
++    <li><strong>Google Cloud Vision API</strong> — image labeling and web/reverse-image search, and, only if you use color analysis, analysing a selfie you choose in order to estimate skin tone. It also reads the text on a clothing tag you photograph, and checks photos you list for community swaps for unsafe content and people (see Clothing swaps below); the swap check happens even if you turned off AI photo analysis</li>
      <li><strong>OpenAI (GPT-4 Vision)</strong> — detailed garment identification from photos</li>
      <li><strong>Brave Search API</strong> — text-based product search results</li>
      <li><strong>Open-Meteo</strong> — weather forecast for your approximate location (no photos or personal details are sent)</li>
@@ -6473,29 +6466,41 @@ jobs:
    <h2>Your choices</h2>
    <ul>
 -    <li><strong>Delete your account</strong> — Settings → Delete Account permanently removes your account and all associated data (wardrobe items, outfits, style profile, friend connections) from our systems immediately. This cannot be undone.</li>
-+    <li><strong>Delete your account</strong> — Settings → Delete Account permanently removes your account and all associated data (wardrobe items, outfits, style profile, friend connections, swap listings, offers and messages) from our systems immediately. This cannot be undone.</li>
++    <li><strong>Delete your account</strong> — Settings → Delete Account permanently removes your account and all associated data (wardrobe items, outfits, ratings, style profile, friend connections, swap listings, offers and messages) from our systems. Copies in routine backups are overwritten on their normal schedule. This cannot be undone.</li>
      <li><strong>Location, camera, and photo access</strong> — controlled entirely through iOS Settings; the app functions without location access (weather suggestions are simply omitted).</li>
      <li><strong>Guest mode</strong> — you can use core wardrobe features without creating an account; that data stays on your device only.</li>
    </ul>
  
    <h2>Children's privacy</h2>
 -  <p>Smart Closet is not directed at children under 13, and we do not knowingly collect personal information from children under 13.</p>
-+  <p>Smart Closet is not directed at children under 13, and we do not knowingly collect personal information from children under 13. Community swaps are for people 18 and over.</p>
++  <p>Smart Closet is not directed at children under 13, and we do not knowingly collect personal information from children under 13. Community swaps are for people 18 and over. Adding ratings to brand insights is for people 18 or older.</p>
  
    <h2>Changes to this policy</h2>
    <p>If this policy changes materially, we'll update the date at the top of this page.</p>
 ````
 
-#### `ios/smartcloset/PrivacyInfo.xcprivacy  (stream S7; unified diff)`
+#### `ios/smartcloset/PrivacyInfo.xcprivacy  (stream POL; unified diff, adds the two types of 8.3)`
 
 ````diff
 --- a/ios/smartcloset/PrivacyInfo.xcprivacy
 +++ b/ios/smartcloset/PrivacyInfo.xcprivacy
-@@ -103,6 +103,18 @@
+@@ -103,6 +103,30 @@
  		</dict>
  		<dict>
  			<key>NSPrivacyCollectedDataType</key>
 +			<string>NSPrivacyCollectedDataTypeEmailsOrTextMessages</string>
++			<key>NSPrivacyCollectedDataTypeLinked</key>
++			<true/>
++			<key>NSPrivacyCollectedDataTypeTracking</key>
++			<false/>
++			<key>NSPrivacyCollectedDataTypePurposes</key>
++			<array>
++				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
++			</array>
++		</dict>
++		<dict>
++			<key>NSPrivacyCollectedDataType</key>
++			<string>NSPrivacyCollectedDataTypePurchaseHistory</string>
 +			<key>NSPrivacyCollectedDataTypeLinked</key>
 +			<true/>
 +			<key>NSPrivacyCollectedDataTypeTracking</key>
@@ -6512,7 +6517,7 @@ jobs:
  			<false/>
 ````
 
-#### `App.tsx  (lead; unified diff, against the tree after the ratings pass: 10.1)`
+#### `App.tsx  (pass B; unified diff, against the tree after the ratings pass: 10.1)`
 
 ````diff
 --- a/App.tsx
@@ -6541,7 +6546,7 @@ jobs:
          component={StylistMarketplaceScreen}
 ````
 
-#### `src/screens/HomeScreen.tsx  (lead; unified diff)`
+#### `src/screens/HomeScreen.tsx  (pass B; unified diff)`
 
 ````diff
 --- a/src/screens/HomeScreen.tsx
@@ -6578,7 +6583,7 @@ jobs:
    ];
 ````
 
-#### `src/screens/ItemDetailsScreen.tsx  (lead; unified diff, against the tree after the ratings pass: 10.1)`
+#### `src/screens/ItemDetailsScreen.tsx  (pass B; unified diff, against the tree after the ratings pass: 10.1)`
 
 ````diff
 --- a/src/screens/ItemDetailsScreen.tsx
@@ -6609,7 +6614,7 @@ jobs:
            <View style={styles.detailsSection}>
 ````
 
-#### `src/screens/SettingsScreen.tsx  (lead; unified diff, against the tree after the ratings pass: 10.1)`
+#### `src/screens/SettingsScreen.tsx  (pass B; unified diff, against the tree after the ratings pass: 10.1)`
 
 ````diff
 --- a/src/screens/SettingsScreen.tsx
@@ -6639,9 +6644,18 @@ jobs:
          </View>
  
          {/* ── Data & Backup ───────────────────────────────────────────────── */}
+@@ -650,7 +652,7 @@
+                 <Text style={[styles.dangerButtonText, { color: '#922B21' }]}>Delete Account</Text>
+               </TouchableOpacity>
+               <Text style={styles.dangerNote}>
+-                Permanently deletes your account, wardrobe, ratings, body profile, and all uploaded images. Cannot be undone.
++                Permanently deletes your account, wardrobe, ratings, body profile, swap listings and messages, and all uploaded images. Cannot be undone.
+               </Text>
+             </>
+           )}
 ````
 
-#### `src/screens/FriendClosetScreen.tsx  (lead; unified diff)`
+#### `src/screens/FriendClosetScreen.tsx  (pass B; unified diff)`
 
 ````diff
 --- a/src/screens/FriendClosetScreen.tsx
@@ -6667,7 +6681,7 @@ jobs:
              <ClothingCard item={item} />
 ````
 
-#### `src/services/accountDeletion.ts and src/services/authService.ts  (lead; unified diff)`
+#### `src/services/accountDeletion.ts and src/services/authService.ts  (pass B; unified diff)`
 
 ````diff
 --- a/src/services/accountDeletion.ts
@@ -6711,7 +6725,7 @@ jobs:
 
 ---
 
-## Appendix E: SQL behaviour scripts (stream S1)
+## Appendix E: SQL behaviour scripts (stream SW1)
 
 `scripts/run-swap-sql-tests.sh` builds each run as `begin;` + `00_lib` + `10_fixture_users` + `20_fixture_listings` + one scenario + `99_tail` (which raises if any check failed, then rolls back). The `s6_catalog` run is also safe to point at the live project.
 
@@ -7069,7 +7083,11 @@ select t.check('B: private fields were not copied',
           and ci.cost is null and ci.retail_cost is null and ci.notes like 'Swapped in on %' and ci.tag_text is null
           and ci.estimated_value is null and ci.wear_count = 0 and ci.retailer is null and ci.is_wishlist = false
           and ci.tags = '["swapped"]'::jsonb) = 1);
+-- Read as the owner of the database, not as B: B can see A's row only while the legacy friends policy exists,
+-- and this check must hold both before and after that policy is dropped.
+select t.as_admin();
 select t.check('B: nothing of A''s was touched', (select cost from clothing_items where id = 'a1000000-0000-0000-0000-000000000001') = 120);
+select t.as_user('b0000000-0000-0000-0000-00000000000b');
 select t.check('B: complete is idempotent (same pending list)',
   jsonb_array_length(public.swap_complete_my_side((select id from ids where k='swap1'), false)->'received') = 1
   and (select count(*) from clothing_items where user_id = 'b0000000-0000-0000-0000-00000000000b' and name = 'Blue blazer') = 1);
@@ -8588,8 +8606,14 @@ describe('privacy manifest and policy for swaps', () => {
     });
   });
 
+  it('declares purchase history too: the app stores the prices people paid', () => {
+    expect(collected.find(c => c.type === 'NSPrivacyCollectedDataTypePurchaseHistory')).toEqual({
+      type: 'NSPrivacyCollectedDataTypePurchaseHistory', linked: true, tracking: false,
+    });
+  });
+
   it('still tracks nothing', () => {
-    expect(collected.length).toBeGreaterThanOrEqual(6);
+    expect(collected.length).toBeGreaterThanOrEqual(8);
     expect(collected.every(c => !c.tracking)).toBe(true);
     expect(plist).toMatch(/<key>NSPrivacyTracking<\/key>\s*<false\/>/);
   });
@@ -8648,13 +8672,13 @@ beforeEach(async () => {
 afterEach(() => jest.restoreAllMocks());
 
 describe('exportData and swaps', () => {
-  // The file version is bumped to 1.1 once, by whichever of the ratings and swap passes lands first (7.7a). This
-  // suite does not own that line, so it only requires a 1.x version.
+  // SW0 bumps the file version to 1.1 in the same edit that adds the section (7.7); the ratings pass A adds its own
+  // section later and does not touch the version.
   it('includes the swap section', async () => {
     const swap = { settings: { termsVersion: '2026-10' }, listings: [{ id: 'l1' }], swaps: [{ id: 's1', myMessages: [{ body: 'hi' }] }] };
     mockExportSwaps.mockResolvedValue(swap);
     const backup = await exportData();
-    expect(backup.version).toMatch(/^1\.\d+$/);
+    expect(backup.version).toBe('1.1');
     expect(backup.swap).toEqual(swap);
   });
 
@@ -9261,14 +9285,23 @@ describe('swap migrations', () => {
     expect(all).not.toMatch(/grant (select|insert|update|delete)[^;]* on public\.(swaps?|swap_\w+) to (anon|authenticated|public)/);
   });
 
-  it('keep two decisions out of the folder `supabase db push` applies: the policy drop and the bucket flag', () => {
+  it('keep two decisions out of the folder `supabase db push` applies until the owner releases them: the policy drop and the bucket flag', () => {
     const present = fs.readdirSync(dir);
     // db push applies every pending file and cannot skip one, so anything waiting for the owner lives in supabase/held.
-    expect(present.filter(f => /drop_legacy_friend_wardrobe_policy|wardrobe_images_private|blocked_terms/.test(f))).toEqual([]);
-    const statements = (file: string) => fs.readFileSync(path.join(heldDir, file), 'utf8')
-      .split('\n').filter(l => l.trim() && !l.trim().startsWith('--')).join(' ').replace(/\s+/g, ' ').trim();
-    expect(statements('drop_legacy_friend_wardrobe_policy.sql')).toBe(`drop policy if exists "Friends can view each other's wardrobe" on public.clothing_items;`);
-    expect(statements('wardrobe_images_private.sql')).toBe(
+    // The one way in is the release procedure (4.1): the same name behind a 14 digit release-day version, and the file gone
+    // from supabase/held. The policy drop is Q0's file (quality-ratings.md 4.3); this test only reads it.
+    const RELEASED = /^\d{14}_(drop_legacy_friend_wardrobe_policy|wardrobe_images_private)\.sql$/;
+    expect(present.filter(f => /drop_legacy_friend_wardrobe_policy|wardrobe_images_private/.test(f) && !RELEASED.test(f))).toEqual([]);
+    expect(present.filter(f => /blocked_terms/.test(f))).toEqual([]);
+    const statements = (name: string) => {
+      const held = path.join(heldDir, `${name}.sql`);
+      const released = present.filter(f => f.endsWith(`_${name}.sql`));
+      expect([fs.existsSync(held), ...released].filter(Boolean)).toHaveLength(1);    // exactly one copy, held or released
+      return fs.readFileSync(fs.existsSync(held) ? held : path.join(dir, released[0]), 'utf8')
+        .split('\n').filter(l => l.trim() && !l.trim().startsWith('--')).join(' ').replace(/\s+/g, ' ').trim();
+    };
+    expect(statements('drop_legacy_friend_wardrobe_policy')).toBe(`drop policy if exists "Friends can view each other's wardrobe" on public.clothing_items;`);
+    expect(statements('wardrobe_images_private')).toBe(
       "insert into storage.buckets (id, name, public) values ('wardrobe-images', 'wardrobe-images', false) on conflict (id) do update set public = false;");
   });
 
@@ -9330,12 +9363,14 @@ describe('swap migrations', () => {
 
 #### `__tests__/migrationVersions.test.ts`
 
+Owned by Q0, the ratings foundation stream (wave 1), not by SW1: it guards both features' ranges and is needed from the first migration on.
+
 ````ts
 /**
  * `supabase db push` records each migration under its version (the digits before the first underscore),
  * and the version is the primary key of the table that remembers what ran. Two files with the same version
  * and different names make `db push` and `db reset` fail, and nothing in a diff review shows it. Every
- * feature that adds migrations is covered by this one test.
+ * feature that adds migrations is covered by this one test (owner: Q0, the ratings foundation stream).
  */
 import fs from 'fs';
 import path from 'path';
@@ -9344,6 +9379,11 @@ const root = path.join(__dirname, '..', 'supabase');
 const migrations = fs.readdirSync(path.join(root, 'migrations')).filter(f => f.endsWith('.sql')).sort();
 const held = fs.existsSync(path.join(root, 'held')) ? fs.readdirSync(path.join(root, 'held')) : [];
 const versionOf = (file: string) => file.match(/^(\d+)_/)?.[1];
+// A held file released into the folder keeps its name behind a 14 digit release-day version (swap.md 4.1,
+// quality-ratings.md 4.1). That version is "later than every file present at the time", so it can fall anywhere.
+const RELEASED = /^\d{14}_(drop_legacy_friend_wardrobe_policy|wardrobe_images_private)\.sql$/;
+const own = migrations.filter(f => !RELEASED.test(f));
+const within = (f: string, from: string, to: string) => { const v = versionOf(f)!; return v >= from && v <= to; };
 
 describe('supabase/migrations', () => {
   it('gives every file a version and a name', () => {
@@ -9359,16 +9399,22 @@ describe('supabase/migrations', () => {
     }
   });
 
-  it('keeps the swap range to the swap files: another feature must take a range of its own', () => {
-    // Swaps: 20261015000000 (a prerequisite table) and 20261015000100 to 20261015000500. The ratings design keeps
-    // 20261016000000 to 20261016000399. See documentation/design/swap.md 10.1.
-    const inSwapRange = migrations.filter(f => f.slice(0, 8) === '20261015');
-    expect(inSwapRange.every(f => /^2026101500(0000_styling_recommendations_if_missing|0[1-5]00_swap_)/.test(f))).toBe(true);
+  it('keeps each feature to its own range: another feature must take a range of its own', () => {
+    // Ratings: 20261014000000 to 20261014000399. Swaps: 20261015000000 (a prerequisite table) and
+    // 20261015000100 to 20261015000500. See documentation/design/BUILD-PLAN.md.
+    const ratings = own.filter(f => within(f, '20261014000000', '20261014000399'));
+    expect(ratings.every(f => /^20261014000(000_ratings_hardening|200_consents_and_quota|300_quality_ratings)\.sql$/.test(f))).toBe(true);
+    const swaps = own.filter(f => within(f, '20261015000000', '20261015000500'));
+    expect(swaps.every(f => /^2026101500(0000_styling_recommendations_if_missing|0[1-5]00_swap_)/.test(f))).toBe(true);
   });
 
-  it('holds back what is waiting for a decision: held files are not migrations', () => {
+  it('holds back what is waiting for a decision: a held file is not a migration, and a released one has no second copy', () => {
     for (const f of held) expect(versionOf(f)).toBeUndefined();
-    expect(migrations.filter(f => /drop_legacy_friend_wardrobe_policy|wardrobe_images_private/.test(f))).toEqual([]);
+    expect(migrations.filter(f => /drop_legacy_friend_wardrobe_policy|wardrobe_images_private/.test(f) && !RELEASED.test(f))).toEqual([]);
+    for (const f of migrations.filter(f => RELEASED.test(f))) {
+      expect(held).not.toContain(f.replace(/^\d{14}_/, ''));
+      expect(versionOf(f)! > '20261013000000').toBe(true);     // later than the newest migration that existed when this was written
+    }
   });
 });
 ````

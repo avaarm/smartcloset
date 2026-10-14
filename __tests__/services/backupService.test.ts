@@ -10,6 +10,8 @@ jest.mock('../../src/config/supabase', () => ({
 }));
 jest.mock('../../src/services/storage', () => ({ getClothingItems: jest.fn() }));
 jest.mock('../../src/services/outfitService', () => ({ getSavedOutfits: jest.fn() }));
+const mockExportRatings = jest.fn();
+jest.mock('../../src/services/ratingService', () => ({ exportMyRatings: (...a: unknown[]) => mockExportRatings(...a) }));
 
 const mockItems = getClothingItems as jest.Mock;
 const mockOutfits = getSavedOutfits as jest.Mock;
@@ -76,5 +78,47 @@ describe('getBackupStats', () => {
   it('reports zero, not a wishlist count, when the items cannot be read', async () => {
     mockItems.mockRejectedValue(new Error('offline'));
     expect((await getBackupStats()).itemsCount).toBe(0);
+  });
+});
+
+describe('exportData and ratings', () => {
+  const ratings = {
+    itemRatings: [{ itemId: 'o1', overall: 4, note: 'Soft, runs a little long', contributed: false }],
+    brandRatings: [{ brandLabel: 'Zara', overall: 3 }],
+    consents: [{ purpose: 'share_ratings', granted: false, policyVersion: null, decidedAt: null }],
+  };
+
+  beforeEach(() => mockExportRatings.mockReset());
+
+  it('carries the member\'s own ratings, notes and consent answers in an optional section, in the 1.1 file', async () => {
+    mockExportRatings.mockResolvedValue(ratings);
+    const backup = await exportData();
+    expect(backup.version).toBe('1.1');
+    expect(backup.ratings).toEqual(ratings);
+    // The rest of the file is as before.
+    expect(backup.metadata.totalItems).toBe(2);
+    expect(backup.items).toHaveLength(5);
+  });
+
+  it('leaves the section out when the ratings cannot be read, and the export still succeeds', async () => {
+    mockExportRatings.mockRejectedValue(new Error('offline'));
+    const backup = await exportData();
+    expect('ratings' in backup).toBe(false);
+    expect(backup.items).toHaveLength(5);
+    expect(backup.outfits).toEqual([{ id: 'out1' }]);
+  });
+
+  it('restoring a backup that has a ratings section ignores it and still needs only the version, items and outfits', async () => {
+    mockExportRatings.mockResolvedValue(ratings);
+    const backup = await exportData();
+    await importData(JSON.parse(JSON.stringify(backup)));
+    expect(JSON.parse((await AsyncStorage.getItem('@smartcloset_items'))!)).toHaveLength(5);
+    expect(await AsyncStorage.getAllKeys()).toEqual(
+      expect.not.arrayContaining(['@smartcloset_ratings']),
+    );
+
+    const withoutRatings: Partial<typeof backup> = { ...backup };
+    delete withoutRatings.ratings;
+    await expect(importData(withoutRatings as typeof backup)).resolves.toBeUndefined();
   });
 });

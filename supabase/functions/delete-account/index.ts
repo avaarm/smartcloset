@@ -2,7 +2,9 @@
 //
 // Deletes the signed-in user's account in the safe order:
 //   1. database rows + the auth user (delete_user_account(), runs as the user), then
-//   2. their uploaded photos (Storage can only be emptied through the Storage API).
+//   2. their uploaded photos (Storage can only be emptied through the Storage API), then
+//   3. the swap-photos copies of pieces they had open to swap (deleting the account queued
+//      their paths in swap_photo_gc; swap-media's sweep is the backstop).
 // Doing the data first means a failure can never leave a live account whose
 // photos were already deleted. A failure while removing photos is reported but
 // does not undo the (already complete) account deletion.
@@ -19,6 +21,7 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
 const BUCKET = "wardrobe-images";
+const SWAP_BUCKET = "swap-photos";
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
@@ -43,9 +46,10 @@ Deno.serve(async (req: Request) => {
   }
 
   // 2. Photos (service role: the user's own session no longer exists).
+  const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   let removed = 0;
+  let incomplete = false;
   try {
-    const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     for (let page = 0; page < 500; page++) {
       const { data: files, error: listErr } = await admin.storage.from(BUCKET).list(user.id, { limit: 100 });
       if (listErr) throw listErr;
@@ -58,8 +62,25 @@ Deno.serve(async (req: Request) => {
     }
   } catch (e: any) {
     console.error("[delete-account] photo cleanup incomplete:", e?.message ?? e);
-    return json({ ok: true, photosRemoved: removed, photosIncomplete: true });
+    incomplete = true;
   }
 
-  return json({ ok: true, photosRemoved: removed });
+  // 3. Swap photos queued by the deletion (paths only; they hold no personal data).
+  try {
+    for (let round = 0; round < 20; round++) {
+      const { data: queued, error: qErr } = await admin.from("swap_photo_gc").select("path").order("queued_at").limit(200);
+      if (qErr) throw qErr;
+      const paths = (queued ?? []).map((r: any) => r.path);
+      if (paths.length === 0) break;
+      const { error: rmErr } = await admin.storage.from(SWAP_BUCKET).remove(paths);
+      if (rmErr) throw rmErr;
+      await admin.from("swap_photo_gc").delete().in("path", paths);
+      removed += paths.length;
+    }
+  } catch (e: any) {
+    console.error("[delete-account] swap photo cleanup incomplete:", e?.message ?? e);
+    incomplete = true;
+  }
+
+  return json(incomplete ? { ok: true, photosRemoved: removed, photosIncomplete: true } : { ok: true, photosRemoved: removed });
 });

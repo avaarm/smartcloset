@@ -27,6 +27,17 @@ jest.mock('../../src/services/imageRecognition', () => ({
   ...jest.requireActual('../../src/services/imageRecognition'),
   analyzeClothingImage: jest.fn(),
 }));
+// This file is about the type, size and condition fields; tag scanning has its own tests.
+jest.mock('../../src/config/ratingFlags', () => ({
+  TAG_SCAN_ENABLED: false,
+  RATINGS_ENABLED: false,
+  BRAND_INSIGHTS_ENABLED: false,
+  TAG_MODEL_FALLBACK_ENABLED: false,
+  TAG_OCR_FEATURE: 'TEXT_DETECTION',
+  ratingsActive: () => false,
+  tagScanActive: () => false,
+  brandInsightsActive: () => false,
+}));
 jest.mock('../../src/services/lensSearchService', () => ({
   ...jest.requireActual('../../src/services/lensSearchService'),
   searchByImage: jest.fn(),

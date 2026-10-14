@@ -35,6 +35,9 @@ import {
 } from '../services/productContributions';
 import MatchPickerSheet, { type PickedMatch } from './MatchPickerSheet';
 import MaterialsEditor from '../components/MaterialsEditor';
+import ScanTagSection, { useTagFields } from '../components/ScanTagSection';
+import BrandInsightStrip from '../components/BrandInsightStrip';
+import { tagScanActive } from '../config/ratingFlags';
 import TypePicker from '../components/TypePicker';
 import { noteAddedItem } from '../utils/askWardrobeFor';
 import { ITEM_CONDITION_LABELS, ITEM_CONDITIONS, cleanSize, type ItemCondition } from '../utils/itemCondition';
@@ -150,6 +153,8 @@ type AddClothingScreenProps = {
       editItem?: any;
       item?: any;
       isWishlist?: boolean;
+      /** Open the tag scanner as soon as the form is up (the link on Item Details sets it). */
+      scanTag?: boolean;
     };
   };
 };
@@ -225,6 +230,8 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   const [isGuestUser, setIsGuestUser] = useState(false);
   // Identifies the latest photo analysis; results of an older one are dropped.
   const analysisId = useRef(0);
+  // Care, country of origin and tag text. State only; nothing is read or sent until a scan or an edit.
+  const tag = useTagFields(editItem);
 
   // ── Estimated value ──
   // Until the owner types a value it follows the estimate, which is worked out
@@ -807,6 +814,8 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         wearCount: editItem?.wearCount || 0,
         lastWorn: editItem?.lastWorn,
         materials: cleanMaterials.length > 0 ? cleanMaterials : undefined,
+        // Only once the Label section is on screen; until then an edit leaves care, country and tag text as saved.
+        ...(tagScanActive() ? tag.toItemFields() : {}),
         // A wishlist item is worth its price, so it carries no value of its own.
         estimatedValue: isWishlist ? undefined : finalValue,
         valueSource: isWishlist ? undefined : valueIsUser ? 'user' : 'estimate',
@@ -1188,6 +1197,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
             onChangeText={setBrand}
             {...singleLineDoneProps}
           />
+          <BrandInsightStrip brand={brand} variant="add" onOpen={b => navigation.navigate('BrandReport', { brand: b })} />
           <TextInput
             style={styles.input}
             placeholder="Retailer/Store"
@@ -1370,6 +1380,23 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
             {...singleLineDoneProps}
           />
         </FormSection>
+
+        {tagScanActive() && (
+          <FormSection title="Label">
+            <ScanTagSection
+              tag={tag}
+              category={category}
+              materials={materials}
+              onMaterialsChange={setMaterials}
+              size={size}
+              onSizeChange={setSize}
+              brand={brand}
+              onBrandChange={setBrand}
+              isGuest={isGuestUser}
+              autoOpen={route.params?.scanTag === true}
+            />
+          </FormSection>
+        )}
 
         <View style={styles.materialsWrap}>
           <MaterialsEditor value={materials} onChange={setMaterials} />

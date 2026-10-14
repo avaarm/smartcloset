@@ -24,22 +24,13 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import type { MaterialComponent, MaterialTier } from '../types';
 import theme from '../styles/theme';
 import { keyboardDoneProps, singleLineDoneProps } from './KeyboardSafe';
+// Common canonical material names, offered as quick suggestions below the name input. Users can type anything else too.
+import { MATERIAL_SUGGESTIONS } from '../utils/materialNames';
 
 type Props = {
   value: MaterialComponent[];
   onChange: (next: MaterialComponent[]) => void;
 };
-
-/**
- * Common canonical material names — offered as quick suggestions below the
- * name input. Users can type anything else too.
- */
-const MATERIAL_SUGGESTIONS = [
-  'cotton', 'polyester', 'wool', 'cashmere', 'merino', 'linen', 'silk',
-  'leather', 'suede', 'nylon', 'spandex', 'elastane', 'viscose', 'rayon',
-  'acrylic', 'denim', 'canvas', 'velvet', 'satin', 'fleece', 'rubber',
-  'gold-plated', 'silver-plated', 'brass',
-];
 
 const TIERS: { value: MaterialTier; label: string }[] = [
   { value: 'primary', label: 'Primary' },

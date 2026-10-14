@@ -57,6 +57,11 @@ import AccountTypeOnboardingScreen from './src/screens/AccountTypeOnboardingScre
 import { hasCompletedModeOnboarding, markModeOnboardingComplete } from './src/services/accountService';
 import FriendsScreen from './src/screens/FriendsScreen';
 import FriendClosetScreen from './src/screens/FriendClosetScreen';
+import BrandReportScreen from './src/screens/BrandReportScreen';
+import SwapBoardScreen from './src/screens/SwapBoardScreen';
+import SwapListingScreen from './src/screens/SwapListingScreen';
+import MySwapsScreen from './src/screens/MySwapsScreen';
+import SwapThreadScreen from './src/screens/SwapThreadScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -77,6 +82,11 @@ const WardrobeStack = () => {
       <Stack.Screen 
         name="ItemDetails" 
         component={ItemDetailsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="BrandReport"
+        component={BrandReportScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen
@@ -134,6 +144,11 @@ const HomeStack = () => {
         options={{ headerShown: false }}
       />
       <Stack.Screen
+        name="BrandReport"
+        component={BrandReportScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
         name="AddClothing"
         component={AddClothingScreen}
         options={{ headerShown: false }}
@@ -168,6 +183,10 @@ const HomeStack = () => {
         component={FriendClosetScreen}
         options={{ headerShown: false }}
       />
+      <Stack.Screen name="SwapBoard" component={SwapBoardScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="SwapListing" component={SwapListingScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="MySwaps" component={MySwapsScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="SwapThread" component={SwapThreadScreen} options={{ headerShown: false }} />
       <Stack.Screen
         name="StylistMarketplace"
         component={StylistMarketplaceScreen}
@@ -255,6 +274,11 @@ const WishlistStack = () => {
       <Stack.Screen 
         name="ItemDetails" 
         component={ItemDetailsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="BrandReport"
+        component={BrandReportScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

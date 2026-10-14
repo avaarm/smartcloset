@@ -75,6 +75,18 @@ const FriendClosetScreen = () => {
         numColumns={2}
         contentContainerStyle={{ padding: 8, flexGrow: 1 }}
         refreshing={loading}
+        ListHeaderComponent={
+          <Pressable
+            onPress={() => navigation.navigate('SwapBoard', { friendId, friendName })}
+            accessibilityRole="button"
+            accessibilityLabel="See items open to swap"
+            style={{ padding: 14, marginHorizontal: 8, marginBottom: 4, flexDirection: 'row', alignItems: 'center' }}
+          >
+            <Icon name="swap-horizontal-outline" size={20} color={theme.colors.accent} />
+            <Text variant="body" style={{ marginLeft: 10, flex: 1 }}>Pieces open to swap</Text>
+            <Icon name="chevron-forward" size={18} color={theme.colors.textSubtle} />
+          </Pressable>
+        }
         renderItem={({ item }) => (
           <View style={{ width: '50%' }}>
             <ClothingCard item={item} />

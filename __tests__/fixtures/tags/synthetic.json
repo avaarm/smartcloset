@@ -1,0 +1,1669 @@
+[
+  {
+    "id": "us-cotton",
+    "about": "Synthetic: modelled on published US care-label conventions, not real OCR output.",
+    "text": "100% COTTON\nMADE IN BANGLADESH\nRN 12345\nMACHINE WASH COLD\nTUMBLE DRY LOW",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 100
+            }
+          ]
+        }
+      ],
+      "origin": {
+        "country": "Bangladesh",
+        "known": true,
+        "status": "verified"
+      },
+      "care": {
+        "items": [
+          "Machine wash cold",
+          "Tumble dry low"
+        ],
+        "status": "verified"
+      },
+      "ids": {
+        "rn": "12345"
+      },
+      "transcriptionIncludes": [
+        "RN 12345"
+      ]
+    }
+  },
+  {
+    "id": "us-blend",
+    "about": "Synthetic: modelled on published US care-label conventions, not real OCR output.",
+    "text": "60% COTTON 40% POLYESTER",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 60
+            },
+            {
+              "fibre": "polyester",
+              "percent": 40
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "us-lining",
+    "about": "Synthetic: modelled on published US care-label conventions, not real OCR output.",
+    "text": "SHELL: 100% POLYESTER\nLINING: 100% POLYESTER",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "polyester",
+              "percent": 100
+            }
+          ],
+          "label": "shell"
+        },
+        {
+          "part": "lining",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "polyester",
+              "percent": 100
+            }
+          ],
+          "label": "lining"
+        }
+      ]
+    }
+  },
+  {
+    "id": "down-jacket",
+    "about": "Synthetic: modelled on published US care-label conventions, not real OCR output.",
+    "text": "SHELL: 100% NYLON\nLINING: 100% POLYESTER\nFILL: 80% DOWN 20% FEATHERS",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "nylon",
+              "percent": 100
+            }
+          ],
+          "label": "shell"
+        },
+        {
+          "part": "lining",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "polyester",
+              "percent": 100
+            }
+          ],
+          "label": "lining"
+        },
+        {
+          "part": "fill",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "down",
+              "percent": 80
+            },
+            {
+              "fibre": "feathers",
+              "percent": 20
+            }
+          ],
+          "label": "fill"
+        }
+      ]
+    }
+  },
+  {
+    "id": "canada-bilingual",
+    "about": "Synthetic: modelled on published Canadian bilingual label conventions, not real OCR output.",
+    "text": "SHELL/COQUILLE: 100% COTTON/COTON\nFABRIQUÉ AU VIETNAM\nMADE IN VIETNAM\nCA 12345",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 100,
+              "printed": "cotton"
+            }
+          ],
+          "label": "shell/coquille"
+        }
+      ],
+      "origin": {
+        "country": "Vietnam",
+        "known": true,
+        "status": "verified"
+      },
+      "ids": {
+        "ca": "12345"
+      },
+      "languages": [
+        "en",
+        "fr"
+      ]
+    }
+  },
+  {
+    "id": "eu-multilingual",
+    "about": "Synthetic: modelled on published EU multilingual label conventions, not real OCR output.",
+    "text": "80% Baumwolle - Cotton - Coton - Cotone - Algodón\n20% Elastan - Elastane - Élasthanne - Elastano",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 80,
+              "printed": "cotton"
+            },
+            {
+              "fibre": "elastane",
+              "percent": 20,
+              "printed": "elastane"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "de-shoe",
+    "about": "Synthetic: modelled on published German label conventions, not real OCR output.",
+    "text": "Obermaterial: 100% Leder\nFutter: 100% Textil\nSohle: 100% Gummi",
+    "category": "shoes",
+    "expected": {
+      "groups": [
+        {
+          "part": "upper",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "leather",
+              "percent": 100
+            }
+          ],
+          "label": "obermaterial"
+        },
+        {
+          "part": "lining",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "textile",
+              "percent": 100
+            }
+          ],
+          "label": "futter"
+        },
+        {
+          "part": "sole",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "rubber",
+              "percent": 100
+            }
+          ],
+          "label": "sohle"
+        }
+      ]
+    }
+  },
+  {
+    "id": "de-shoe-as-tops",
+    "about": "Synthetic: modelled on published German label conventions, not real OCR output. Same text, category tops: the German shell word is a shell.",
+    "text": "Obermaterial: 100% Leder\nFutter: 100% Textil\nSohle: 100% Gummi",
+    "category": "tops",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "leather",
+              "percent": 100
+            }
+          ],
+          "label": "obermaterial"
+        },
+        {
+          "part": "lining",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "textile",
+              "percent": 100
+            }
+          ],
+          "label": "futter"
+        },
+        {
+          "part": "sole",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "rubber",
+              "percent": 100
+            }
+          ],
+          "label": "sohle"
+        }
+      ]
+    }
+  },
+  {
+    "id": "tr-percent-first",
+    "about": "Synthetic: modelled on published Turkish label conventions, not real OCR output.",
+    "text": "%70 Pamuk\n%30 Polyester",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 70
+            },
+            {
+              "fibre": "polyester",
+              "percent": 30
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "jp-fibre-first",
+    "about": "Synthetic: modelled on published Japanese label conventions, not real OCR output.",
+    "text": "表地 綿100%\n裏地 ポリエステル100%",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 100
+            }
+          ],
+          "label": "表地"
+        },
+        {
+          "part": "lining",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "polyester",
+              "percent": 100
+            }
+          ],
+          "label": "裏地"
+        }
+      ]
+    }
+  },
+  {
+    "id": "decimal",
+    "about": "Synthetic: modelled on published EU multilingual label conventions, not real OCR output.",
+    "text": "97,5% Baumwolle\n2,5% Elastan",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 98
+            },
+            {
+              "fibre": "elastane",
+              "percent": 2
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "sum-95",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "55% COTTON 40% POLYESTER",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 55
+            },
+            {
+              "fibre": "polyester",
+              "percent": 40
+            }
+          ],
+          "issues": [
+            "Adds up to 95"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "sum-101",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "95% COTTON 6% ELASTANE",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 95
+            },
+            {
+              "fibre": "elastane",
+              "percent": 6
+            }
+          ],
+          "issues": [
+            "Adds up to 101"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "lone-percent",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "70%\nCOTTON\n30%\nPOLYESTER",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 70
+            },
+            {
+              "fibre": "polyester",
+              "percent": 30
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "digit-confusion",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "1OO% C0TT0N",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 100
+            }
+          ],
+          "issues": [
+            "Read with corrections"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "digit-confusion-2",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "6O% COTTON 4O% POLYESTER",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 60
+            },
+            {
+              "fibre": "polyester",
+              "percent": 40
+            }
+          ],
+          "issues": [
+            "Read with corrections"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "unknown-header",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "BODY: 100% COTTON\nSLEEVE: 100% POLYESTER",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 100
+            }
+          ],
+          "label": "body"
+        },
+        {
+          "part": "other",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "polyester",
+              "percent": 100
+            }
+          ],
+          "label": "sleeve",
+          "issues": [
+            "Unknown part"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "set-tags",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "TOP: 100% COTTON\nBOTTOM: 100% POLYESTER",
+    "expected": {
+      "flags": [
+        "set_of_garments"
+      ],
+      "groups": [
+        {
+          "part": "other",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 100
+            }
+          ],
+          "label": "top",
+          "issues": [
+            "Unknown part"
+          ]
+        },
+        {
+          "part": "other",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "polyester",
+              "percent": 100
+            }
+          ],
+          "label": "bottom",
+          "issues": [
+            "Unknown part"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "noise",
+    "about": "Synthetic: modelled on published US care-label conventions, not real OCR output.",
+    "text": "100% LINEN\nSILK SCREEN PRINT\nWOOL CYCLE\nPROP 65 WARNING",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "linen",
+              "percent": 100
+            }
+          ]
+        }
+      ],
+      "care": {
+        "items": [
+          "Gentle cycle"
+        ],
+        "status": "verified"
+      }
+    }
+  },
+  {
+    "id": "importer",
+    "about": "Synthetic: modelled on published US care-label conventions, not real OCR output.",
+    "text": "MADE IN PORTUGAL\nIMPORTED BY ACME CO\nDISTRIBUTED BY SOMEONE",
+    "expected": {
+      "origin": {
+        "country": "Portugal",
+        "known": true,
+        "status": "verified"
+      }
+    }
+  },
+  {
+    "id": "origin-synonyms#1",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "MADE IN P.R.C.",
+    "expected": {
+      "origin": {
+        "country": "China",
+        "known": true,
+        "status": "verified"
+      }
+    }
+  },
+  {
+    "id": "origin-synonyms#2",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "MADE IN VIET NAM",
+    "expected": {
+      "origin": {
+        "country": "Vietnam",
+        "known": true,
+        "status": "verified"
+      }
+    }
+  },
+  {
+    "id": "origin-synonyms#3",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "HECHO EN PERU",
+    "expected": {
+      "origin": {
+        "country": "Peru",
+        "known": true,
+        "status": "verified"
+      }
+    }
+  },
+  {
+    "id": "origin-synonyms#4",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "MADE IN USA",
+    "expected": {
+      "origin": {
+        "country": "United States",
+        "known": true,
+        "status": "verified"
+      }
+    }
+  },
+  {
+    "id": "origin-unknown",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "MADE IN ATLANTIS",
+    "expected": {
+      "origin": {
+        "country": "Atlantis",
+        "known": false,
+        "status": "check"
+      }
+    }
+  },
+  {
+    "id": "origin-mixed",
+    "about": "Synthetic: modelled on published US care-label conventions, not real OCR output.",
+    "text": "MADE IN USA AND IMPORTED",
+    "expected": {
+      "origin": {
+        "country": "United States",
+        "known": true,
+        "status": "check",
+        "issues": [
+          "Mixed origin"
+        ]
+      }
+    }
+  },
+  {
+    "id": "size-single#1",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "SIZE M",
+    "expected": {
+      "size": {
+        "value": "M",
+        "status": "verified"
+      }
+    }
+  },
+  {
+    "id": "size-single#2",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "TAILLE 38",
+    "expected": {
+      "size": {
+        "value": "38",
+        "status": "verified"
+      }
+    }
+  },
+  {
+    "id": "size-grid#1",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "S M L XL",
+    "expected": {
+      "flags": [
+        "multiple_sizes"
+      ],
+      "size": {
+        "value": null,
+        "status": "missing"
+      }
+    }
+  },
+  {
+    "id": "size-grid#2",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "US 8 UK 10 EU 38",
+    "expected": {
+      "flags": [
+        "multiple_sizes"
+      ],
+      "size": {
+        "value": null,
+        "status": "missing"
+      }
+    }
+  },
+  {
+    "id": "care-full",
+    "about": "Synthetic: modelled on published US care-label conventions, not real OCR output.",
+    "text": "MACHINE WASH COLD WITH LIKE COLORS\nONLY NON-CHLORINE BLEACH WHEN NEEDED\nTUMBLE DRY LOW\nWARM IRON IF NEEDED",
+    "expected": {
+      "care": {
+        "items": [
+          "Machine wash cold",
+          "Wash with like colors",
+          "Non-chlorine bleach only",
+          "Tumble dry low",
+          "Iron medium"
+        ],
+        "status": "verified"
+      }
+    }
+  },
+  {
+    "id": "care-partial",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "WASH COLD\nDRY IN SHADE ONLY WHEN SUN IS STRONG",
+    "expected": {
+      "care": {
+        "items": [
+          "Machine wash cold"
+        ],
+        "status": "check"
+      }
+    }
+  },
+  {
+    "id": "unreadable#1",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": ".",
+    "expected": {
+      "readable": false,
+      "flags": [
+        "no_text"
+      ]
+    }
+  },
+  {
+    "id": "unreadable#2",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "x",
+    "expected": {
+      "readable": false,
+      "flags": [
+        "no_text"
+      ]
+    }
+  },
+  {
+    "id": "over-100",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "120% COTTON",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "missing",
+          "fibres": [],
+          "issues": [
+            "Percentage over 100"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "singleton-parts",
+    "about": "Synthetic: modelled on published US care-label conventions, not real OCR output.",
+    "text": "UPPER: LEATHER\nLINING: TEXTILE\nSOLE: RUBBER",
+    "expected": {
+      "groups": [
+        {
+          "part": "upper",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "leather",
+              "percent": null
+            }
+          ],
+          "label": "upper"
+        },
+        {
+          "part": "lining",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "textile",
+              "percent": null
+            }
+          ],
+          "label": "lining"
+        },
+        {
+          "part": "sole",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "rubber",
+              "percent": null
+            }
+          ],
+          "label": "sole"
+        }
+      ]
+    }
+  },
+  {
+    "id": "qualifiers",
+    "about": "Synthetic: modelled on published US care-label conventions, not real OCR output.",
+    "text": "50% ORGANIC COTTON\n50% RECYCLED POLYESTER",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 50,
+              "qualifier": "organic"
+            },
+            {
+              "fibre": "polyester",
+              "percent": 50,
+              "qualifier": "recycled"
+            }
+          ]
+        }
+      ],
+      "materials": [
+        {
+          "name": "organic cotton",
+          "tier": "primary",
+          "percentage": 50
+        },
+        {
+          "name": "recycled polyester",
+          "tier": "primary",
+          "percentage": 50
+        }
+      ]
+    }
+  },
+  {
+    "id": "tencel",
+    "about": "Synthetic: modelled on published EU multilingual label conventions, not real OCR output.",
+    "text": "48% TENCEL™ LYOCELL\n52% COTTON",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "lyocell",
+              "percent": 48,
+              "printed": "tencel lyocell"
+            },
+            {
+              "fibre": "cotton",
+              "percent": 52
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "polyamide",
+    "about": "Synthetic: modelled on published EU multilingual label conventions, not real OCR output.",
+    "text": "100% POLYAMIDE",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "nylon",
+              "percent": 100
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "vegan-leather",
+    "about": "Synthetic: modelled on published US care-label conventions, not real OCR output.",
+    "text": "100% VEGAN LEATHER",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "polyurethane",
+              "percent": 100,
+              "printed": "vegan leather"
+            }
+          ]
+        }
+      ],
+      "materials": [
+        {
+          "name": "vegan leather",
+          "tier": "primary",
+          "percentage": 100
+        }
+      ]
+    }
+  },
+  {
+    "id": "faux-leather-upper",
+    "about": "Synthetic: modelled on published US care-label conventions, not real OCR output.",
+    "text": "UPPER: FAUX LEATHER\nLINING: TEXTILE\nSOLE: RUBBER",
+    "expected": {
+      "groups": [
+        {
+          "part": "upper",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "polyurethane",
+              "percent": null,
+              "printed": "faux leather"
+            }
+          ],
+          "label": "upper"
+        },
+        {
+          "part": "lining",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "textile",
+              "percent": null
+            }
+          ],
+          "label": "lining"
+        },
+        {
+          "part": "sole",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "rubber",
+              "percent": null
+            }
+          ],
+          "label": "sole"
+        }
+      ],
+      "materials": [
+        {
+          "name": "faux leather",
+          "tier": "upper"
+        },
+        {
+          "name": "textile",
+          "tier": "lining"
+        },
+        {
+          "name": "rubber",
+          "tier": "sole"
+        }
+      ]
+    }
+  },
+  {
+    "id": "pu-and-pleather#1",
+    "about": "Synthetic: modelled on published US care-label conventions, not real OCR output.",
+    "text": "100% PU LEATHER",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "polyurethane",
+              "percent": 100,
+              "printed": "pu leather"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "pu-and-pleather#2",
+    "about": "Synthetic: modelled on published US care-label conventions, not real OCR output.",
+    "text": "100% PLEATHER",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "polyurethane",
+              "percent": 100,
+              "printed": "pleather"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "real-leather-control",
+    "about": "Synthetic: modelled on published US care-label conventions, not real OCR output.",
+    "text": "UPPER: LEATHER",
+    "expected": {
+      "groups": [
+        {
+          "part": "upper",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "leather",
+              "percent": null
+            }
+          ],
+          "label": "upper"
+        }
+      ]
+    }
+  },
+  {
+    "id": "two-fibres-one-percent",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "80% COTTON - POLYESTER",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 80
+            }
+          ],
+          "issues": [
+            "Two fibres for one percentage"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "no-percentages",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "60%\n40%",
+    "expected": {}
+  },
+  {
+    "id": "no-percent-shell",
+    "about": "Synthetic: modelled on published US care-label conventions, not real OCR output.",
+    "text": "ORGANIC COTTON\nGOTS CERTIFIED",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": null,
+              "qualifier": "organic"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "multi-photo",
+    "about": "Synthetic: modelled on published US care-label conventions, not real OCR output.",
+    "text": "100% COTTON\n---\nMADE IN ITALY\nSIZE 40",
+    "expected": {
+      "flags": [
+        "multiple_labels"
+      ],
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 100
+            }
+          ]
+        }
+      ],
+      "origin": {
+        "country": "Italy",
+        "known": true,
+        "status": "verified"
+      },
+      "size": {
+        "value": "40",
+        "status": "verified"
+      }
+    }
+  },
+  {
+    "id": "duplicate-part",
+    "about": "Synthetic: modelled on published US care-label conventions, not real OCR output.",
+    "text": "100% COTTON\n---\n98% COTTON 2% ELASTANE",
+    "expected": {
+      "flags": [
+        "multiple_labels"
+      ],
+      "groups": [
+        {
+          "part": "shell",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 100
+            }
+          ],
+          "issues": [
+            "Two lists for shell"
+          ]
+        },
+        {
+          "part": "shell",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 98
+            },
+            {
+              "fibre": "elastane",
+              "percent": 2
+            }
+          ],
+          "issues": [
+            "Two lists for shell"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "brand-short-line",
+    "about": "Synthetic: modelled on published US care-label conventions, not real OCR output.",
+    "text": "EVERLANE\n100% COTTON",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 100
+            }
+          ]
+        }
+      ],
+      "brand": {
+        "name": "Everlane",
+        "status": "check",
+        "confidence": 0.8
+      }
+    }
+  },
+  {
+    "id": "bare-number-lining",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "LINING: 60 COTTON",
+    "expected": {
+      "groups": [
+        {
+          "part": "lining",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": null
+            }
+          ],
+          "label": "lining",
+          "issues": [
+            "No percent signs on the tag"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "bare-number-fill",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "FILL: 80 DOWN",
+    "expected": {
+      "groups": [
+        {
+          "part": "fill",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "down",
+              "percent": null
+            }
+          ],
+          "label": "fill",
+          "issues": [
+            "No percent signs on the tag"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "bare-number-upper",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "UPPER: 80 LEATHER",
+    "expected": {
+      "groups": [
+        {
+          "part": "upper",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "leather",
+              "percent": null
+            }
+          ],
+          "label": "upper",
+          "issues": [
+            "No percent signs on the tag"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "bare-number-after-fibre",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "LINING: POLYESTER 50",
+    "expected": {
+      "groups": [
+        {
+          "part": "lining",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "polyester",
+              "percent": null
+            }
+          ],
+          "label": "lining",
+          "issues": [
+            "No percent signs on the tag"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "bare-numbers-two-fibres",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "LINING: 60 COTTON 30 POLYESTER",
+    "expected": {
+      "groups": [
+        {
+          "part": "lining",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": null
+            },
+            {
+              "fibre": "polyester",
+              "percent": null
+            }
+          ],
+          "label": "lining",
+          "issues": [
+            "No percent signs on the tag"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "header-outer-shell-excluding-trim",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "OUTER SHELL EXCLUDING TRIM: 100% POLYESTER",
+    "expected": {
+      "groups": [
+        {
+          "part": "other",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "polyester",
+              "percent": 100
+            }
+          ],
+          "label": "outer shell excluding trim",
+          "issues": [
+            "Unknown part"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "header-body-excluding-trim",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "BODY EXCLUDING TRIM: 100% COTTON",
+    "expected": {
+      "groups": [
+        {
+          "part": "other",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 100
+            }
+          ],
+          "label": "body excluding trim",
+          "issues": [
+            "Unknown part"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "header-sleeve-lining",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "SLEEVE LINING: 100% POLYESTER",
+    "expected": {
+      "groups": [
+        {
+          "part": "other",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "polyester",
+              "percent": 100
+            }
+          ],
+          "label": "sleeve lining",
+          "issues": [
+            "Unknown part"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "header-pocket-lining",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "POCKET LINING: 100% POLYESTER",
+    "expected": {
+      "groups": [
+        {
+          "part": "other",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "polyester",
+              "percent": 100
+            }
+          ],
+          "label": "pocket lining",
+          "issues": [
+            "Unknown part"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "header-contrast-lining",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "CONTRAST LINING: 100% POLYESTER",
+    "expected": {
+      "groups": [
+        {
+          "part": "other",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "polyester",
+              "percent": 100
+            }
+          ],
+          "label": "contrast lining",
+          "issues": [
+            "Unknown part"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "header-not-lining",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "NOT LINING: 100% POLYESTER",
+    "expected": {
+      "groups": [
+        {
+          "part": "other",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "polyester",
+              "percent": 100
+            }
+          ],
+          "label": "not lining",
+          "issues": [
+            "Unknown part"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "header-no-shell",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "NO SHELL: 100% POLYESTER",
+    "expected": {
+      "groups": [
+        {
+          "part": "other",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "polyester",
+              "percent": 100
+            }
+          ],
+          "label": "no shell",
+          "issues": [
+            "Unknown part"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "header-inner-sole",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "INNER SOLE: 100% COTTON",
+    "expected": {
+      "groups": [
+        {
+          "part": "other",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 100
+            }
+          ],
+          "label": "inner sole",
+          "issues": [
+            "Unknown part"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "trim-then-body-excluding-trim",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "Trim: 100% POLYESTER\nBody excluding trim: 100% COTTON",
+    "expected": {
+      "groups": [
+        {
+          "part": "trim",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "polyester",
+              "percent": 100
+            }
+          ],
+          "label": "trim"
+        },
+        {
+          "part": "other",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 100
+            }
+          ],
+          "label": "body excluding trim",
+          "issues": [
+            "Unknown part"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "inline-headers-still-split",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "SHELL: 100% NYLON LINING: 100% POLYESTER",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "nylon",
+              "percent": 100
+            }
+          ],
+          "label": "shell"
+        },
+        {
+          "part": "lining",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "polyester",
+              "percent": 100
+            }
+          ],
+          "label": "lining"
+        }
+      ]
+    }
+  },
+  {
+    "id": "inline-pocket-lining-after-shell",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "SHELL: 98% COTTON 2% ELASTANE POCKET LINING: 100% POLYESTER",
+    "expected": {
+      "groups": [
+        {
+          "part": "shell",
+          "status": "verified",
+          "fibres": [
+            {
+              "fibre": "cotton",
+              "percent": 98
+            },
+            {
+              "fibre": "elastane",
+              "percent": 2
+            }
+          ],
+          "label": "shell"
+        },
+        {
+          "part": "other",
+          "status": "check",
+          "fibres": [
+            {
+              "fibre": "polyester",
+              "percent": 100
+            }
+          ],
+          "label": "pocket lining",
+          "issues": [
+            "Unknown part"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "care-hand-wash-cold",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "HAND WASH COLD",
+    "expected": {
+      "care": {
+        "items": [
+          "Hand wash"
+        ],
+        "status": "verified"
+      }
+    }
+  },
+  {
+    "id": "care-hand-wash-cold-line-dry",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "Hand wash in cold water, line dry",
+    "expected": {
+      "care": {
+        "items": [
+          "Hand wash",
+          "Line dry"
+        ],
+        "status": "verified"
+      }
+    }
+  },
+  {
+    "id": "care-do-not-iron-on-print",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "DO NOT IRON ON PRINT",
+    "expected": {
+      "care": {
+        "items": [
+          "Do not iron"
+        ],
+        "status": "check"
+      }
+    }
+  },
+  {
+    "id": "care-do-not-wash-with-other-colors",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "DO NOT WASH WITH OTHER COLORS",
+    "expected": {
+      "care": {
+        "items": [
+          "Do not wash"
+        ],
+        "status": "check"
+      }
+    }
+  },
+  {
+    "id": "care-do-not-hand-wash",
+    "about": "Synthetic: written to exercise one parser rule, not real OCR output.",
+    "text": "DO NOT HAND WASH",
+    "expected": {
+      "care": {
+        "items": [],
+        "status": "check"
+      }
+    }
+  }
+]

@@ -32,3 +32,6 @@ export const readImageAsBase64 = async (uri: string): Promise<string> => {
     reader.readAsDataURL(blob);
   });
 };
+
+/** Browsers hold the picked file in memory; there is no temp file to remove. */
+export const discardTempImage = async (_uri: string): Promise<void> => {};

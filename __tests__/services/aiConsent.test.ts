@@ -97,3 +97,30 @@ describe('callAiProxy photo gate', () => {
     expect(isAiConsentError(new Error('network'))).toBe(false);
   });
 });
+
+describe('older and newer stored answers', () => {
+  const KEY = '@smartcloset_ai_consent_v1:user-1';
+
+  it('stores a plain "granted" while nothing is sent to OpenAI but photos', async () => {
+    answer('Allow');
+    await ensureAiConsent();
+    expect(await AsyncStorage.getItem(KEY)).toBe('granted');
+  });
+
+  it('treats an answer that also covers tag text as "granted" everywhere else', async () => {
+    await AsyncStorage.setItem(KEY, 'granted_tags');
+    const spy = jest.spyOn(Alert, 'alert');
+    expect(await getAiConsent()).toBe('granted');
+    expect(await ensureAiConsent()).toBe(true);
+    await callAiProxy('vision', { requests: [] });
+    expect(spy).not.toHaveBeenCalled();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps an answer that also covers tag text when Settings reads it', async () => {
+    await AsyncStorage.setItem(KEY, 'granted_tags');
+    expect(await getAiConsent()).toBe('granted');
+    await setAiConsent('denied');
+    expect(await getAiConsent()).toBe('denied');
+  });
+});

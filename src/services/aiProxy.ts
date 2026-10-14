@@ -19,7 +19,10 @@ import { env } from '../config/env';
 import { ensureAiConsent, AI_CONSENT_ERROR } from './aiConsent';
 import { getAuthUserId } from './authUser';
 
-export type AIProvider = 'vision' | 'openai-vision' | 'brave';
+export type AIProvider = 'vision' | 'openai-vision' | 'openai-tag' | 'brave';
+
+/** Providers that carry no personal content. Everything else needs the person's AI permission. */
+const CONSENT_EXEMPT: ReadonlySet<AIProvider> = new Set<AIProvider>(['brave']);
 
 // Error text is for developer logs only. Anything the user reads goes through
 // classifyAiError + friendlyAiMessage so status codes, "ai-proxy" and provider
@@ -128,10 +131,12 @@ export const callAiProxy = async <T = unknown>(
     throw new Error(`${NOT_SIGNED_IN}: ai-proxy requires an authenticated user`);
   }
 
-  // These two carry the user's photo to third-party AI services, which needs
-  // their explicit permission (asked once, remembered). Brave only gets a text query.
-  if (provider === 'vision' || provider === 'openai-vision') {
-    if (!(await ensureAiConsent())) throw new Error(AI_CONSENT_ERROR);
+  // Everything except a plain search query carries the user's photo (or the words read from their tag) to a
+  // third-party AI service, which needs their explicit permission (asked once, remembered). A provider added
+  // later is therefore gated until it is listed in CONSENT_EXEMPT on purpose.
+  if (!CONSENT_EXEMPT.has(provider)) {
+    const ok = await ensureAiConsent(provider === 'openai-tag' ? { feature: 'tag_text' } : undefined);
+    if (!ok) throw new Error(AI_CONSENT_ERROR);
   }
 
   const resp = await fetch(buildProxyUrl(), {

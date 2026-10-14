@@ -15,6 +15,7 @@ import {
   Platform,
 } from 'react-native';
 import { useRoute, useNavigation, useFocusEffect, RouteProp } from '@react-navigation/native';
+import SwapListingCard from '../components/SwapListingCard';
 import Icon from 'react-native-vector-icons/Ionicons';
 import LinearGradient from 'react-native-linear-gradient';
 import theme from '../styles/theme';
@@ -25,6 +26,10 @@ import { parseMoney } from '../utils/money';
 import { KeyboardDoneBar, keyboardDoneProps } from '../components/KeyboardSafe';
 import { WearTrackingService } from '../services/wearTrackingService';
 import { deleteClothingItem, getClothingItem, updateClothingItem } from '../services/storage';
+import ItemQualityCard from '../components/ItemQualityCard';
+import ItemLabelBlock from '../components/ItemLabelBlock';
+import { ScanTagLink } from '../components/ScanTagButton';
+import { brandInsightsActive } from '../config/ratingFlags';
 
 const { width, height } = Dimensions.get('window');
 
@@ -180,6 +185,8 @@ const ItemDetailsScreen: React.FC = () => {
   const [isFavorite, setIsFavorite] = useState(item.favorite || false);
   const [wearCount, setWearCount] = useState(item.wearCount || 0);
   const [lastWorn, setLastWorn] = useState<string | undefined>(item.lastWorn);
+  // Set by the quality card so the delete confirmation can say the rating goes with the item.
+  const [itemHasRating, setItemHasRating] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -277,9 +284,13 @@ const ItemDetailsScreen: React.FC = () => {
   };
 
   const handleDelete = () => {
+    const deleteBody =
+      'This removes the item from your wardrobe.' +
+      (itemHasRating ? ' Your rating of it will be removed too.' : '') +
+      ' This action cannot be undone.';
     Alert.alert(
       `Delete "${item.name}"?`,
-      'This removes the item from your wardrobe. This action cannot be undone.',
+      deleteBody,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -416,9 +427,23 @@ const ItemDetailsScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
             {item.brand && (
-              <View style={styles.brandBadge}>
-                <Text style={styles.brandText}>{item.brand}</Text>
-              </View>
+              brandInsightsActive() ? (
+                <TouchableOpacity
+                  style={styles.brandBadgeLink}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  onPress={() => (navigation as any).navigate('BrandReport', { brand: item.brand })}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.brand} brand report`}
+                >
+                  <View style={styles.brandBadge}>
+                    <Text style={styles.brandText}>{item.brand}</Text>
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.brandBadge}>
+                  <Text style={styles.brandText}>{item.brand}</Text>
+                </View>
+              )
             )}
           </View>
 
@@ -449,6 +474,24 @@ const ItemDetailsScreen: React.FC = () => {
 
           {!item.isWishlist && (
             <ItemValueCard item={item} onChange={fields => setItem(prev => ({ ...prev, ...fields }))} />
+          )}
+
+          {/* Handles wishlist items itself, so it sits outside the owned-items check. */}
+          <ItemQualityCard
+            item={item}
+            wearCount={wearCount}
+            onOpenBrand={brand => (navigation as any).navigate('BrandReport', { brand })}
+            onRatingChange={setItemHasRating}
+          />
+
+          {/* Owned pieces only. Sits under the quality card; hides itself when swaps are off or not deployed. */}
+          {!item.isWishlist && (
+            <SwapListingCard
+              item={item}
+              onEditPiece={handleEdit}
+              onOpenSwaps={() => (navigation as any).navigate('Home', { screen: 'MySwaps' })}
+              onSignIn={() => (navigation as any).navigate('Home', { screen: 'SignIn' })}
+            />
           )}
 
           {/* Details Section */}
@@ -555,6 +598,13 @@ const ItemDetailsScreen: React.FC = () => {
             </View>
           )}
 
+          {!item.isWishlist && (
+            <ScanTagLink
+              hasTag={!!item.tagText}
+              onPress={() => (navigation as any).navigate('AddClothing', { editItem: item, scanTag: true })}
+            />
+          )}
+
           {/* Materials composition */}
           {item.materials && item.materials.length > 0 && (
             <View style={styles.detailsSection}>
@@ -573,6 +623,17 @@ const ItemDetailsScreen: React.FC = () => {
                 </View>
               ))}
             </View>
+          )}
+
+          {/* Label: size, condition, care and country. Renders nothing until tag scanning is switched on. */}
+          {!item.isWishlist && (
+            <ItemLabelBlock
+              item={item}
+              onClearTagText={async () => {
+                await updateClothingItem({ ...item, tagText: '' });
+                setItem(prev => ({ ...prev, tagText: undefined }));
+              }}
+            />
           )}
 
           {/* Tags */}
@@ -852,6 +913,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 20,
+  },
+  brandBadgeLink: {
+    alignSelf: 'flex-start',
   },
   brandText: {
     fontSize: 14,

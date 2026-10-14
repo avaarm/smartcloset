@@ -14,7 +14,12 @@ with
       'appointments',
       'stylist_clients',
       'stylist_profiles',
-      'recommendations'
+      'recommendations',
+      -- Ratings and consents: the owner reads their own rows through a policy; writes go through functions.
+      -- Tables with row-level security and no policy by design (the swap tables) do not belong in this list.
+      'item_ratings',
+      'brand_ratings',
+      'user_consents'
     ]) as tablename
   ),
   rls_off as (
