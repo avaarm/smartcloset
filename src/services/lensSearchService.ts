@@ -24,6 +24,8 @@
 
 import { env, hasGoogleVision } from '../config/env';
 import { readImageAsBase64 } from '../platform/fileSystem';
+import { brandFromText } from '../utils/brandNames';
+import { categoryFromText } from '../utils/clothingCategories';
 import { callAiProxy, classifyAiError, friendlyAiMessage } from './aiProxy';
 import { classifyHost, hostnameOf, sourceKindOf, type SourceKind } from './retailerDomains';
 import { getWardrobeFor, type WardrobeFor } from './wardrobeAudience';
@@ -42,6 +44,7 @@ import {
   genderBoost,
   headFamily,
   isNonProductTitle,
+  mergeRefineWords,
   passesRelevance,
   productFamilies,
   queryTokens,
@@ -358,6 +361,26 @@ const rankForDisplay = (
 /** How well a result fits a search: its title's share of the search words, Brave's order, and a nod to the wanted gender. */
 const searchScore = (tokens: readonly string[], shopFor?: ShopFor) => (r: LensResult): number =>
   titleCoverage(r.title, tokens) * 6 + r.similarity * 2 + genderBoost(r, shopFor);
+
+// ─── Refining a photo's answer with words ───────────────────────────────────
+
+/**
+ * The text search that narrows a photo's answer with the person's own words: the photo's best
+ * guess (its query, else its first label) plus what was typed. The category and brand are read
+ * from the combined words, which costs nothing and helps the search (a brand's own site counts
+ * as a shop). Null when no usable words were typed.
+ */
+export const buildRefinedSearch = (
+  photo: Pick<LensSearchResponse, 'query' | 'bestGuessLabels'>,
+  words: string,
+): { query: string; options: TextSearchOptions } | null => {
+  const base = photo.query.trim() || photo.bestGuessLabels[0]?.trim() || '';
+  const query = mergeRefineWords(base, words);
+  if (!query) return null;
+  const category = categoryFromText(query);
+  const brand = brandFromText(query);
+  return { query, options: { ...(category ? { category } : {}), ...(brand ? { brand } : {}) } };
+};
 
 // ─── Photo search ───────────────────────────────────────────────────────────
 

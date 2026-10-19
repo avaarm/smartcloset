@@ -3,9 +3,10 @@
  *
  * Ordered result tiers:
  *   1. Knowledge-base matches (crowd-sourced, high confidence)
- *   2. Web results: the Vision lens search and the person's own extra searches
- *      (text, URL paste), together ranked shops first and second-hand last,
- *      each card labelled with the kind of site
+ *   2. Web results: the Vision lens search, ranked shops first and second-hand
+ *      last, each card labelled with the kind of site. Words typed in the refine
+ *      box search again on top of what the photo was taken for and replace these
+ *      results (with a way back); a pasted link always stays first
  *
  * Only real matches are ever shown. When there are none (or the search
  * failed) the sheet says so and the user fills in the details themselves.
@@ -16,7 +17,7 @@
  * 'manual'), growing the KB either way.
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -30,6 +31,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {
+  buildRefinedSearch,
   searchProductsByText,
   toSecureImageUrl,
   type LensResult,
@@ -64,6 +66,8 @@ type Props = {
   lensResults: LensResult[];
   /** Friendly reason the automatic match search failed (shown instead of "no matches"). */
   searchError?: string | null;
+  /** What the photo was recognised as ("burgundy structured tote Bottega Veneta"): typed words are added to it. */
+  searchHint?: string;
   onPick: (match: PickedMatch) => void;
   onSkip: () => void;
 };
@@ -75,55 +79,77 @@ const MatchPickerSheet: React.FC<Props> = ({
   kbMatches,
   lensResults,
   searchError,
+  searchHint,
   onPick,
   onSkip,
 }) => {
-  // Additional results from user-driven searches (text / URL)
-  const [extraResults, setExtraResults] = useState<LensResult[]>([]);
+  // The person's refined search: it takes the place of the photo's results until they go back.
+  const [refined, setRefined] = useState<{ label: string; results: LensResult[] } | null>(null);
+  // A later refine makes an earlier one's answer stale.
+  const refineSeq = useRef(0);
+  const stripRef = useRef<ScrollView>(null);
   // A page the person pasted is the match they asked for: it stays first, whatever the site is.
   const [pastedResults, setPastedResults] = useState<LensResult[]>([]);
   const [extraLoading, setExtraLoading] = useState(false);
   // Outcome of the last user-driven search when it found nothing or failed.
   const [extraMessage, setExtraMessage] = useState<string | null>(null);
-  const [activeInput, setActiveInput] = useState<ExtraSource | null>(null);
+  // The refine box is open from the start: it is the way to correct a wrong guess.
+  const [activeInput, setActiveInput] = useState<ExtraSource | null>('text');
   const [textQuery, setTextQuery] = useState('');
   const [urlQuery, setUrlQuery] = useState('');
 
-  // One list, so a shop found by the person's own search is not stuck behind
-  // second-hand listings from the photo search. Ties keep their order.
+  // Shops first, second-hand last, whichever search the cards come from. Ties keep their order.
   const webResults = useMemo(() => {
-    const seen = new Set(lensResults.map(r => r.url));
-    const card = (r: LensResult, key: string) => ({ r, key, source: r.source, sourceKind: sourceKindOf(r) });
-    return sortByTier([
-      ...lensResults.map(r => card(r, `lens-${r.id}`)),
-      ...extraResults.filter(r => !seen.has(r.url)).map(r => card(r, `extra-${r.id}`)),
-    ]);
-  }, [lensResults, extraResults]);
+    const prefix = refined ? 'refined' : 'lens';
+    return sortByTier(
+      (refined ? refined.results : lensResults).map(r => ({
+        r,
+        key: `${prefix}-${r.id}`,
+        source: r.source,
+        sourceKind: sourceKindOf(r),
+      })),
+    );
+  }, [lensResults, refined]);
 
   const hasResults = kbMatches.length > 0 || pastedResults.length > 0 || webResults.length > 0;
 
   // ── Extra search handlers ──
 
   const runTextSearch = useCallback(async () => {
-    const q = textQuery.trim();
-    if (!q) return;
+    const built = buildRefinedSearch({ query: searchHint ?? '', bestGuessLabels: [] }, textQuery);
+    if (!built) return;
+    const seq = ++refineSeq.current;
     setExtraLoading(true);
     setExtraMessage(null);
     try {
-      const resp = await searchProductsByText(q);
+      const resp = await searchProductsByText(built.query, built.options);
+      if (seq !== refineSeq.current) return;
       // A card without a picture is no use for picking a match. YouTube,
       // Pinterest and blogs are already dropped by lensSearchService.
       const withImage = resp.results.filter(r => !!toSecureImageUrl(r.imageUrl));
-      setExtraResults(prev => mergeUniqueById(prev, withImage));
       if (resp.error) setExtraMessage(resp.error);
       else if (withImage.length === 0) setExtraMessage('No shop results for that. Try fewer words.');
+      else {
+        setRefined({ label: built.query, results: withImage });
+        // The new cards replace the old ones; start the strip at the first of them.
+        stripRef.current?.scrollTo({ x: 0, animated: true });
+      }
     } catch (err: any) {
+      if (seq !== refineSeq.current) return;
       console.warn('[MatchPicker] text search failed:', err?.message);
       setExtraMessage("Couldn't search right now. Check your connection and try again.");
     } finally {
-      setExtraLoading(false);
+      if (seq === refineSeq.current) setExtraLoading(false);
     }
-  }, [textQuery]);
+  }, [textQuery, searchHint]);
+
+  const backToPhotoMatches = useCallback(() => {
+    refineSeq.current += 1;
+    setRefined(null);
+    setExtraMessage(null);
+    setExtraLoading(false);
+    stripRef.current?.scrollTo({ x: 0, animated: false });
+  }, []);
 
   const runUrlLookup = useCallback(async () => {
     const u = urlQuery.trim();
@@ -191,13 +217,34 @@ const MatchPickerSheet: React.FC<Props> = ({
             color={theme.colors.mediumGray}
           />
           <Text style={styles.emptyText}>
-            {searchError || 'Try a text or URL search below, or fill in the details directly.'}
+            {searchError || 'Type some words below, or paste a link, or fill in the details directly.'}
           </Text>
         </View>
       )}
 
+      {!loading && refined && (
+        <View style={styles.refinedBanner}>
+          <Text style={styles.refinedLabel} numberOfLines={1}>
+            {`Results for “${refined.label}”`}
+          </Text>
+          <Pressable
+            onPress={backToPhotoMatches}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Back to photo matches"
+          >
+            <Text style={styles.refinedBack}>Back to photo matches</Text>
+          </Pressable>
+        </View>
+      )}
+
       {!loading && hasResults && (
-        <ScrollView horizontal keyboardShouldPersistTaps="handled" showsHorizontalScrollIndicator={false}>
+        <ScrollView
+          ref={stripRef}
+          horizontal
+          keyboardShouldPersistTaps="handled"
+          showsHorizontalScrollIndicator={false}
+        >
           <View style={styles.row}>
             {kbMatches.map((m, idx) => (
               <KBCard key={`kb-${idx}`} match={m} onPick={onPick} />
@@ -214,11 +261,11 @@ const MatchPickerSheet: React.FC<Props> = ({
 
       {/* ── More search options toolbar ── */}
       <View style={styles.toolbar}>
-        <Text style={styles.toolbarLabel}>Search more:</Text>
+        <Text style={styles.toolbarLabel}>Not right?</Text>
         <View style={styles.toolbarRow}>
           <ToolbarButton
             icon="search"
-            label="Text"
+            label="Refine"
             active={activeInput === 'text'}
             onPress={() => toggleInput('text')}
           />
@@ -236,7 +283,7 @@ const MatchPickerSheet: React.FC<Props> = ({
         <View style={styles.inlineInputRow}>
           <TextInput
             style={styles.inlineInput}
-            placeholder="e.g. 'burgundy leather clutch'"
+            placeholder={searchHint ? "Add words: 'black', 'leather', a brand..." : "e.g. 'burgundy leather clutch'"}
             placeholderTextColor={theme.colors.mediumGray}
             value={textQuery}
             onChangeText={setTextQuery}
@@ -244,8 +291,15 @@ const MatchPickerSheet: React.FC<Props> = ({
             returnKeyType="search"
             autoCapitalize="none"
             autoCorrect={false}
+            accessibilityLabel="Refine the matches with words"
           />
-          <Pressable style={styles.inlineGoButton} onPress={runTextSearch}>
+          <Pressable
+            style={[styles.inlineGoButton, !textQuery.trim() && { opacity: 0.4 }]}
+            onPress={runTextSearch}
+            disabled={!textQuery.trim()}
+            accessibilityRole="button"
+            accessibilityLabel="Search with these words"
+          >
             <Icon name="arrow-forward" size={16} color="#FFFFFF" />
           </Pressable>
         </View>
@@ -265,6 +319,7 @@ const MatchPickerSheet: React.FC<Props> = ({
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"
+            accessibilityLabel="Product link"
           />
           <Pressable style={styles.inlineGoButton} onPress={runUrlLookup}>
             <Icon name="arrow-forward" size={16} color="#FFFFFF" />
@@ -449,6 +504,24 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 12,
     color: theme.colors.mediumGray,
+  },
+  refinedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 8,
+  },
+  refinedLabel: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  refinedBack: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.accent,
   },
   extraLoadingWrap: {
     flexDirection: 'row',

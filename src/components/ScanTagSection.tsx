@@ -1,9 +1,14 @@
 /**
- * ScanTagSection: the body of the "Label" section of Add/Edit item. The Scan tag button, a note after a scan, the
- * "Made in" field and the care instructions. The title and spacing come from the screen's FormSection.
+ * ScanTagSection: the body of the "Label & washing instructions" section of Add/Edit item. A note after a scan, the
+ * "Made in" field and the care instructions, and (when `showScanButton` is on, the default) the Scan tag button.
+ * The title and spacing come from the screen's FormSection.
  *
- * useTagFields holds what only this section edits (care, country of origin and the stored tag text). It is state
- * only, no I/O, so the screen calls it unconditionally; the section itself is a flag wrapper (design 6.1).
+ * ScanTagFormCard is the prominent card near the top of the form that starts the same scan. The screen shows one
+ * scanner: the card, with ScanTagSection's own button off, so there is one review sheet and the section below it
+ * is for checking and editing what the scan filled in.
+ *
+ * useTagFields holds what only the section edits (care, country of origin and the stored tag text). It is state
+ * only, no I/O, so the screen calls it unconditionally; the section and the card are flag wrappers (design 6.1).
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
@@ -16,8 +21,8 @@ import { cleanCareInstructions } from '../utils/itemCondition';
 import { CARE_PHRASES } from '../utils/careNames';
 import { ChipMultiSelect } from './ChipSelect';
 import { singleLineDoneProps } from './KeyboardSafe';
-import ScanTagButton from './ScanTagButton';
-import type { TagApplyChoice, TagCurrentValues } from './tagApply';
+import ScanTagButton, { GUEST_SCAN_MESSAGE } from './ScanTagButton';
+import { describeMaterials, type TagApplyChoice, type TagCurrentValues } from './tagApply';
 
 export type { TagApplyChoice, TagCurrentValues };
 
@@ -45,9 +50,12 @@ export interface ScanTagSectionProps {
   onBrandChange: (s: string) => void;
   isGuest: boolean;
   autoOpen?: boolean;
+  /** Off where the screen shows the scan card instead, so there is one scanner. */
+  showScanButton?: boolean;
 }
 
 export const FILLED_NOTE = 'Filled from the tag. Check the numbers.';
+export const CARE_EMPTY_NOTE = 'None yet. Tap Edit to add the washing instructions from the tag.';
 export const MAX_ORIGIN_LENGTH = 60;
 
 // ─── The fields this section owns ───────────────────────────────────────────
@@ -104,20 +112,13 @@ export function useTagFields(
 
 // ─── The section ────────────────────────────────────────────────────────────
 
-function ScanTagSectionInner({
-  tag,
-  category,
-  materials,
-  onMaterialsChange,
-  size,
-  onSizeChange,
-  brand,
-  onBrandChange,
-  isGuest,
-  autoOpen,
-}: ScanTagSectionProps) {
-  const [careOpen, setCareOpen] = useState(false);
+type TagApplyArgs = Pick<
+  ScanTagSectionProps,
+  'tag' | 'materials' | 'onMaterialsChange' | 'size' | 'onSizeChange' | 'brand' | 'onBrandChange'
+>;
 
+/** What the form holds for the scan to compare with, and what to do with the rows the person ticks. */
+function useTagApply({ tag, materials, onMaterialsChange, size, onSizeChange, brand, onBrandChange }: TagApplyArgs) {
   const current = useMemo<TagCurrentValues>(
     () => ({ materials, size, brand, originCountry: tag.originCountry, careInstructions: tag.careInstructions }),
     [materials, size, brand, tag.originCountry, tag.careInstructions],
@@ -153,6 +154,26 @@ function ScanTagSectionInner({
     ],
   );
 
+  return { current, apply };
+}
+
+function ScanTagSectionInner({
+  tag,
+  category,
+  materials,
+  onMaterialsChange,
+  size,
+  onSizeChange,
+  brand,
+  onBrandChange,
+  isGuest,
+  autoOpen,
+  showScanButton = true,
+}: ScanTagSectionProps) {
+  const [careOpen, setCareOpen] = useState(false);
+  const { current, apply } = useTagApply({ tag, materials, onMaterialsChange, size, onSizeChange, brand, onBrandChange });
+  const { careInstructions, setCareInstructions } = tag;
+
   const options = useMemo(() => {
     const extra = careInstructions.filter(line => !CARE_PHRASES.includes(line));
     return [...CARE_PHRASES, ...extra].map(line => ({ label: line, value: line }));
@@ -167,7 +188,9 @@ function ScanTagSectionInner({
 
   return (
     <View style={styles.wrap}>
-      <ScanTagButton onApply={apply} current={current} category={category} guest={isGuest} autoOpen={autoOpen} />
+      {showScanButton ? (
+        <ScanTagButton onApply={apply} current={current} category={category} guest={isGuest} autoOpen={autoOpen} />
+      ) : null}
 
       {tag.filledFromTag ? (
         <View style={styles.note} accessibilityLiveRegion="polite">
@@ -205,11 +228,15 @@ function ScanTagSectionInner({
           onPress={() => setCareOpen(open => !open)}
           accessibilityRole="button"
           accessibilityLabel={`Care instructions (${careInstructions.length})`}
+          accessibilityHint={careOpen ? 'Closes the list' : 'Opens the list to add or remove washing instructions'}
           accessibilityState={{ expanded: careOpen }}
           style={styles.careHeader}
         >
           <Text style={styles.careTitle}>{`Care instructions (${careInstructions.length})`}</Text>
-          <Icon name={careOpen ? 'chevron-up' : 'chevron-down'} size={18} color={theme.colors.textMuted} />
+          <View style={styles.careAction}>
+            <Text style={styles.careActionText}>{careOpen ? 'Done' : 'Edit'}</Text>
+            <Icon name={careOpen ? 'chevron-up' : 'chevron-down'} size={18} color={theme.colors.textMuted} />
+          </View>
         </Pressable>
         {careOpen ? (
           <ChipMultiSelect<string>
@@ -218,7 +245,9 @@ function ScanTagSectionInner({
             onToggle={toggleCare}
             accessibilityLabel="Care instructions"
           />
-        ) : careInstructions.length > 0 ? (
+        ) : careInstructions.length === 0 ? (
+          <Text style={styles.careEmpty}>{CARE_EMPTY_NOTE}</Text>
+        ) : (
           <View style={styles.chips}>
             {careInstructions.map(line => (
               <Pressable
@@ -234,7 +263,7 @@ function ScanTagSectionInner({
               </Pressable>
             ))}
           </View>
-        ) : null}
+        )}
       </View>
     </View>
   );
@@ -242,6 +271,107 @@ function ScanTagSectionInner({
 
 const ScanTagSection: React.FC<ScanTagSectionProps> = props => (tagScanActive() ? <ScanTagSectionInner {...props} /> : null);
 export default ScanTagSection;
+
+// ─── The card at the top of the form ────────────────────────────────────────
+
+export interface ScanTagFormCardProps {
+  tag: TagFieldsApi;
+  category?: string;
+  materials: MaterialComponent[];
+  onMaterialsChange: (next: MaterialComponent[]) => void;
+  size: string;
+  onSizeChange: (s: string) => void;
+  brand: string;
+  onBrandChange: (s: string) => void;
+  isGuest: boolean;
+  autoOpen?: boolean;
+}
+
+export const SCAN_FORM_CARD_TITLE = 'Scan the tag & washing instructions';
+export const SCAN_FORM_CARD_BEFORE = 'Take a photo of the tag';
+export const SCAN_FORM_CARD_AFTER = 'Read from the tag';
+export const SCAN_FORM_CARD_NOTHING = 'Nothing was filled in. Type the details below.';
+
+/** "Size M · 60% cotton, 40% polyester · 2 care instructions": what the form holds from the tag, for the card. */
+export const tagSummary = (
+  tag: Pick<TagFieldsApi, 'careInstructions' | 'originCountry'>,
+  size: string,
+  materials: readonly MaterialComponent[],
+): string => {
+  const parts: string[] = [];
+  if (size.trim() !== '') parts.push(`Size ${size.trim()}`);
+  const fabric = describeMaterials(materials);
+  if (fabric !== '') parts.push(fabric);
+  const care = tag.careInstructions.length;
+  if (care > 0) parts.push(`${care} care instruction${care === 1 ? '' : 's'}`);
+  if (tag.originCountry.trim() !== '') parts.push(`Made in ${tag.originCountry.trim()}`);
+  return parts.join(' · ');
+};
+
+function ScanTagFormCardInner({
+  tag,
+  category,
+  materials,
+  onMaterialsChange,
+  size,
+  onSizeChange,
+  brand,
+  onBrandChange,
+  isGuest,
+  autoOpen,
+}: ScanTagFormCardProps) {
+  const { current, apply } = useTagApply({ tag, materials, onMaterialsChange, size, onSizeChange, brand, onBrandChange });
+  // Only a scan stores tag text, so a stored text means the tag was read (now, or when the item was last saved).
+  const scanned = tag.tagText !== '';
+  const summary = scanned ? tagSummary(tag, size, materials) : '';
+
+  return (
+    <ScanTagButton
+      onApply={apply}
+      current={current}
+      category={category}
+      guest={isGuest}
+      autoOpen={autoOpen}
+      renderTrigger={({ start, blocked }) => (
+        <Pressable
+          onPress={start}
+          disabled={blocked}
+          accessibilityRole="button"
+          accessibilityLabel={scanned ? 'Rescan the tag and washing instructions' : 'Scan the tag and washing instructions'}
+          accessibilityState={{ disabled: blocked }}
+          style={({ pressed }) => [styles.card, blocked && styles.cardDisabled, pressed && styles.pressed]}
+        >
+          <View style={[styles.cardIcon, blocked && styles.cardIconDisabled]}>
+            <Icon
+              name={scanned ? 'checkmark-circle-outline' : 'scan-outline'}
+              size={26}
+              color={blocked ? theme.colors.textMuted : '#7A5A22'}
+            />
+          </View>
+          <View style={styles.cardText}>
+            <Text style={styles.cardTitle}>{SCAN_FORM_CARD_TITLE}</Text>
+            <Text style={styles.cardStatus}>
+              {blocked ? GUEST_SCAN_MESSAGE : scanned ? SCAN_FORM_CARD_AFTER : SCAN_FORM_CARD_BEFORE}
+            </Text>
+            {!blocked && scanned ? (
+              <Text style={styles.cardSummary} numberOfLines={3}>
+                {summary || SCAN_FORM_CARD_NOTHING}
+              </Text>
+            ) : null}
+          </View>
+          {!blocked ? (
+            <View style={styles.cardAction}>
+              <Text style={styles.cardActionText}>{scanned ? 'Scan again' : 'Scan'}</Text>
+            </View>
+          ) : null}
+        </Pressable>
+      )}
+    />
+  );
+}
+
+/** Renders nothing with the flag off, like the section it sits above. */
+export const ScanTagFormCard: React.FC<ScanTagFormCardProps> = props => (tagScanActive() ? <ScanTagFormCardInner {...props} /> : null);
 
 const styles = StyleSheet.create({
   wrap: { gap: 14 },
@@ -268,6 +398,9 @@ const styles = StyleSheet.create({
   },
   careHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 },
   careTitle: { fontSize: 16, fontWeight: '600', color: theme.colors.text },
+  careAction: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  careActionText: { fontSize: 15, fontWeight: '600', color: '#7A5A22' },
+  careEmpty: { fontSize: 13, color: theme.colors.textMuted, marginLeft: 4 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
   chip: {
     minHeight: 36,
@@ -279,4 +412,32 @@ const styles = StyleSheet.create({
   },
   chipText: { fontSize: 14, color: theme.colors.text },
   chipIcon: { marginLeft: 6 },
+  card: {
+    minHeight: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.accent,
+    backgroundColor: theme.colors.accentSubtle,
+  },
+  cardDisabled: { borderColor: theme.colors.border, backgroundColor: theme.colors.mutedBackground },
+  pressed: { opacity: 0.85 },
+  cardIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  cardIconDisabled: { backgroundColor: theme.colors.border },
+  cardText: { flex: 1 },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: theme.colors.text },
+  cardStatus: { fontSize: 14, color: theme.colors.textMuted, marginTop: 2 },
+  cardSummary: { fontSize: 13, color: theme.colors.text, marginTop: 4 },
+  cardAction: { paddingHorizontal: 14, minHeight: 36, borderRadius: 18, justifyContent: 'center', backgroundColor: theme.colors.accent },
+  cardActionText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF' },
 });

@@ -5,7 +5,8 @@ import ChipSelect, { ChipMultiSelect } from '../components/ChipSelect';
 import * as ImagePicker from 'react-native-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { saveClothingItem, updateClothingItem } from '../services/storage';
+import { getClothingItems, saveClothingItem, updateClothingItem } from '../services/storage';
+import { saveItemRating } from '../services/ratingService';
 import { ClothingCategory, Occasion } from '../types/clothing';
 import type { MaterialComponent, Season } from '../types';
 import {
@@ -35,12 +36,32 @@ import {
 } from '../services/productContributions';
 import MatchPickerSheet, { type PickedMatch } from './MatchPickerSheet';
 import MaterialsEditor from '../components/MaterialsEditor';
-import ScanTagSection, { useTagFields } from '../components/ScanTagSection';
+import ScanTagSection, { ScanTagFormCard, useTagFields } from '../components/ScanTagSection';
 import BrandInsightStrip from '../components/BrandInsightStrip';
-import { tagScanActive } from '../config/ratingFlags';
+import { ratingsActive, tagScanActive } from '../config/ratingFlags';
 import TypePicker from '../components/TypePicker';
+import SizePicker from '../components/SizePicker';
+import StylePicker from '../components/StylePicker';
+import AddRatingSection, {
+  AddBrandRatingRow,
+  BrandSheetHost,
+  RATING_NOT_SAVED_BODY,
+  RATING_NOT_SAVED_TITLE,
+  useBrandRatingDraft,
+  useItemRatingDraft,
+} from '../components/AddRatingSection';
 import { noteAddedItem } from '../utils/askWardrobeFor';
 import { ITEM_CONDITION_LABELS, ITEM_CONDITIONS, cleanSize, type ItemCondition } from '../utils/itemCondition';
+import { sizeNoun } from '../utils/sizeOptions';
+import {
+  STYLE_OPTIONS,
+  isItemStyle,
+  stylesFromTags,
+  tagsWithStyles,
+  tagsWithoutStyles,
+  type ItemStyle,
+} from '../utils/styleOptions';
+import { brandKeyRaw } from '../utils/brandKey';
 import { getWardrobeFor } from '../services/wardrobeAudience';
 import {
   KeyboardDoneBar,
@@ -111,6 +132,48 @@ const positiveAmount = (raw: string): number | undefined => {
 };
 
 const splitTags = (raw: string): string[] => raw.split(',').map(tag => tag.trim()).filter(Boolean);
+
+/**
+ * The item's tags from the two places they are edited: the style chips and the free-text field. A style word typed
+ * in the field counts as that style, so nothing the person typed is lost and no style is listed twice.
+ */
+const mergeTags = (typed: string, styles: readonly ItemStyle[]): string[] => {
+  const words = splitTags(typed);
+  const typedStyles = stylesFromTags(words);
+  return tagsWithStyles(words, STYLE_OPTIONS.filter(style => styles.includes(style) || typedStyles.includes(style)));
+};
+
+/** The styles with `add` switched on, in the order the chips are shown. */
+const withStyles = (styles: readonly ItemStyle[], add: readonly ItemStyle[]): ItemStyle[] =>
+  STYLE_OPTIONS.filter(style => styles.includes(style) || add.includes(style));
+
+/** A rating is a second request after the item is saved; it gets this long before the form moves on without it. */
+const RATING_SAVE_TIMEOUT_MS = 8000;
+
+const withTimeout = <T,>(work: Promise<T>, ms: number): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timed out')), ms);
+    work.then(
+      value => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      error => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+
+/**
+ * The id the database gave a new item. saveClothingItem does not hand it back, and a new row is the newest one, so
+ * it is the latest item of that name and category. Null when it can't be found.
+ */
+const findSavedItemId = async (saved: { name: string; category: string }): Promise<string | null> => {
+  const recent = await getClothingItems({ limit: 5 });
+  const found = recent.find(i => !i.isWishlist && i.name === saved.name && i.category === saved.category);
+  return found?.id ?? null;
+};
 
 /** What is wrong with a value the owner typed, or null when it can be saved. */
 const valueProblem = (raw: string): string | null => {
@@ -183,7 +246,9 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   const [retailCost, setRetailCost] = useState<string>(editItem?.retailCost?.toString() || '');
   const [purchaseDate, setPurchaseDate] = useState<Date>(editItem?.purchaseDate ? new Date(editItem.purchaseDate) : new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [tags, setTags] = useState<string>(editItem?.tags?.join(', ') || '');
+  // Style words live in the item's tags but have chips of their own; the field holds the rest.
+  const [tags, setTags] = useState<string>(() => tagsWithoutStyles(editItem?.tags).join(', '));
+  const [itemStyles, setItemStyles] = useState<ItemStyle[]>(() => stylesFromTags(editItem?.tags));
   const [notes, setNotes] = useState<string>(editItem?.notes || '');
   const [favorite, setFavorite] = useState(editItem?.favorite || false);
   const [retailer, setRetailer] = useState<string>(editItem?.retailer || '');
@@ -209,6 +274,8 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   // AI recognition states
   const [analyzing, setAnalyzing] = useState(false);
   const [recognitionResult, setRecognitionResult] = useState<RecognitionResult | null>(null);
+  // What the owner says the item is when the photo reading got it wrong ("leather ankle boots").
+  const [detectHint, setDetectHint] = useState('');
 
   // Match-picker state — populated after Vision analysis
   const [matchLoading, setMatchLoading] = useState(false);
@@ -228,6 +295,8 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   const [matchError, setMatchError] = useState<string | null>(null);
   // Guests can't use AI features, so say so before they pick a photo.
   const [isGuestUser, setIsGuestUser] = useState(false);
+  // False until the session has been read, so a guest does not see signed-in controls flash by.
+  const [authChecked, setAuthChecked] = useState(false);
   // Identifies the latest photo analysis; results of an older one are dropped.
   const analysisId = useRef(0);
   // Care, country of origin and tag text. State only; nothing is read or sent until a scan or an edit.
@@ -252,7 +321,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
     cost: cost === matchFilled.cost ? undefined : positiveAmount(cost),
     retailCost: retailCost === matchFilled.retailCost ? undefined : positiveAmount(retailCost),
     materials,
-    tags: splitTags(tags),
+    tags: mergeTags(tags, itemStyles),
   };
   const estimate = estimateItemValue(estimateInputs, { matchedPrice });
   const estimateKey = JSON.stringify([estimateInputs, matchedPrice ?? null]);
@@ -278,12 +347,54 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   };
 
   useEffect(() => {
-    getAuthUserId().then(id => setIsGuestUser(!id));
+    getAuthUserId().then(id => {
+      setIsGuestUser(!id);
+      setAuthChecked(true);
+    });
     // Leaving the screen invalidates any analysis still running.
     return () => {
       analysisId.current += 1;
     };
   }, []);
+
+  // ── Ratings: owned items only, for a signed-in person, and only while ratings are on ──
+  const signedIn = authChecked ? !isGuestUser : null;
+  const ratingsOn = ratingsActive() && !isWishlist;
+  const itemRating = useItemRatingDraft({ itemId: isEditing ? String(editItem.id) : null, active: ratingsOn, signedIn });
+  const brandRating = useBrandRatingDraft(brand, ratingsOn && signedIn === true);
+  const [brandSheetOpen, setBrandSheetOpen] = useState(false);
+  const brandSheetBusy = useRef(false);
+  // The full brand sheet rates from the saved piece, so it is offered when editing one of that brand (or once the brand is rated).
+  const savedBrandKey = brandKeyRaw(editItem?.brand);
+  const canRateBrandMore =
+    isEditing &&
+    brandRating.usable &&
+    (brandRating.stored !== null || (savedBrandKey !== null && savedBrandKey === brandKeyRaw(brand)));
+
+  const openBrandSheet = async () => {
+    if (brandSheetBusy.current) return;
+    brandSheetBusy.current = true;
+    try {
+      // Stars chosen in the form are saved first, so the sheet opens on them.
+      if (brandRating.dirty) {
+        try {
+          await brandRating.commit();
+          await brandRating.reload();
+        } catch {
+          // The sheet opens on what is stored; the stars stay as chosen and are tried again on Save.
+        }
+      }
+      setBrandSheetOpen(true);
+    } finally {
+      brandSheetBusy.current = false;
+    }
+  };
+  const onBrandMore = () => {
+    openBrandSheet().catch(() => {});
+  };
+  const onBrandSheetChanged = () => {
+    brandRating.reload().catch(() => {});
+  };
 
   const onCategoryChange = useCallback((value: ClothingCategory) => {
     categoryTouched.current = true;
@@ -313,8 +424,27 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
     setOccasion(value === null || value === 'any' ? null : value);
   }, []);
 
+  const onStyleToggle = useCallback((style: ItemStyle) => {
+    setItemStyles(prev => (prev.includes(style) ? prev.filter(s => s !== style) : withStyles(prev, [style])));
+  }, []);
+
+  // A style word typed in the Tags field becomes its chip once the field is left.
+  const absorbTypedStyles = () => {
+    const words = splitTags(tags);
+    const typed = stylesFromTags(words);
+    if (typed.length === 0) return;
+    setItemStyles(prev => withStyles(prev, typed));
+    setTags(tagsWithoutStyles(words).join(', '));
+  };
+
   const redetectFromPhoto = () => {
     if (imageUri && !analyzing) analyzeImage(imageUri, { redetect: true });
+  };
+
+  // The same re-detect, told what the item is: the words go to the model as a hint along with the photo.
+  const redetectWithHint = () => {
+    const hint = detectHint.trim();
+    if (imageUri && !analyzing && hint) analyzeImage(imageUri, { redetect: true, hint });
   };
 
   const showImageOptions = () => {
@@ -473,7 +603,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
    * photo already on the item: it corrects the category, type and colour (replacing what is
    * there) and leaves everything else, including any picked match, as it is.
    */
-  const analyzeImage = async (uri: string, opts: { redetect?: boolean } = {}) => {
+  const analyzeImage = async (uri: string, opts: { redetect?: boolean; hint?: string } = {}) => {
     const redetect = !!opts.redetect;
     // Analysis and the match search take seconds, and another photo can be
     // picked meanwhile. Everything this run sets goes through isCurrent() so a
@@ -483,6 +613,8 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
 
     setAnalyzing(true);
     if (!redetect) {
+      // A new photo starts over, including the words said about the last one.
+      setDetectHint('');
       setMatchSheetDismissed(false);
       setPickedMatch(null);
       // A price a picked match filled in is the listing's, not what the owner paid.
@@ -513,7 +645,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
       }
 
       // ── 2. Run Vision AI ──
-      const result = await analyzeClothingImage(uri);
+      const result = opts.hint ? await analyzeClothingImage(uri, { title: opts.hint }) : await analyzeClothingImage(uri);
       if (!isCurrent()) return;
       setRecognitionResult(result);
       setVisionLabels(result.rawLabels || []);
@@ -692,8 +824,10 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
       const generatedName = generateNameFromRecognition({ ...result, color: confidentColor });
       if (generatedName) setName(prev => (prev.trim() ? prev : generatedName));
 
-      // Add detected material and style descriptors as tags, merged into whatever
-      // the user has typed by then.
+      // Detected styles that have a chip light it; the other descriptors and the material become tags,
+      // merged into whatever the user has typed by then.
+      const detectedStyles = (result.style ?? []).slice(0, 3).map((s: string) => s.trim().toLowerCase()).filter(isItemStyle);
+      if (detectedStyles.length > 0) setItemStyles(prev => withStyles(prev, detectedStyles));
       setTags((prev: string) => {
         const current = prev.split(',').map((t: string) => t.trim()).filter(Boolean);
         const toAdd: string[] = [];
@@ -706,6 +840,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         if (result.style && result.style.length > 0) {
           result.style.slice(0, 3).forEach((s: string) => {
             const lc = s.toLowerCase();
+            if (isItemStyle(lc)) return;
             if (!current.some((t: string) => t.toLowerCase() === lc) && !toAdd.includes(lc)) {
               toAdd.push(lc);
             }
@@ -762,6 +897,35 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
     return Object.keys(newErrors).length === 0;
   };
 
+  /**
+   * Sends the rating the person drafted, once the item exists: the stars and words of "How does it feel?" and the
+   * brand stars. Only what was chosen or changed is sent. Returns false when something could not be saved, and never
+   * throws: the item is already saved and stays saved.
+   */
+  const saveDraftRatings = async (saved: { name: string; category: string; id: string | null }): Promise<boolean> => {
+    if (!ratingsOn || signedIn !== true) return true;
+    const itemInput = itemRating.toInput();
+    const brandChanged = brandRating.dirty;
+    let ok = true;
+    const attempt = async (work: () => Promise<unknown>) => {
+      try {
+        await withTimeout(work(), RATING_SAVE_TIMEOUT_MS);
+      } catch (error) {
+        console.warn('[AddClothing] rating not saved:', error);
+        ok = false;
+      }
+    };
+    if (itemInput) {
+      await attempt(async () => {
+        const id = isEditing ? String(editItem.id) : saved.id ?? (await findSavedItemId(saved));
+        if (!id) throw new Error('the new item was not found');
+        await saveItemRating(id, itemInput);
+      });
+    }
+    if (brandChanged) await attempt(() => brandRating.commit());
+    return ok;
+  };
+
   const handleSave = async () => {
     if (saving) return;
     if (!validateForm()) {
@@ -807,7 +971,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         cost: cost ? parseMoney(cost) : undefined,
         retailCost: retailCost ? parseMoney(retailCost) : undefined,
         purchaseDate: purchaseDate.toISOString(),
-        tags: splitTags(tags),
+        tags: mergeTags(tags, itemStyles),
         notes: notes.trim(),
         favorite,
         retailer: retailer.trim(),
@@ -821,11 +985,18 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         valueSource: isWishlist ? undefined : valueIsUser ? 'user' : 'estimate',
       };
 
+      let createdId: string | null = null;
       if (isEditing) {
         await updateClothingItem(itemData);
       } else {
-        await saveClothingItem(itemData);
+        // The store resolves with nothing today. If it ever hands back the new row's id, that id is used for the
+        // rating; until then the id is looked up (findSavedItemId).
+        const created: unknown = await saveClothingItem(itemData);
+        if (typeof created === 'string' && created !== '') createdId = created;
       }
+
+      // The item is saved. Its rating is a second request that may fail on its own; if it does, say so gently below.
+      const ratingsSaved = await saveDraftRatings({ name: itemData.name, category: itemData.category, id: createdId });
 
       // ── Record a contribution to the knowledge base ──
       // Every save — whether from a lens match, KB match, or manual entry —
@@ -869,6 +1040,10 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
       }
 
       navigation.goBack();
+      // After the screen has gone, so the message is not lost in the transition and does not hold the person here.
+      if (!ratingsSaved) {
+        setTimeout(() => Alert.alert(RATING_NOT_SAVED_TITLE, RATING_NOT_SAVED_BODY), 400);
+      }
     } catch (error) {
       console.error('Error saving item:', error);
       Alert.alert('Error', 'Failed to save item. Please try again.');
@@ -980,6 +1155,33 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
                   : friendlyAiMessage(unavailableReason, 'analyze')}
               </Text>
 
+              {/* Wrong reading? Say what it is and read the photo again with those words as a hint. */}
+              {!isGuestUser && !!imageUri && (recognitionResult.isReal || unavailableReason === 'other') && (
+                <View style={styles.hintRow}>
+                  <TextInput
+                    style={styles.hintInput}
+                    accessibilityLabel="Tell us what it is"
+                    placeholder="Not right? Tell us what it is"
+                    placeholderTextColor="#6B7280"
+                    value={detectHint}
+                    onChangeText={setDetectHint}
+                    maxLength={120}
+                    {...singleLineDoneProps}
+                  />
+                  <Pressable
+                    onPress={redetectWithHint}
+                    disabled={!detectHint.trim()}
+                    accessibilityRole="button"
+                    accessibilityLabel="Read the photo again with this description"
+                    accessibilityState={{ disabled: !detectHint.trim() }}
+                    hitSlop={6}
+                    style={[styles.hintButton, !detectHint.trim() && styles.hintButtonOff]}
+                  >
+                    <Text style={styles.hintButtonText}>Try again</Text>
+                  </Pressable>
+                </View>
+              )}
+
               {/* Color swatches — tap to set as the item's color */}
               {recognitionResult.colors && recognitionResult.colors.length > 0 && (
                 <View style={styles.swatchRow}>
@@ -1074,6 +1276,13 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
                 kbMatches={kbMatches}
                 lensResults={lensResults}
                 searchError={matchError}
+                searchHint={[
+                  recognitionResult.color,
+                  recognitionResult.brand,
+                  recognitionResult.subtype || recognitionResult.type,
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
                 onPick={applyMatch}
                 onSkip={dismissMatchSheet}
               />
@@ -1182,6 +1391,24 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
           )}
         </View>
 
+        {/* The tag and its washing instructions are read from a photo, so the way in is here, right under the item's own photo. */}
+        {tagScanActive() && (
+          <View style={styles.section}>
+            <ScanTagFormCard
+              tag={tag}
+              category={category}
+              materials={materials}
+              onMaterialsChange={setMaterials}
+              size={size}
+              onSizeChange={setSize}
+              brand={brand}
+              onBrandChange={setBrand}
+              isGuest={isGuestUser}
+              autoOpen={route.params?.scanTag === true}
+            />
+          </View>
+        )}
+
         <FormSection title="Details">
           <TextInput
             style={styles.input}
@@ -1198,6 +1425,15 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
             {...singleLineDoneProps}
           />
           <BrandInsightStrip brand={brand} variant="add" onOpen={b => navigation.navigate('BrandReport', { brand: b })} />
+          {brandRating.usable && (
+            <AddBrandRatingRow
+              brand={brandRating.brand}
+              score={brandRating.score}
+              onChange={brandRating.setScore}
+              canClear={brandRating.stored === null}
+              onMore={canRateBrandMore ? onBrandMore : undefined}
+            />
+          )}
           <TextInput
             style={styles.input}
             placeholder="Retailer/Store"
@@ -1228,17 +1464,11 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
           <TypePicker category={category} value={subcategory} onChange={onTypeChange} />
         </FormSection>
 
-        <FormSection title="Size & Condition" hint="Optional. Helps when you swap or sell it.">
-          <TextInput
-            style={styles.input}
-            accessibilityLabel="Size"
-            placeholder="Size, e.g. M, 8 or EU 38"
-            value={size}
-            onChangeText={text => setSize(text.slice(0, 20))}
-            maxLength={20}
-            autoCapitalize="characters"
-            {...singleLineDoneProps}
-          />
+        <FormSection title={sizeNoun(category)} hint="Optional. Pick one, or type your own. Helps when you swap or sell it.">
+          <SizePicker category={category} value={size} onChange={setSize} />
+        </FormSection>
+
+        <FormSection title="Condition" hint="Optional. How worn it is. Helps when you swap or sell it.">
           <ChipSelect<ItemCondition>
             accessibilityLabel="Condition"
             value={condition}
@@ -1371,18 +1601,33 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
           />
         </FormSection>
 
+        <FormSection title="Style" hint="Pick every look it suits.">
+          <StylePicker selected={itemStyles} onToggle={onStyleToggle} />
+        </FormSection>
+
         <FormSection title="Tags">
           <TextInput
             style={styles.input}
-            placeholder="Tags (comma separated, e.g., summer, casual, favorite)"
+            placeholder="Tags (comma separated, e.g., summer, favorite)"
             value={tags}
             onChangeText={setTags}
+            onBlur={absorbTypedStyles}
             {...singleLineDoneProps}
           />
         </FormSection>
 
+        {/* Things you own only: a wishlist piece has not been felt or worn yet. */}
+        {ratingsOn && (
+          <AddRatingSection
+            status={itemRating.status}
+            draft={itemRating.draft}
+            onChange={itemRating.setDraft}
+            canClear={itemRating.stored === null}
+          />
+        )}
+
         {tagScanActive() && (
-          <FormSection title="Label">
+          <FormSection title="Label & washing instructions" hint="Scan the tag above, or fill these in by hand.">
             <ScanTagSection
               tag={tag}
               category={category}
@@ -1393,7 +1638,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
               brand={brand}
               onBrandChange={setBrand}
               isGuest={isGuestUser}
-              autoOpen={route.params?.scanTag === true}
+              showScanButton={false}
             />
           </FormSection>
         )}
@@ -1438,6 +1683,15 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
           </View>
         )}
 
+        {canRateBrandMore && (
+          <BrandSheetHost
+            visible={brandSheetOpen}
+            brand={brandRating.brand}
+            initial={brandRating.stored}
+            onClose={() => setBrandSheetOpen(false)}
+            onChanged={onBrandSheetChanged}
+          />
+        )}
       </KeyboardSafeScrollView>
 
       {/* Outside the scroll content so Save is always on screen, not at the end of a long
@@ -1617,6 +1871,37 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#4338CA',
     marginTop: 2,
+  },
+  hintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  hintInput: {
+    flex: 1,
+    height: 40,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    fontSize: 14,
+    backgroundColor: '#FFFFFF',
+  },
+  hintButton: {
+    height: 40,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    justifyContent: 'center',
+    backgroundColor: '#4338CA',
+  },
+  hintButtonOff: {
+    opacity: 0.4,
+  },
+  hintButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   swatchRow: {
     flexDirection: 'row',

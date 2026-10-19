@@ -429,7 +429,7 @@ describe('the wishlist form', () => {
 describe('size and condition', () => {
   it('are saved with a new item, the size cleaned', async () => {
     await render();
-    await typeInto('Size', '  eu 38 ');
+    await typeInto('Other size', '  eu 38 ');
     await act(async () => chip('Like new').props.onPress());
     await typeName('Silk shirt');
     await pressSave();
@@ -445,10 +445,11 @@ describe('size and condition', () => {
 
   it('come back when an item is edited, and can be cleared', async () => {
     await render({ editItem: savedItem({ size: 'M', condition: 'good' }) });
-    expect(input('Size').props.value).toBe('M');
+    expect(chip('Letter M').props.accessibilityState).toEqual({ selected: true, disabled: false });
+    expect(input('Other size').props.value).toBe('');
     expect(chip('Good').props.accessibilityState).toEqual({ selected: true });
-    await typeInto('Size', '');
-    await act(async () => chip('Good').props.onPress()); // tapping the lit chip clears it
+    await act(async () => chip('Letter M').props.onPress()); // tapping the lit chip clears it
+    await act(async () => chip('Good').props.onPress());
     await pressSave('Update Item');
     expect(update).toHaveBeenLastCalledWith(expect.objectContaining({ size: '', condition: null }));
   });

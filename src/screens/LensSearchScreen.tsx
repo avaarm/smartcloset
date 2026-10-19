@@ -1,20 +1,21 @@
 /**
  * LensSearchScreen — "Google Lens for clothes".
  *
- * Pick a photo → call lensSearchService → render a grid of visually similar
- * items found online, shops first. Second-hand listings (eBay, Poshmark...) are
+ * Describe a look in words, or pick a photo, or both: call lensSearchService and
+ * render a grid of items found online, shops first. After a photo, a box under its
+ * best guess adds words to it ("black leather", "Coach") and shows those results in
+ * place of the photo's, with a way back. Second-hand listings (eBay, Poshmark...) are
  * left out once there are enough shop results, unless "Include resale" is on.
  * Tap a result to open the source URL in the browser.
  *
  * Gracefully handles the no-API-key case with an inline setup hint.
  */
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Image,
   Linking,
   Pressable,
-  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
@@ -30,82 +31,64 @@ import {
   Text,
 } from '../ui';
 import { useTheme } from '../styles/ThemeProvider';
-import { pickImageFromLibrary } from '../platform/imagePicker';
-import {
-  searchByImage,
-  toSecureImageUrl,
-  type LensResult,
-  type LensSearchResponse,
-} from '../services/lensSearchService';
+import { toSecureImageUrl, type LensResult } from '../services/lensSearchService';
 import { sourceKindOf } from '../services/retailerDomains';
-import { selectVisibleResults } from '../services/searchRanking';
+import { useProductSearch } from '../hooks/useProductSearch';
 import IncludeResaleToggle from '../components/IncludeResaleToggle';
+import RefineChips from '../components/RefineChips';
+import RefineSearchBar from '../components/RefineSearchBar';
 import SourceKindBadge from '../components/SourceKindBadge';
-
-const SEARCH_FAILED_MESSAGE = "Couldn't search right now. Check your connection and try again.";
+import { KeyboardSafeScrollView } from '../components/KeyboardSafe';
 
 const LensSearchScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
-
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [response, setResponse] = useState<LensSearchResponse | null>(null);
-  const [includeResale, setIncludeResale] = useState(false);
-  // A newer photo (or Clear) makes an earlier search's answer stale.
-  const searchSeq = useRef(0);
-
-  // The search returns everything it found, resale included, so the switch
-  // filters what is already here instead of searching again.
-  const results = useMemo(
-    () => (response ? selectVisibleResults(response.results, includeResale) : []),
-    [response, includeResale],
-  );
-
-  const handlePick = async () => {
-    const picked = await pickImageFromLibrary();
-    if (!picked) return;
-    const seq = ++searchSeq.current;
-    setPhotoUri(picked.uri);
-    setLoading(true);
-    setResponse(null);
-    try {
-      const result = await searchByImage(picked.uri);
-      if (seq === searchSeq.current) setResponse(result);
-    } catch (err: any) {
-      if (seq === searchSeq.current) {
-        setResponse({ query: '', bestGuessLabels: [], results: [], error: SEARCH_FAILED_MESSAGE });
-      }
-    } finally {
-      if (seq === searchSeq.current) setLoading(false);
-    }
-  };
+  // The searching is shared with "Add from the web". It also holds the words in the two
+  // boxes, so they are not lost when the photo is changed or cleared.
+  const search = useProductSearch();
+  const { photoUri, photoAnswer, response, results, loading, kind } = search;
 
   const openResult = (r: LensResult) => {
     Linking.openURL(r.url).catch(() => {});
   };
 
-  const reset = () => {
-    searchSeq.current += 1;
-    setPhotoUri(null);
-    setResponse(null);
-    setLoading(false);
-  };
-
   return (
     <Screen padded={false}>
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-        <Pressable onPress={() => navigation.goBack()} hitSlop={16}>
+        <Pressable
+          onPress={() => navigation.goBack()}
+          hitSlop={16}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Icon name="arrow-back" size={24} color={theme.colors.text} />
         </Pressable>
         <Text variant="h3">Search a look</Text>
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+      <KeyboardSafeScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+        {/* Describe it in words; with a photo, the box under its best guess takes over */}
+        {!photoUri ? (
+          <>
+            <RefineSearchBar
+              value={search.query}
+              onChangeText={search.setQuery}
+              onSubmit={search.searchText}
+              placeholder="Describe it, e.g. burgundy clutch"
+              accessibilityLabel="Describe what you are looking for"
+            />
+            <Text variant="caption" color="muted" style={{ marginTop: 14, marginBottom: 8 }}>
+              Or search with a photo
+            </Text>
+          </>
+        ) : null}
+
         {/* Picker area */}
         <Pressable
-          onPress={handlePick}
+          onPress={search.searchPhoto}
+          accessibilityRole="button"
+          accessibilityLabel={photoUri ? 'Photo to search, tap to change it' : 'Pick a photo'}
           style={[
             styles.picker,
             {
@@ -139,32 +122,56 @@ const LensSearchScreen: React.FC = () => {
 
         {photoUri ? (
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-            <Button label="Change photo" variant="secondary" size="sm" onPress={handlePick} />
-            <Button label="Clear" variant="ghost" size="sm" onPress={reset} />
+            <Button label="Change photo" variant="secondary" size="sm" onPress={search.searchPhoto} />
+            <Button label="Clear" variant="ghost" size="sm" onPress={search.reset} />
           </View>
         ) : null}
 
         <IncludeResaleToggle
-          value={includeResale}
-          onValueChange={setIncludeResale}
+          value={search.includeResale}
+          onValueChange={search.setIncludeResale}
           style={styles.resaleToggle}
         />
 
-        {/* Query hint */}
-        {response && response.query ? (
+        {/* The photo's best guess, and a box to add words to it */}
+        {photoAnswer ? (
           <View style={{ marginTop: 20 }}>
-            <Text variant="label" color="muted">
-              BEST GUESS
+            {photoAnswer.query ? (
+              <>
+                <Text variant="label" color="muted">
+                  BEST GUESS
+                </Text>
+                <Text variant="h3" style={{ marginTop: 4 }}>
+                  {photoAnswer.query}
+                </Text>
+                {photoAnswer.bestGuessLabels.length > 1 ? (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                    {photoAnswer.bestGuessLabels.slice(1).map(l => (
+                      <Badge key={l} label={l} tone="neutral" />
+                    ))}
+                  </View>
+                ) : null}
+              </>
+            ) : null}
+            <Text variant="label" color="muted" style={{ marginTop: photoAnswer.query ? 16 : 0, marginBottom: 6 }}>
+              REFINE
             </Text>
-            <Text variant="h3" style={{ marginTop: 4 }}>
-              {response.query}
-            </Text>
-            {response.bestGuessLabels.length > 1 ? (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-                {response.bestGuessLabels.slice(1).map(l => (
-                  <Badge key={l} label={l} tone="neutral" />
-                ))}
-              </View>
+            <RefineSearchBar
+              value={search.refineText}
+              onChangeText={search.setRefineText}
+              onSubmit={search.refine}
+              placeholder="Add words: black leather, ankle, Coach..."
+              accessibilityLabel="Add words to refine the photo results"
+            />
+            {kind === 'refined' ? (
+              <Button
+                label="Back to photo results"
+                variant="ghost"
+                size="sm"
+                leftIcon={<Icon name="arrow-back" size={16} color={theme.colors.text} />}
+                onPress={search.backToPhoto}
+                style={{ marginTop: 8 }}
+              />
             ) : null}
           </View>
         ) : null}
@@ -211,12 +218,16 @@ const LensSearchScreen: React.FC = () => {
         )}
 
         {/* Empty state after completed search */}
-        {!loading && response && !response.error && !response.notConfigured && results.length === 0 && photoUri && (
+        {!loading && response && !response.error && !response.notConfigured && results.length === 0 && (
           <View style={{ marginTop: 30 }}>
             <EmptyState
               icon={<Icon name="search-outline" size={28} color={theme.colors.textSubtle} />}
               title="No matches found"
-              body="Try a clearer photo, or a different angle of the item."
+              body={
+                kind === 'photo'
+                  ? 'Try a clearer photo, or a different angle of the item.'
+                  : 'Try different or fewer words.'
+              }
             />
           </View>
         )}
@@ -226,7 +237,9 @@ const LensSearchScreen: React.FC = () => {
           <>
             <Text variant="overline" color="muted" style={{ marginTop: 24, marginBottom: 10 }}>
               {results.length} result{results.length !== 1 ? 's' : ''}
+              {kind !== 'photo' && response?.query ? ` for "${response.query}"` : ''}
             </Text>
+            <RefineChips words={search.suggestions} onPick={search.addWord} />
             <View style={styles.grid}>
               {results.map(r => (
                 <ResultCard key={r.id} result={r} onPress={() => openResult(r)} />
@@ -240,9 +253,10 @@ const LensSearchScreen: React.FC = () => {
           <Card bordered style={{ marginTop: 24 }}>
             <Text variant="h4">How it works</Text>
             <Text variant="body" color="muted" style={{ marginTop: 6, lineHeight: 20 }}>
-              Pick a photo of a clothing item — from a magazine, a screenshot,
-              or someone you saw on the street. We’ll find visually similar
-              items online with links to where to buy.
+              Describe a clothing item, or pick a photo of one — from a magazine,
+              a screenshot, or someone you saw on the street. We’ll find
+              similar items online with links to where to buy. After a photo,
+              add words like a color or a brand to narrow it down.
             </Text>
             <View style={{ marginTop: 12, flexDirection: 'row', gap: 6 }}>
               <Badge label="Photo library only" tone="neutral" />
@@ -250,7 +264,7 @@ const LensSearchScreen: React.FC = () => {
             </View>
           </Card>
         )}
-      </ScrollView>
+      </KeyboardSafeScrollView>
     </Screen>
   );
 };

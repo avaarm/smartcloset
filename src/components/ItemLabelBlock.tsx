@@ -1,9 +1,13 @@
 /**
- * ItemLabelBlock: what is known from an item's label, read-only, on Item Details. Size, condition, care and
- * country of origin, and the text that was read from a scanned tag (collapsed, private to the owner), with a way
- * to clear that text. Everything is edited in Edit item; this block has no text field.
+ * ItemLabelBlock: "About this piece" on Item Details, the facts about one item that are easy to leave out: size,
+ * style, condition, washing instructions and country of origin, plus the text read from a scanned tag (collapsed,
+ * private to the owner) with a way to clear it. A wishlist piece shows size and style only.
  *
- * Flag wrapper (design 6.1): with TAG_SCAN_ENABLED off nothing renders and no hook runs.
+ * Every row is always there. A row with nothing yet shows a prompt ("Add size") that opens Edit item, so the
+ * block says what is missing instead of hiding it. Everything is edited in Edit item; this block has no text field.
+ *
+ * Washing instructions, country and the tag text belong to tag scanning, so those rows follow its flag
+ * (design 6.1): with TAG_SCAN_ENABLED off they are not shown. Size, style and condition are always shown.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -13,22 +17,26 @@ import type { ClothingItem } from '../types';
 import { tagScanActive } from '../config/ratingFlags';
 import theme from '../styles/theme';
 import { cleanCareInstructions, conditionLabel } from '../utils/itemCondition';
+import { STYLE_LABELS, stylesFromTags } from '../utils/styleOptions';
 
 export interface ItemLabelBlockProps {
-  item: Pick<ClothingItem, 'size' | 'condition' | 'careInstructions' | 'originCountry' | 'tagText'> & {
-    /** Wishlist pieces are not owned, so they have no label to show. The screen skips them too. */
+  item: Pick<ClothingItem, 'size' | 'condition' | 'careInstructions' | 'originCountry' | 'tagText' | 'tags'> & {
+    /** Wishlist pieces are not owned yet: they show size and style only. */
     isWishlist?: boolean;
   };
   onClearTagText: () => Promise<void>;
+  /** Opens Edit item, for an empty row to be filled in. Without it the prompts are plain text. */
+  onEdit?: () => void;
 }
 
+export const ABOUT_TITLE = 'About this piece';
 export const CLEAR_TITLE = 'Clear the tag text?';
 export const CLEAR_MESSAGE =
   'The materials, care and country you saved stay as they are. This piece will no longer count in the fabric breakdown of brand insights.';
 export const CLEAR_ERROR = 'Couldn’t clear that. Please try again.';
 export const TAG_TEXT_HELPER = 'What was read from the tag. Only you can see it.';
 
-function ItemLabelBlockInner({ item, onClearTagText }: ItemLabelBlockProps) {
+function ItemLabelBlock({ item, onClearTagText, onEdit }: ItemLabelBlockProps) {
   const [open, setOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,13 +49,14 @@ function ItemLabelBlockInner({ item, onClearTagText }: ItemLabelBlockProps) {
     };
   }, []);
 
+  const owned = !item.isWishlist;
+  const scanning = owned && tagScanActive();
   const size = (item.size ?? '').trim();
+  const itemStyles = stylesFromTags(item.tags);
   const condition = conditionLabel(item.condition);
   const care = cleanCareInstructions(item.careInstructions);
   const origin = (item.originCountry ?? '').trim();
   const tagText = (item.tagText ?? '').trim();
-
-  if (item.isWishlist || (!size && !condition && care.length === 0 && !origin && !tagText)) return null;
 
   const clear = async () => {
     if (clearing) return;
@@ -70,29 +79,61 @@ function ItemLabelBlockInner({ item, onClearTagText }: ItemLabelBlockProps) {
     ]);
   };
 
-  const row = (label: string, lines: string[]) => (
+  /** What an empty row offers: a button to Edit item, or the same words when nothing can be opened. */
+  const prompt = (text: string) =>
+    onEdit ? (
+      <Pressable
+        onPress={onEdit}
+        accessibilityRole="button"
+        accessibilityLabel={text}
+        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        style={styles.prompt}
+      >
+        <Icon name="add-circle-outline" size={18} color="#7A5A22" />
+        <Text style={styles.promptText}>{text}</Text>
+      </Pressable>
+    ) : (
+      <Text style={styles.empty}>{text}</Text>
+    );
+
+  const row = (label: string, content: React.ReactNode) => (
     <View style={styles.row} key={label}>
       <Text style={styles.rowLabel}>{label}</Text>
-      <View style={styles.rowValue}>
-        {lines.map(line => (
-          <Text key={line} style={styles.rowText}>
-            {line}
-          </Text>
-        ))}
-      </View>
+      <View style={styles.rowValue}>{content}</View>
     </View>
   );
+
+  const lines = (values: string[]) =>
+    values.map(line => (
+      <Text key={line} style={styles.rowText}>
+        {line}
+      </Text>
+    ));
 
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle} accessibilityRole="header">
-        Label
+        {ABOUT_TITLE}
       </Text>
-      {size ? row('Size', [size]) : null}
-      {condition ? row('Condition', [condition]) : null}
-      {care.length > 0 ? row('Care', care) : null}
-      {origin ? row('Made in', [origin]) : null}
-      {tagText ? (
+      {row('Size', size ? lines([size]) : prompt('Add size'))}
+      {row(
+        'Style',
+        itemStyles.length > 0 ? (
+          <View style={styles.chips}>
+            {itemStyles.map(style => (
+              <View key={style} style={styles.chip}>
+                <Text style={styles.chipText}>{STYLE_LABELS[style]}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          prompt('Add style')
+        ),
+      )}
+      {owned ? row('Condition', condition ? lines([condition]) : prompt('Add condition')) : null}
+      {scanning ? row('Washing instructions', care.length > 0 ? lines(care) : prompt('Add washing instructions')) : null}
+      {scanning ? row('Made in', origin ? lines([origin]) : prompt('Add country')) : null}
+      {scanning && tagText ? (
         <View style={styles.tagBox}>
           <Pressable
             onPress={() => setOpen(o => !o)}
@@ -136,7 +177,6 @@ function ItemLabelBlockInner({ item, onClearTagText }: ItemLabelBlockProps) {
   );
 }
 
-const ItemLabelBlock: React.FC<ItemLabelBlockProps> = props => (tagScanActive() ? <ItemLabelBlockInner {...props} /> : null);
 export default ItemLabelBlock;
 
 const styles = StyleSheet.create({
@@ -151,6 +191,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    minHeight: 48,
     paddingVertical: 10,
     paddingHorizontal: 14,
     backgroundColor: theme.colors.cardBackground,
@@ -158,9 +199,15 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     ...theme.shadows.subtle,
   },
-  rowLabel: { width: 84, fontSize: 14, color: theme.colors.textMuted, paddingTop: 1 },
+  rowLabel: { width: 104, paddingRight: 8, fontSize: 14, color: theme.colors.textMuted, paddingTop: 1 },
   rowValue: { flex: 1, gap: 2 },
   rowText: { fontSize: 15, fontWeight: '500', color: theme.colors.text },
+  empty: { fontSize: 15, color: theme.colors.textSubtle },
+  prompt: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 28 },
+  promptText: { fontSize: 15, fontWeight: '600', color: '#7A5A22' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 14, backgroundColor: theme.colors.accentSubtle },
+  chipText: { fontSize: 13, fontWeight: '600', color: '#7A5A22' },
   tagBox: {
     backgroundColor: theme.colors.cardBackground,
     borderRadius: 8,

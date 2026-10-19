@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -28,8 +28,9 @@ import { WearTrackingService } from '../services/wearTrackingService';
 import { deleteClothingItem, getClothingItem, updateClothingItem } from '../services/storage';
 import ItemQualityCard from '../components/ItemQualityCard';
 import ItemLabelBlock from '../components/ItemLabelBlock';
-import { ScanTagLink } from '../components/ScanTagButton';
+import ScanTagCard from '../components/ScanTagCard';
 import { brandInsightsActive } from '../config/ratingFlags';
+import { tagsWithoutStyles } from '../utils/styleOptions';
 
 const { width, height } = Dimensions.get('window');
 
@@ -187,10 +188,18 @@ const ItemDetailsScreen: React.FC = () => {
   const [lastWorn, setLastWorn] = useState<string | undefined>(item.lastWorn);
   // Set by the quality card so the delete confirmation can say the rating goes with the item.
   const [itemHasRating, setItemHasRating] = useState(false);
+  // Bumped each time the screen comes back into view, so the quality card reads its rating again.
+  const [focusTick, setFocusTick] = useState(0);
+  const focusedBefore = useRef(false);
+  // Given by the quality card while the brand can be rated; the brand badge opens the same sheet through it.
+  const [openBrandRating, setOpenBrandRating] = useState<(() => void) | null>(null);
+  const handleBrandRatingOpener = useCallback((open: (() => void) | null) => setOpenBrandRating(() => open), []);
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
+      if (focusedBefore.current) setFocusTick(tick => tick + 1);
+      focusedBefore.current = true;
       getClothingItem(route.params.item.id)
         .then(fresh => {
           if (cancelled || !fresh) return;
@@ -241,9 +250,15 @@ const ItemDetailsScreen: React.FC = () => {
     }
   };
 
-  const handleEdit = () => {
-    (navigation as any).navigate('AddClothing', { editItem: { ...item, wearCount, lastWorn } });
+  // Edit item, with the wear count as shown here. `scanTag` opens the tag scanner as soon as the form is up.
+  const openEditor = (scanTag?: boolean) => {
+    (navigation as any).navigate('AddClothing', {
+      editItem: { ...item, wearCount, lastWorn },
+      ...(scanTag ? { scanTag: true } : {}),
+    });
   };
+
+  const handleEdit = () => openEditor();
 
   const handleMarkAsWorn = async () => {
     const prevLastWorn = lastWorn;
@@ -324,6 +339,8 @@ const ItemDetailsScreen: React.FC = () => {
     if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
     return `${Math.floor(diffDays / 30)} months ago`;
   };
+
+  const otherTags = tagsWithoutStyles(item.tags);
 
   const renderInfoRow = (icon: string, label: string, value: string) => (
     <View style={styles.infoRow}>
@@ -439,6 +456,20 @@ const ItemDetailsScreen: React.FC = () => {
                     <Text style={styles.brandText}>{item.brand}</Text>
                   </View>
                 </TouchableOpacity>
+              ) : openBrandRating && !item.isWishlist ? (
+                // Brand insights are off, so there is no report to open: the badge rates the brand instead.
+                <TouchableOpacity
+                  style={styles.brandBadgeLink}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  onPress={openBrandRating}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Rate the brand ${item.brand}`}
+                >
+                  <View style={[styles.brandBadge, styles.brandBadgeRate]}>
+                    <Text style={styles.brandText}>{item.brand}</Text>
+                    <Icon name="star-outline" size={14} color="#FFFFFF" />
+                  </View>
+                </TouchableOpacity>
               ) : (
                 <View style={styles.brandBadge}>
                   <Text style={styles.brandText}>{item.brand}</Text>
@@ -476,12 +507,27 @@ const ItemDetailsScreen: React.FC = () => {
             <ItemValueCard item={item} onChange={fields => setItem(prev => ({ ...prev, ...fields }))} />
           )}
 
+          {/* The way into the tag scan, high up where it is seen. Owned pieces only; hides itself for a guest. */}
+          {!item.isWishlist && <ScanTagCard hasTag={!!item.tagText} onPress={() => openEditor(true)} />}
+
+          {/* Size, style, condition, washing instructions and country: every row shows, or asks to be filled in. */}
+          <ItemLabelBlock
+            item={item}
+            onEdit={() => openEditor()}
+            onClearTagText={async () => {
+              await updateClothingItem({ ...item, tagText: '' });
+              setItem(prev => ({ ...prev, tagText: undefined }));
+            }}
+          />
+
           {/* Handles wishlist items itself, so it sits outside the owned-items check. */}
           <ItemQualityCard
             item={item}
             wearCount={wearCount}
             onOpenBrand={brand => (navigation as any).navigate('BrandReport', { brand })}
             onRatingChange={setItemHasRating}
+            reloadKey={focusTick}
+            onBrandRatingOpener={handleBrandRatingOpener}
           />
 
           {/* Owned pieces only. Sits under the quality card; hides itself when swaps are off or not deployed. */}
@@ -598,13 +644,6 @@ const ItemDetailsScreen: React.FC = () => {
             </View>
           )}
 
-          {!item.isWishlist && (
-            <ScanTagLink
-              hasTag={!!item.tagText}
-              onPress={() => (navigation as any).navigate('AddClothing', { editItem: item, scanTag: true })}
-            />
-          )}
-
           {/* Materials composition */}
           {item.materials && item.materials.length > 0 && (
             <View style={styles.detailsSection}>
@@ -625,23 +664,12 @@ const ItemDetailsScreen: React.FC = () => {
             </View>
           )}
 
-          {/* Label: size, condition, care and country. Renders nothing until tag scanning is switched on. */}
-          {!item.isWishlist && (
-            <ItemLabelBlock
-              item={item}
-              onClearTagText={async () => {
-                await updateClothingItem({ ...item, tagText: '' });
-                setItem(prev => ({ ...prev, tagText: undefined }));
-              }}
-            />
-          )}
-
-          {/* Tags */}
-          {item.tags && item.tags.length > 0 && (
+          {/* Tags: the style words have their own row in About this piece. */}
+          {otherTags.length > 0 && (
             <View style={styles.detailsSection}>
               <Text style={styles.sectionTitle}>Tags</Text>
               <View style={styles.tagWrap}>
-                {item.tags.map((t, i) => (
+                {otherTags.map((t, i) => (
                   <View key={`${t}-${i}`} style={styles.tagChip}>
                     <Text style={styles.tagText}>{t}</Text>
                   </View>
@@ -916,6 +944,11 @@ const styles = StyleSheet.create({
   },
   brandBadgeLink: {
     alignSelf: 'flex-start',
+  },
+  brandBadgeRate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   brandText: {
     fontSize: 14,

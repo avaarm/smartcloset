@@ -44,7 +44,19 @@ jest.mock('../../src/platform/fileSystem', () => ({
   readImageAsBase64: jest.fn(),
 }));
 
-import ScanTagSection, { FILLED_NOTE, useTagFields, type TagFieldsApi } from '../../src/components/ScanTagSection';
+import ScanTagSection, {
+  CARE_EMPTY_NOTE,
+  FILLED_NOTE,
+  SCAN_FORM_CARD_AFTER,
+  SCAN_FORM_CARD_BEFORE,
+  SCAN_FORM_CARD_NOTHING,
+  SCAN_FORM_CARD_TITLE,
+  ScanTagFormCard,
+  tagSummary,
+  useTagFields,
+  type TagFieldsApi,
+} from '../../src/components/ScanTagSection';
+import TagReviewSheet from '../../src/components/TagReviewSheet';
 
 const CLEAN = parseTagText('100% COTTON\nMADE IN BANGLADESH\nMACHINE WASH COLD\nTUMBLE DRY LOW\nSIZE M');
 const BRAND = parseTagText('EVERLANE\n100% COTTON');
@@ -422,5 +434,227 @@ describe('ScanTagSection: after a scan', () => {
       originCountry: 'Bangladesh',
       tagText: CLEAN.transcription,
     });
+  });
+});
+
+// ─── The care instructions can be seen to be editable ───────────────────────
+
+describe('ScanTagSection: editing the care instructions', () => {
+  it('shows an Edit action in the care row, which turns into Done while the list is open', async () => {
+    const { text, press } = await mount();
+    expect(text()).toContain('Edit');
+    expect(text()).not.toContain('Done');
+    await press('Care instructions (0)');
+    expect(text()).toContain('Done');
+    expect(text()).not.toContain('Edit');
+  });
+
+  it('says what to do when there are none yet, and stops saying it once one is added', async () => {
+    const { text, press } = await mount();
+    expect(text()).toContain(CARE_EMPTY_NOTE);
+    expect(CARE_EMPTY_NOTE).toContain('Tap Edit');
+    await press('Care instructions (0)');
+    expect(text()).not.toContain(CARE_EMPTY_NOTE);
+    await press('Hand wash');
+    await press('Care instructions (1)');
+    expect(text()).not.toContain(CARE_EMPTY_NOTE);
+    expect(text()).toContain('Hand wash');
+  });
+
+  it('tells a screen reader what the care row does', async () => {
+    const { byLabel, press } = await mount();
+    expect(byLabel('Care instructions (0)')[0].props.accessibilityHint).toMatch(/add or remove washing instructions/);
+    await press('Care instructions (0)');
+    expect(byLabel('Care instructions (0)')[0].props.accessibilityHint).toBe('Closes the list');
+  });
+});
+
+// ─── Without its own scan button (the card at the top does the scanning) ─────
+
+describe('ScanTagSection without a scan button', () => {
+  const mountPlain = async () => {
+    const latest: { tag: TagFieldsApi } = { tag: undefined as unknown as TagFieldsApi };
+    const Host = () => {
+      const tag = useTagFields({ originCountry: 'Peru' });
+      latest.tag = tag;
+      return (
+        <ScanTagSection
+          tag={tag}
+          materials={[]}
+          onMaterialsChange={() => {}}
+          size=""
+          onSizeChange={() => {}}
+          brand=""
+          onBrandChange={() => {}}
+          isGuest={false}
+          showScanButton={false}
+        />
+      );
+    };
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(<Host />);
+    });
+    return { tree, text: () => flatten(tree.toJSON()), latest };
+  };
+
+  it('keeps the Made in field and the care row, and has no Scan tag button or helper', async () => {
+    const { tree, text } = await mountPlain();
+    expect(tree.root.findAllByType(Pressable).filter(n => n.props.accessibilityLabel === 'Scan tag')).toHaveLength(0);
+    expect(text()).not.toContain('Fill in materials, care and country from the tag.');
+    expect(text()).toContain('Made in');
+    expect(text()).toContain('Care instructions (0)');
+    expect(tree.root.findAllByType(TextInput)[0].props.value).toBe('Peru');
+    expect(tree.root.findAllByType(TagReviewSheet)).toHaveLength(0);
+  });
+
+  it('starts no scan of its own', async () => {
+    mockFlags.on = true;
+    await mountPlain();
+    expect(mockEnsureConsent).not.toHaveBeenCalled();
+  });
+});
+
+// ─── The card at the top of the form ────────────────────────────────────────
+
+describe('tagSummary', () => {
+  it('lists the size, the fabric, the number of care lines and the country', () => {
+    const tag = { careInstructions: ['Hand wash', 'Line dry'], originCountry: ' Peru ' };
+    const materials: MaterialComponent[] = [
+      { name: 'cotton', percentage: 60, tier: 'primary' },
+      { name: 'polyester', percentage: 40, tier: 'primary' },
+    ];
+    expect(tagSummary(tag, ' M ', materials)).toBe('Size M · 60% cotton, 40% polyester · 2 care instructions · Made in Peru');
+  });
+
+  it('says "1 care instruction" for one, and leaves out what is empty', () => {
+    expect(tagSummary({ careInstructions: ['Hand wash'], originCountry: '' }, '', [])).toBe('1 care instruction');
+    expect(tagSummary({ careInstructions: [], originCountry: '' }, '', [])).toBe('');
+    expect(tagSummary({ careInstructions: [], originCountry: '' }, 'S', [{ name: 'wool', tier: 'primary' }])).toBe('Size S · wool');
+  });
+});
+
+describe('ScanTagFormCard', () => {
+  // The card and the section below it share one tag state, like the Add screen: one scanner, one review sheet.
+  const mountCard = async (
+    opts: { editItem?: EditItem; materials?: MaterialComponent[]; size?: string; brand?: string; guest?: boolean; autoOpen?: boolean; withSection?: boolean } = {},
+  ) => {
+    const latest: { state: HostState } = { state: undefined as unknown as HostState };
+    const Host = () => {
+      const tag = useTagFields(opts.editItem);
+      const [materials, setMaterials] = useState<MaterialComponent[]>(opts.materials ?? []);
+      const [size, setSize] = useState(opts.size ?? '');
+      const [brand, setBrand] = useState(opts.brand ?? '');
+      latest.state = { tag, materials, size, brand };
+      const shared = {
+        tag,
+        category: 'tops',
+        materials,
+        onMaterialsChange: setMaterials,
+        size,
+        onSizeChange: setSize,
+        brand,
+        onBrandChange: setBrand,
+        isGuest: !!opts.guest,
+      };
+      return (
+        <>
+          <ScanTagFormCard {...shared} autoOpen={opts.autoOpen} />
+          {opts.withSection ? <ScanTagSection {...shared} showScanButton={false} /> : null}
+        </>
+      );
+    };
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(<Host />);
+    });
+    const text = () => flatten(tree.toJSON());
+    const byLabel = (label: string) => tree.root.findAllByType(Pressable).filter(n => n.props.accessibilityLabel === label);
+    const press = async (label: string) => {
+      const found = byLabel(label);
+      if (found.length !== 1) throw new Error(`expected one "${label}", found ${found.length}`);
+      await act(async () => {
+        await found[0].props.onPress();
+      });
+    };
+    return { tree, latest, text, byLabel, press };
+  };
+
+  it('asks to scan the tag and washing instructions, and before a scan says to take a photo', async () => {
+    const { text, byLabel } = await mountCard();
+    expect(SCAN_FORM_CARD_TITLE).toBe('Scan the tag & washing instructions');
+    expect(text()).toContain(SCAN_FORM_CARD_TITLE);
+    expect(text()).toContain(SCAN_FORM_CARD_BEFORE);
+    expect(SCAN_FORM_CARD_BEFORE).toBe('Take a photo of the tag');
+    expect(text()).not.toContain(SCAN_FORM_CARD_AFTER);
+    const [card] = byLabel('Scan the tag and washing instructions');
+    expect(card.props.accessibilityRole).toBe('button');
+    expect(card.props.accessibilityState.disabled).toBe(false);
+  });
+
+  it('starts the scan from a tap: consent first, then the one review sheet', async () => {
+    const { press, tree, text } = await mountCard({ withSection: true });
+    await press('Scan the tag and washing instructions');
+    expect(mockEnsureConsent).toHaveBeenCalledTimes(1);
+    expect(text()).toContain('Take photo');
+    expect(tree.root.findAllByType(TagReviewSheet)).toHaveLength(1);
+  });
+
+  it('opens the scan straight away when asked to, as the link on Item Details does', async () => {
+    const { text, tree } = await mountCard({ autoOpen: true, withSection: true });
+    expect(mockEnsureConsent).toHaveBeenCalledTimes(1);
+    expect(text()).toContain('Take photo');
+    expect(tree.root.findAllByType(TagReviewSheet)).toHaveLength(1);
+  });
+
+  it('fills the shared form after a scan, then says it was read with what it read', async () => {
+    const m = await mountCard({ withSection: true });
+    await m.press('Scan the tag and washing instructions');
+    await m.press('Take photo');
+    await m.press('Use these');
+
+    expect(m.latest.state.size).toBe('M');
+    expect(m.latest.state.tag.originCountry).toBe('Bangladesh');
+    expect(m.latest.state.tag.careInstructions).toEqual(['Machine wash cold', 'Tumble dry low']);
+
+    expect(m.text()).toContain(SCAN_FORM_CARD_AFTER);
+    expect(SCAN_FORM_CARD_AFTER).toBe('Read from the tag');
+    expect(m.text()).not.toContain(SCAN_FORM_CARD_BEFORE);
+    expect(m.text()).toContain('Size M · 100% cotton · 2 care instructions · Made in Bangladesh');
+    expect(m.text()).toContain('Scan again');
+    expect(m.byLabel('Rescan the tag and washing instructions')).toHaveLength(1);
+    // The section below shows the same state for checking and editing.
+    expect(m.text()).toContain(FILLED_NOTE);
+    expect(m.text()).toContain('Care instructions (2)');
+  });
+
+  it('says it was read for an item that already has tag text, and says when nothing was filled in', async () => {
+    const stored = await mountCard({
+      editItem: { tagText: '100% wool', careInstructions: ['Hand wash'] },
+      size: 'S',
+      materials: [{ name: 'wool', percentage: 100, tier: 'primary' }],
+    });
+    expect(stored.text()).toContain(SCAN_FORM_CARD_AFTER);
+    expect(stored.text()).toContain('Size S · 100% wool · 1 care instruction');
+
+    const bare = await mountCard({ editItem: { tagText: 'RN 12345' } });
+    expect(bare.text()).toContain(SCAN_FORM_CARD_AFTER);
+    expect(bare.text()).toContain(SCAN_FORM_CARD_NOTHING);
+  });
+
+  it('leaves a guest the same sign-in explanation as the scan button, and the card does nothing', async () => {
+    const { text, byLabel, press } = await mountCard({ guest: true });
+    expect(text()).toContain('Sign in to scan tags.');
+    expect(text()).not.toContain('Take a photo of the tag');
+    expect(byLabel('Scan the tag and washing instructions')[0].props.accessibilityState.disabled).toBe(true);
+    await press('Scan the tag and washing instructions');
+    expect(mockEnsureConsent).not.toHaveBeenCalled();
+  });
+
+  it('renders nothing, and touches nothing, with the flag off', async () => {
+    mockFlags.on = false;
+    const { tree } = await mountCard({ autoOpen: true });
+    expect(tree.toJSON()).toBeNull();
+    expect(mockEnsureConsent).not.toHaveBeenCalled();
   });
 });

@@ -780,3 +780,81 @@ export const deriveImageQuery = (p: {
   if (color && !hasColor && !tokenize(color).every(t => have.has(t))) extra.push(color);
   return [...extra, core].join(' ');
 };
+
+// Words that go with a colour ("dark brown", "light blue"): dropped along with the colour they describe.
+const SHADE_WORDS = new Set(['dark', 'light', 'pale', 'bright', 'deep', 'hot', 'baby', 'dusty', 'off']);
+
+/**
+ * A search's own words with more the person typed to narrow it ("black leather" on "tan ankle boots"
+ * asks for "black leather ankle boots"). A colour typed replaces the colour guessed, a word the
+ * search already has is not repeated, and the typed words go first so the search's product noun
+ * stays the last one ("heel" added to "ankle boots" is still boots; see headFamily). Empty when
+ * nothing usable was typed.
+ */
+export const mergeRefineWords = (base: string, typed: string): string => {
+  const seen = new Set<string>();
+  let added = sanitizeQueryText(typed)
+    .split(' ')
+    .filter(w => {
+      const key = w.toLowerCase();
+      if (!w || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  if (added.length === 0) return '';
+
+  const baseWords = sanitizeQueryText(base).split(' ').filter(Boolean);
+  // "chelsea boots" on "ankle boots" is "chelsea ankle boots": the noun the search ends on stays last.
+  const noun = new Set(tokenize(baseWords[baseWords.length - 1] ?? ''));
+  added = added.filter(w => !tokenize(w).every(t => noun.has(t)));
+
+  const addedTokens = new Set(added.flatMap(tokenize));
+  const addsColor = [...addedTokens].some(t => COLOR_WORDS.has(t));
+  const kept: string[] = [];
+  for (const word of baseWords) {
+    const tokens = tokenize(word);
+    const isColor = tokens.some(t => COLOR_WORDS.has(t));
+    const repeated = tokens.length > 0 && tokens.every(t => addedTokens.has(t));
+    if (repeated || (addsColor && isColor)) {
+      const previous = kept[kept.length - 1];
+      if (isColor && previous && SHADE_WORDS.has(previous.toLowerCase())) kept.pop();
+      continue;
+    }
+    kept.push(word);
+  }
+  return sanitizeQueryText([...added, ...kept].join(' '));
+};
+
+// Words a title can say that tell one product from another, offered as ways to narrow results.
+const MATERIAL_WORDS = [
+  'leather', 'suede', 'denim', 'cotton', 'linen', 'silk', 'wool', 'cashmere', 'velvet', 'satin', 'canvas', 'lace', 'knit', 'fleece',
+];
+const STYLE_WORDS = [
+  'vintage', 'oversized', 'cropped', 'mini', 'midi', 'maxi', 'ankle', 'platform', 'chunky', 'slim', 'striped', 'floral', 'quilted',
+  'pleated', 'ribbed',
+];
+// Keyed by the tokenize() form of the word ("canvas" is "canva"), valued by the word as shown.
+const SUGGESTION_WORDS = new Map<string, string>(
+  [...COLOR_WORDS, ...MATERIAL_WORDS, ...STYLE_WORDS].map(w => [tokenize(w)[0], w] as [string, string]),
+);
+
+/**
+ * Words from the result titles to offer as one-tap ways to narrow a search: colours, materials and
+ * styles that several results share without all of them sharing it, and that the search does not
+ * already say. Most common first (colours before materials before styles on a tie).
+ */
+export const refineSuggestions = (titles: readonly string[], searched: string, max = 6): string[] => {
+  const have = new Set(tokenize(searched));
+  const counts = new Map<string, number>();
+  for (const title of titles) {
+    for (const t of new Set(tokenize(title))) {
+      if (SUGGESTION_WORDS.has(t) && !have.has(t)) counts.set(t, (counts.get(t) ?? 0) + 1);
+    }
+  }
+  const rank = [...SUGGESTION_WORDS.keys()];
+  return [...counts.entries()]
+    .filter(([, n]) => n >= 2 && n < titles.length)
+    .sort((a, b) => b[1] - a[1] || rank.indexOf(a[0]) - rank.indexOf(b[0]))
+    .slice(0, max)
+    .map(([t]) => SUGGESTION_WORDS.get(t) as string);
+};

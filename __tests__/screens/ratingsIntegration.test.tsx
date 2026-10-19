@@ -119,10 +119,12 @@ jest.mock('../../src/components/SwapListingCard', () => ({ __esModule: true, def
 
 // Spies on the props two components are given. The real component still renders.
 let mockSectionProps: any = null;
+let mockCardProps: any = null;
 jest.mock('../../src/components/ScanTagSection', () => {
   const actual = jest.requireActual('../../src/components/ScanTagSection');
   const React = require('react');
   const Real = actual.default;
+  const RealCard = actual.ScanTagFormCard;
   return {
     __esModule: true,
     ...actual,
@@ -130,6 +132,10 @@ jest.mock('../../src/components/ScanTagSection', () => {
     default: (props: any) => {
       mockSectionProps = props;
       return React.createElement(Real, { ...props, autoOpen: false });
+    },
+    ScanTagFormCard: (props: any) => {
+      mockCardProps = props;
+      return React.createElement(RealCard, { ...props, autoOpen: false });
     },
   };
 });
@@ -217,6 +223,7 @@ beforeEach(() => {
   mockFlags = { ...ALL_ON };
   mockSession = { user: { id: 'u1', email: 'ada@example.com', user_metadata: { name: 'Ada Lovelace' } } };
   mockSectionProps = null;
+  mockCardProps = null;
   [mockNavigate, mockGoBack, mockGetSession, mockRpc, updateItem, saveItem, deleteClothingItem as jest.Mock].forEach(m =>
     m.mockClear(),
   );
@@ -334,7 +341,7 @@ const deleteAlert = async (tree: renderer.ReactTestRenderer) => {
 };
 
 describe('Item Details with the flags on', () => {
-  it('puts the quality card directly under the Value card', async () => {
+  it('puts the quality card after the Value card and before Details', async () => {
     const tree = await renderDetails(makeItem(OWNED));
     const texts = textsOf(tree);
     const value = indexOfText(texts, 'Value');
@@ -347,14 +354,18 @@ describe('Item Details with the flags on', () => {
     expect(loadMyBrandSummary).toHaveBeenCalledWith('Coach');
   });
 
-  it('shows the card for a wishlist piece too (it handles that case itself), but no scan link or label', async () => {
+  it('shows the card for a wishlist piece too (it handles that case itself), but no scan card or care rows', async () => {
     const tree = await renderDetails(makeItem({ ...OWNED, isWishlist: true }));
     expect(loadMyItemRating).not.toHaveBeenCalled();
     const texts = textsOf(tree);
     expect(texts).not.toContain('How is it?');
-    expect(texts).not.toContain('Scan the tag');
-    expect(texts).not.toContain('Label');
-    expect(hasLabel(tree, 'Scan the tag')).toBe(false);
+    expect(texts).not.toContain('Scan the tag & washing instructions');
+    expect(texts).not.toContain('Washing instructions');
+    expect(texts).not.toContain('Condition');
+    // Size and style are still worth knowing about a piece that is only wished for.
+    expect(texts).toContain('About this piece');
+    expect(texts).toContain('Size');
+    expect(hasLabel(tree, 'Scan the tag & washing instructions')).toBe(false);
   });
 
   it('opens the brand report from the card and from the brand badge', async () => {
@@ -371,15 +382,24 @@ describe('Item Details with the flags on', () => {
     expect(mockNavigate).toHaveBeenCalledWith('BrandReport', { brand: 'Coach' });
   });
 
-  it('leaves the brand badge as a plain label while brand insights are off', async () => {
+  it('has no report to open while brand insights are off: the badge rates the brand instead', async () => {
     mockFlags = { ratings: true, insights: false, tag: true };
     const tree = await renderDetails(makeItem(OWNED));
     expect(hasLabel(tree, 'Coach brand report')).toBe(false);
     expect(hasLabel(tree, 'See what members say about Coach')).toBe(false);
-    // The brand is still shown, as before.
     expect(textsOf(tree)).toContain('Coach');
     // Ratings are on, so the card is.
     expect(textsOf(tree)).toContain('How is it?');
+    expect(hasLabel(tree, 'Rate the brand Coach')).toBe(true);
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('leaves the brand badge as a plain label with ratings off', async () => {
+    mockFlags = { ...ALL_OFF };
+    const tree = await renderDetails(makeItem(OWNED));
+    expect(textsOf(tree)).toContain('Coach');
+    expect(hasLabel(tree, 'Rate the brand Coach')).toBe(false);
+    expect(hasLabel(tree, 'Coach brand report')).toBe(false);
   });
 
   it('adds the rating sentence to the delete confirmation only once the card reports a rating', async () => {
@@ -405,35 +425,37 @@ describe('Item Details with the flags on', () => {
     expect(mockGoBack).toHaveBeenCalled();
   });
 
-  it('puts the scan link before Materials and sends the item to the form with the scan switch on', async () => {
+  it('puts the scan card under the Value card, above Details, and sends the item to the form with the scan switch on', async () => {
     const tree = await renderDetails(makeItem({ ...OWNED, tagText: undefined }));
     const texts = textsOf(tree);
-    expect(indexOfText(texts, 'Scan the tag')).toBeLessThan(indexOfText(texts, 'Materials'));
+    const scan = indexOfText(texts, 'Scan the tag & washing instructions');
+    expect(indexOfText(texts, 'Value')).toBeLessThan(scan);
+    expect(scan).toBeLessThan(indexOfText(texts, 'Details'));
 
-    await pressLabel(tree, 'Scan the tag');
+    await pressLabel(tree, 'Scan the tag & washing instructions');
     expect(mockNavigate).toHaveBeenCalledWith('AddClothing', {
       editItem: expect.objectContaining({ id: ID, name: 'Linen Shirt' }),
       scanTag: true,
     });
   });
 
-  it('says "Rescan" when the item already has tag text, and shows no link to a guest', async () => {
+  it('says "Scan the tag again" when the item already has tag text, and shows no card to a guest', async () => {
     const tree = await renderDetails(makeItem(OWNED));
-    expect(hasLabel(tree, 'Rescan the tag')).toBe(true);
-    expect(hasLabel(tree, 'Scan the tag')).toBe(false);
+    expect(hasLabel(tree, 'Scan the tag again')).toBe(true);
+    expect(hasLabel(tree, 'Scan the tag & washing instructions')).toBe(false);
 
     authUserId.mockResolvedValue(null);
     const guest = await renderDetails(makeItem(OWNED));
-    expect(hasLabel(guest, 'Scan the tag')).toBe(false);
-    expect(hasLabel(guest, 'Rescan the tag')).toBe(false);
+    expect(hasLabel(guest, 'Scan the tag & washing instructions')).toBe(false);
+    expect(hasLabel(guest, 'Scan the tag again')).toBe(false);
   });
 
-  it('puts the Label block after Materials and before Tags, and Clear tag text clears it through the store', async () => {
+  it('puts About this piece above Details, and Clear tag text clears the tag text through the store', async () => {
     const tree = await renderDetails(makeItem(OWNED));
     const texts = textsOf(tree);
-    const label = indexOfText(texts, 'Label');
-    expect(indexOfText(texts, 'Materials')).toBeLessThan(label);
-    expect(label).toBeLessThan(indexOfText(texts, 'Tags'));
+    const about = indexOfText(texts, 'About this piece');
+    expect(indexOfText(texts, 'Value')).toBeLessThan(about);
+    expect(about).toBeLessThan(indexOfText(texts, 'Details'));
     expect(texts).toContain('Size');
 
     await pressLabel(tree, 'Tag text');
@@ -448,10 +470,10 @@ describe('Item Details with the flags on', () => {
 
     expect(updateItem).toHaveBeenCalledTimes(1);
     expect(updateItem).toHaveBeenCalledWith(expect.objectContaining({ id: ID, tagText: '' }));
-    // The tag row is gone; the rest of the Label block stays.
+    // The tag row is gone; the rest of About this piece stays.
     const after = textsOf(tree);
     expect(after).not.toContain('Tag text');
-    expect(after).toContain('Label');
+    expect(after).toContain('About this piece');
     expect(after).toContain('Size');
   });
 
@@ -478,9 +500,20 @@ describe('Item Details with every flag off', () => {
   it('shows none of the new pieces and asks nothing of the services', async () => {
     const tree = await renderDetails(makeItem(OWNED));
     const texts = textsOf(tree);
-    for (const gone of ['How is it?', 'Your rating', 'Label', 'Scan the tag', 'Rescan the tag', 'Tag text', 'Size']) {
+    for (const gone of [
+      'How is it?',
+      'Your rating',
+      'Scan the tag & washing instructions',
+      'Scan the tag again',
+      'Tag text',
+      'Washing instructions',
+      'Made in',
+    ]) {
       expect(texts).not.toContain(gone);
     }
+    // Size, style and condition are facts about the piece, not part of tag scanning or ratings.
+    expect(texts).toContain('About this piece');
+    expect(texts).toContain('Size');
     expect(texts).toContain('Value');
     expect(texts).toContain('Materials');
     expect(texts).toContain('Tags');
@@ -547,32 +580,51 @@ describe('Add Item with the flags on', () => {
   it('puts the Label section before the materials editor, after Tags', async () => {
     const { tree } = await renderAdd();
     const texts = textsOf(tree);
-    const label = indexOfText(texts, 'Label');
+    const label = indexOfText(texts, 'Label & washing instructions');
     expect(indexOfText(texts, 'Tags')).toBeLessThan(label);
     expect(label).toBeLessThan(indexOfText(texts, 'Materials'));
     expect(labelled(tree, 'Made in')).toBeTruthy();
   });
 
-  it('hands the section the form\'s own values and callbacks, and opens the scan when asked to', async () => {
+  it('puts the scan card right under the photo, before Details', async () => {
+    const { tree } = await renderAdd();
+    const texts = textsOf(tree);
+    const card = indexOfText(texts, 'Scan the tag & washing instructions');
+    expect(indexOfText(texts, 'Photo')).toBeLessThan(card);
+    expect(card).toBeLessThan(indexOfText(texts, 'Details'));
+    expect(texts).toContain('Take a photo of the tag');
+  });
+
+  it('hands the card and the section the form\'s own values and callbacks, and opens the scan from the card when asked to', async () => {
     const { tree } = await renderAdd({ editItem: editItemWithTag({ brand: 'Max Mara', size: 'M' }), scanTag: true });
-    expect(mockSectionProps).toEqual(
+    expect(mockCardProps).toEqual(
       expect.objectContaining({ category: 'outerwear', size: 'M', brand: 'Max Mara', isGuest: false, autoOpen: true }),
     );
-    expect(typeof mockSectionProps.onMaterialsChange).toBe('function');
-    expect(typeof mockSectionProps.onSizeChange).toBe('function');
-    expect(typeof mockSectionProps.onBrandChange).toBe('function');
-    // The brand and size the section writes land in the form's own fields.
-    await act(async () => mockSectionProps.onBrandChange('Totême'));
-    await act(async () => mockSectionProps.onSizeChange('S'));
+    // One scanner: the section below the card has no scan button of its own, so there is one review sheet.
+    expect(mockSectionProps).toEqual(
+      expect.objectContaining({ category: 'outerwear', size: 'M', brand: 'Max Mara', isGuest: false, showScanButton: false }),
+    );
+    expect(mockSectionProps.autoOpen).toBeUndefined();
+    expect(mockCardProps.tag).toBe(mockSectionProps.tag);
+    for (const props of [mockCardProps, mockSectionProps]) {
+      expect(typeof props.onMaterialsChange).toBe('function');
+      expect(typeof props.onSizeChange).toBe('function');
+      expect(typeof props.onBrandChange).toBe('function');
+    }
+    // The brand and size a scan writes land in the form's own fields.
+    await act(async () => mockCardProps.onBrandChange('Totême'));
+    await act(async () => mockCardProps.onSizeChange('S'));
     expect(field(tree, 'Brand')!.props.value).toBe('Totême');
-    expect(labelled(tree, 'Size')!.props.value).toBe('S');
+    expect(byLabel(tree, 'Letter S')[0].props.accessibilityState.selected).toBe(true);
   });
 
   it('does not start a scan unless the link on Item Details asked for one, and tells a guest apart', async () => {
     authUserId.mockResolvedValue(null);
-    await renderAdd({ editItem: editItemWithTag() });
-    expect(mockSectionProps.autoOpen).toBe(false);
+    const { tree } = await renderAdd({ editItem: editItemWithTag() });
+    expect(mockCardProps.autoOpen).toBe(false);
+    expect(mockCardProps.isGuest).toBe(true);
     expect(mockSectionProps.isGuest).toBe(true);
+    expect(textsOf(tree)).toContain('Sign in to scan tags.');
   });
 
   it('sends what the Label section holds with a new item', async () => {
@@ -634,9 +686,12 @@ describe('Add Item with every flag off', () => {
 
   it('has no Label section and no brand strip, and nothing looked up', async () => {
     const { tree } = await renderAdd({ editItem: editItemWithTag({ brand: 'Coach' }), scanTag: true });
-    expect(textsOf(tree)).not.toContain('Label');
+    expect(textsOf(tree)).not.toContain('Label & washing instructions');
+    expect(textsOf(tree)).not.toContain('Scan the tag & washing instructions');
+    expect(textsOf(tree)).not.toContain('How does it feel?');
     expect(labelled(tree, 'Made in')).toBeUndefined();
     expect(mockSectionProps).toBeNull();
+    expect(mockCardProps).toBeNull();
     expect(textsOf(tree)).toContain('Materials');
 
     jest.useFakeTimers();

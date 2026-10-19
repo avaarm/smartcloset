@@ -341,7 +341,6 @@ const CASES: Case[] = [
     element: () => (
       <MatchPickerSheet loading={false} kbMatches={[]} lensResults={[]} onPick={jest.fn()} onSkip={jest.fn()} />
     ),
-    open: tree => pressText(tree, 'Text'),
     safe: 'host',
   },
   {

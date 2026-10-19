@@ -60,7 +60,7 @@ import ScanTagButton, {
   type TagCurrentValues,
   type TagTicks,
 } from '../../src/components/ScanTagButton';
-import { FAILURE_MESSAGES } from '../../src/components/TagReviewSheet';
+import TagReviewSheet, { FAILURE_MESSAGES } from '../../src/components/TagReviewSheet';
 
 const CLEAN = parseTagText('100% COTTON\nMADE IN BANGLADESH\nMACHINE WASH COLD\nTUMBLE DRY LOW\nSIZE M');
 const AMBER = parseTagText('55% COTTON 40% POLYESTER');
@@ -274,6 +274,65 @@ describe('ScanTagButton: the button', () => {
     expect(mockRpc).not.toHaveBeenCalled();
     expect(mockGetAuthUserId).not.toHaveBeenCalled();
     expect(errorSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('ScanTagButton: a custom trigger', () => {
+  const Trigger = ({ start, blocked }: { start: () => void; blocked: boolean }) => (
+    <Pressable onPress={start} disabled={blocked} accessibilityRole="button" accessibilityLabel="Card trigger" />
+  );
+
+  it('replaces the default button and its helper, and starts the same scan with the same review sheet', async () => {
+    const { text, byLabel, press, tree } = await mount({
+      renderTrigger: ({ start, blocked }) => <Trigger start={start} blocked={blocked} />,
+    });
+    expect(byLabel('Scan tag')).toHaveLength(0);
+    expect(text()).not.toContain(SCAN_HELPER);
+    expect(byLabel('Card trigger')).toHaveLength(1);
+
+    await press('Card trigger');
+    expect(mockEnsureConsent).toHaveBeenCalledTimes(1);
+    expect(text()).toContain('Take photo');
+    expect(tree.root.findAllByType(TagReviewSheet)).toHaveLength(1);
+  });
+
+  it('hands the ticked rows to the form, like the default button', async () => {
+    const { press, onApply } = await mount({
+      renderTrigger: ({ start, blocked }) => <Trigger start={start} blocked={blocked} />,
+    });
+    await press('Card trigger');
+    await press('Take photo');
+    await press('Use these');
+    expect(onApply).toHaveBeenCalledWith(expect.objectContaining({ size: 'M', originCountry: 'Bangladesh' }));
+  });
+
+  it('tells the trigger it is blocked for a guest or a disabled button, and starting then does nothing', async () => {
+    const seen: boolean[] = [];
+    const { press } = await mount({
+      guest: true,
+      renderTrigger: ({ start, blocked }) => {
+        seen.push(blocked);
+        return <Trigger start={start} blocked={blocked} />;
+      },
+    });
+    expect(seen[0]).toBe(true);
+    await press('Card trigger');
+    expect(mockEnsureConsent).not.toHaveBeenCalled();
+  });
+
+  it('still opens straight into the scan for autoOpen', async () => {
+    const { text } = await mount({
+      autoOpen: true,
+      renderTrigger: ({ start, blocked }) => <Trigger start={start} blocked={blocked} />,
+    });
+    expect(mockEnsureConsent).toHaveBeenCalledTimes(1);
+    expect(text()).toContain('Take photo');
+  });
+
+  it('renders nothing with the flag off, trigger included', async () => {
+    mockFlags.on = false;
+    const { tree } = await mount({ renderTrigger: ({ start, blocked }) => <Trigger start={start} blocked={blocked} /> });
+    expect(tree.toJSON()).toBeNull();
   });
 });
 

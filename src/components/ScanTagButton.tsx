@@ -1,7 +1,8 @@
 /**
- * ScanTagButton: the "Scan tag" button of the Label section, and the whole scan behind it (consent, coaching,
- * camera or library, reading, review). ScanTagLink is the small "Scan the tag" link on Item Details, which sends
- * the person to Edit item with the scanner already open: there is no second copy of the scanner.
+ * ScanTagButton: the "Scan tag" button, and the whole scan behind it (consent, coaching, camera or library,
+ * reading, review). `renderTrigger` swaps the button for another way to start the same scan (the card at the top of
+ * Add/Edit item). ScanTagLink is the small "Scan the tag" link on Item Details, which sends the person to Edit
+ * item with the scanner already open: there is no second copy of the scanner.
  *
  * Both are flag wrappers (design 6.1): with TAG_SCAN_ENABLED off they render nothing and no hook, effect or
  * request runs. The pure rules for what a scan changes in the form are in tagApply.ts and exported from here.
@@ -23,6 +24,13 @@ import type { TagApplyChoice, TagCurrentValues } from './tagApply';
 export { applyTagRead } from './tagApply';
 export type { TagApplyChoice, TagCurrentValues, TagTicks } from './tagApply';
 
+/** What a custom trigger needs to start the scan: the same start the default button uses. */
+export interface ScanTagTrigger {
+  start: () => void;
+  /** True for a guest or a disabled button: starting does nothing. */
+  blocked: boolean;
+}
+
 export interface ScanTagButtonProps {
   onApply: (choice: TagApplyChoice) => void;
   current: TagCurrentValues;
@@ -31,6 +39,11 @@ export interface ScanTagButtonProps {
   guest?: boolean;
   /** Start the scan as soon as the button appears (Item Details sends the person here to rescan). */
   autoOpen?: boolean;
+  /**
+   * Draws the thing that starts the scan in place of the default button and its helper line (the card at the top of
+   * Add/Edit item). The scan and its one review sheet are the same either way.
+   */
+  renderTrigger?: (trigger: ScanTagTrigger) => React.ReactNode;
 }
 
 export const SCAN_HELPER = 'Fill in materials, care and country from the tag.';
@@ -40,7 +53,7 @@ export const CAMERA_UNAVAILABLE_NOTICE = 'We couldn’t open the camera. Try aga
 
 // ─── The button ─────────────────────────────────────────────────────────────
 
-function ScanTagButtonInner({ onApply, current, category, disabled, guest, autoOpen }: ScanTagButtonProps) {
+function ScanTagButtonInner({ onApply, current, category, disabled, guest, autoOpen, renderTrigger }: ScanTagButtonProps) {
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<TagReviewPhase>('coach');
   const [read, setRead] = useState<TagRead | null>(null);
@@ -211,18 +224,29 @@ function ScanTagButtonInner({ onApply, current, category, disabled, guest, autoO
 
   return (
     <View>
-      <Pressable
-        onPress={start}
-        disabled={blocked}
-        accessibilityRole="button"
-        accessibilityLabel="Scan tag"
-        accessibilityState={{ disabled: blocked }}
-        style={({ pressed }) => [styles.button, blocked && styles.buttonDisabled, pressed && styles.pressed]}
-      >
-        <Icon name="scan-outline" size={20} color={blocked ? theme.colors.textMuted : '#7A5A22'} />
-        <Text style={[styles.buttonText, blocked && styles.buttonTextDisabled]}>Scan tag</Text>
-      </Pressable>
-      <Text style={styles.helper}>{guest ? GUEST_SCAN_MESSAGE : SCAN_HELPER}</Text>
+      {renderTrigger ? (
+        renderTrigger({
+          start: () => {
+            start().catch(() => {});
+          },
+          blocked,
+        })
+      ) : (
+        <>
+          <Pressable
+            onPress={start}
+            disabled={blocked}
+            accessibilityRole="button"
+            accessibilityLabel="Scan tag"
+            accessibilityState={{ disabled: blocked }}
+            style={({ pressed }) => [styles.button, blocked && styles.buttonDisabled, pressed && styles.pressed]}
+          >
+            <Icon name="scan-outline" size={20} color={blocked ? theme.colors.textMuted : '#7A5A22'} />
+            <Text style={[styles.buttonText, blocked && styles.buttonTextDisabled]}>Scan tag</Text>
+          </Pressable>
+          <Text style={styles.helper}>{guest ? GUEST_SCAN_MESSAGE : SCAN_HELPER}</Text>
+        </>
+      )}
       <TagReviewSheet
         visible={open}
         phase={phase}

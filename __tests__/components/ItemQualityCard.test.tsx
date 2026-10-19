@@ -58,7 +58,6 @@ import ItemQualityCard, {
   LOAD_FAILED,
   NUDGE_TEN,
   NUDGE_THREE,
-  ratingSummary,
   STAR_HELPER,
   STATUS_COUNTS,
   STATUS_PRIVATE,
@@ -456,7 +455,8 @@ describe('ItemQualityCard', () => {
       await star(2);
       expect(text()).toContain('Excellent');
       expect(text()).not.toContain('Fair');
-      expect(text()).toContain('Soft, True to size');
+      expect(text()).toContain('Hand feel Soft');
+      expect(text()).toContain('Fit True to size');
     });
 
     it('goes back to the empty stars with the reason when the save fails', async () => {
@@ -527,12 +527,14 @@ describe('ItemQualityCard', () => {
       wouldBuyAgain: 'yes',
     });
 
-    it('shows the rating, what was chosen, and Edit and Remove', async () => {
+    it('shows the rating, a labelled line for what was chosen, and Edit and Remove', async () => {
       loadMyItemRating.mockResolvedValue(ok(richRating));
       const { text, all } = await mount();
       expect(text()).toContain('Your rating');
-      expect(text()).toContain('Good');
-      expect(text()).toContain('Soft, True to size, Would buy again');
+      expect(text()).toContain('Overall Good');
+      expect(text()).toContain('Hand feel Soft');
+      expect(text()).toContain('Fit True to size');
+      expect(text()).toContain('Would buy again Yes');
       expect(text()).toContain(STATUS_PRIVATE);
       expect(all('Edit')).toHaveLength(1);
       expect(all('Remove')).toHaveLength(1);
@@ -540,20 +542,24 @@ describe('ItemQualityCard', () => {
       expect(text()).not.toContain('How is it?');
     });
 
-    it('has read-only stars: a change goes through Edit', async () => {
+    it('shows the stars filled to the rating, and saves nothing by showing them', async () => {
       loadMyItemRating.mockResolvedValue(ok(richRating));
       const { tree, all } = await mount();
+      // The stars are tappable (see the quick inputs); the sheet's own scale is not there while it is closed.
       expect(all(scaleStepLabel('Rate this piece', 2))).toHaveLength(0);
-      expect(all(scaleStepLabel('Your overall rating', 2))).toHaveLength(0);
-      const stars = tree.root.findAll(n => (n.type as unknown) === 'Icon').map(n => n.props.name);
+      expect(all(scaleStepLabel('Your overall rating', 2))).toHaveLength(1);
+      const stars = tree.root.findAll(n => (n.type as unknown) === 'Icon' && String(n.props.name).startsWith('star')).map(n => n.props.name);
       expect(stars).toEqual(['star', 'star', 'star', 'star', 'star-outline']);
       expect(saveItemRating).not.toHaveBeenCalled();
     });
 
-    it('leaves out the line of choices when there are none', async () => {
+    it('lists only Overall when nothing else was chosen', async () => {
       loadMyItemRating.mockResolvedValue(ok(rating()));
       const { text } = await mount();
-      expect(ratingSummary(rating())).toBe('');
+      expect(text()).toContain('Overall Good');
+      expect(text()).not.toContain('Comfort');
+      expect(text()).not.toContain('Holds up');
+      expect(text()).not.toContain('Would buy again');
       expect(text()).toContain(STATUS_PRIVATE);
     });
 
@@ -579,13 +585,6 @@ describe('ItemQualityCard', () => {
       expect((await mount()).text()).toContain(STATUS_COUNTS);
     });
 
-    it('describes the choices in a short line', () => {
-      expect(ratingSummary(rating({ touchTags: ['soft', 'silky'], comfortTags: ['cozy', 'warm'], holdsUpTags: ['pills'] }))).toBe(
-        'Soft, Silky, Cozy',
-      );
-      expect(ratingSummary(rating({ fit: 'runs_small', wouldBuyAgain: 'maybe' }))).toBe('Runs small, Might buy again');
-      expect(ratingSummary(rating({ wouldBuyAgain: 'no' }))).toBe('Wouldn’t buy again');
-    });
   });
 
   describe('Edit, Say more and the sheet', () => {
@@ -695,8 +694,9 @@ describe('ItemQualityCard', () => {
       expect(labelled()).toHaveLength(0);
       await press('Edit');
       expect(labelled().length).toBeGreaterThan(0);
-      const modal = tree.root.findByType(Modal);
-      expect(modal.findAll(n => n.props.accessibilityLabel === 'consent sheet').length).toBeGreaterThan(0);
+      const open = tree.root.findAllByType(Modal).filter(m => m.props.visible === true);
+      expect(open).toHaveLength(1);
+      expect(open[0].findAll(n => n.props.accessibilityLabel === 'consent sheet').length).toBeGreaterThan(0);
     });
   });
 

@@ -1,8 +1,9 @@
 /**
  * "Is it one of these?": web matches are listed shops first and second-hand
- * last (photo matches and the person's own searches together), each card says
- * what kind of site it is, the brand is only guessed from a brand's own site,
- * and a pasted link stays first.
+ * last, each card says what kind of site it is, the brand is only guessed from
+ * a brand's own site, and a pasted link stays first. The refine box adds the
+ * person's words to what the photo was taken for, shows those results in place
+ * of the photo's, and offers the way back.
  */
 jest.mock('../../src/services/productUrlService', () => ({
   fetchProductMetadata: jest.fn(),
@@ -37,10 +38,17 @@ const item = (id: string, host: string, title: string, over: Partial<LensResult>
 let tree: renderer.ReactTestRenderer;
 const onPick = jest.fn();
 
-const mount = (lensResults: LensResult[]) => {
+const mount = (lensResults: LensResult[], searchHint?: string) => {
   act(() => {
     tree = renderer.create(
-      <MatchPickerSheet loading={false} kbMatches={[]} lensResults={lensResults} onPick={onPick} onSkip={jest.fn()} />,
+      <MatchPickerSheet
+        loading={false}
+        kbMatches={[]}
+        lensResults={lensResults}
+        searchHint={searchHint}
+        onPick={onPick}
+        onSkip={jest.fn()}
+      />,
     );
   });
 };
@@ -73,7 +81,7 @@ const pressByText = async (label: string) => {
 };
 
 const search = async (q: string) => {
-  await pressByText('Text');
+  // The refine box is open from the start.
   const input = tree.root.findByType(TextInput);
   await act(async () => {
     input.props.onChangeText(q);
@@ -106,17 +114,58 @@ describe('ordering and labels', () => {
     expect(badgeTexts()).toEqual(['Retail', 'Resale', 'Resale']);
   });
 
-  it('puts a shop found by the person\'s own search ahead of second-hand photo matches', async () => {
+  it('shows the results of a refine in place of the photo matches, shops first', async () => {
     mount([item('e1', 'ebay.com', 'Tan boots eBay'), item('z1', 'zara.com', 'Tan boots Zara')]);
     searchText.mockResolvedValue({
       query: 'tan boots',
       bestGuessLabels: [],
-      results: [item('n1', 'nordstrom.com', 'Tan boots Nordstrom'), item('d1', 'depop.com', 'Tan boots Depop')],
+      results: [item('d1', 'depop.com', 'Black boots Depop'), item('n1', 'nordstrom.com', 'Black boots Nordstrom')],
     });
 
-    await search('tan boots');
+    await search('black');
 
-    expect(cardTitles()).toEqual(['Tan boots Zara', 'Tan boots Nordstrom', 'Tan boots eBay', 'Tan boots Depop']);
+    expect(cardTitles()).toEqual(['Black boots Nordstrom', 'Black boots Depop']);
+  });
+
+  it('adds the typed words to what the photo was taken for', async () => {
+    mount([item('z1', 'zara.com', 'Tan boots Zara')], 'tan ankle boots');
+    searchText.mockResolvedValue({ query: 'x', bestGuessLabels: [], results: [item('n1', 'nordstrom.com', 'Black boots')] });
+
+    await search('black leather');
+
+    const [query] = searchText.mock.calls[0];
+    expect(query).toContain('ankle boots');
+    expect(query).toContain('black');
+    expect(query).toContain('leather');
+    // a typed colour replaces the one the photo guessed
+    expect(query).not.toContain('tan');
+  });
+
+  it('goes back to the photo matches', async () => {
+    mount([item('z1', 'zara.com', 'Tan boots Zara')]);
+    searchText.mockResolvedValue({ query: 'x', bestGuessLabels: [], results: [item('n1', 'nordstrom.com', 'Black boots')] });
+    await search('black boots');
+    expect(cardTitles()).toEqual(['Black boots']);
+    expect(text()).toContain('Back to photo matches');
+
+    await pressByText('Back to photo matches');
+
+    expect(cardTitles()).toEqual(['Tan boots Zara']);
+    expect(text()).not.toContain('Back to photo matches');
+  });
+
+  it('keeps what is on screen when a refine finds nothing, and says so', async () => {
+    mount([item('z1', 'zara.com', 'Tan boots Zara')]);
+    searchText.mockResolvedValue({ query: 'x', bestGuessLabels: [], results: [] });
+    await search('qwertyuiop');
+    expect(cardTitles()).toEqual(['Tan boots Zara']);
+    expect(text()).toContain('No shop results for that. Try fewer words.');
+  });
+
+  it('does nothing for a blank refine', async () => {
+    mount([item('z1', 'zara.com', 'Tan boots Zara')]);
+    await search('   ');
+    expect(searchText).not.toHaveBeenCalled();
   });
 
   it('keeps results from sites it does not know, which used to be dropped', async () => {

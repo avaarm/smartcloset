@@ -3,7 +3,10 @@
  *
  * Full-screen modal with two search modes:
  *   1. Text search — product search results from the web
- *   2. Photo search — reuse the existing Vision-based reverse-image pipeline
+ *   2. Photo search — reuse the existing Vision-based reverse-image pipeline.
+ *      Once the photo has an answer, a box under it adds words to the photo's
+ *      best guess ("black leather", "Coach") and shows those results in place of
+ *      the photo's, with a way back to them.
  *
  * Shops come first and each card says what kind of site it is. Second-hand
  * listings (eBay, Poshmark...) are left out once there are enough shop
@@ -13,7 +16,7 @@
  * retailer image, title, brand guess, source URL, and a best-guess category.
  */
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -22,37 +25,31 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  searchByImage,
-  searchProductsByText,
-  toSecureImageUrl,
-  type LensResult,
-  type LensSearchResponse,
-} from '../services/lensSearchService';
+import { toSecureImageUrl, type LensResult } from '../services/lensSearchService';
 import { brandFromHost, sourceKindOf } from '../services/retailerDomains';
-import { selectVisibleResults } from '../services/searchRanking';
 import { categoryFromText } from '../utils/clothingCategories';
-import { pickImageFromLibrary } from '../platform/imagePicker';
 import { saveClothingItem } from '../services/storage';
 import { buildWishlistItem } from '../services/wishlistItemBuilder';
 import { categoryLabel } from '../utils/clothingOptions';
 import { noteAddedItem } from '../utils/askWardrobeFor';
 import type { ClothingCategory } from '../types/clothing';
 import theme from '../styles/theme';
+import {
+  EMPTY_PHOTO_RESULTS_MESSAGE,
+  EMPTY_TEXT_RESULTS_MESSAGE,
+  useProductSearch,
+} from '../hooks/useProductSearch';
 import IncludeResaleToggle from '../components/IncludeResaleToggle';
+import RefineChips from '../components/RefineChips';
+import RefineSearchBar from '../components/RefineSearchBar';
 import SourceKindBadge from '../components/SourceKindBadge';
 import { KeyboardSafeScrollView } from '../components/KeyboardSafe';
 
-const SEARCH_FAILED_MESSAGE = "Couldn't search right now. Check your connection and try again.";
-
-// Resale is already kept whenever shops are scarce, so "include resale" never fixes an empty list.
-export const EMPTY_TEXT_RESULTS_MESSAGE = 'No results for that. Try different or fewer words.';
-export const EMPTY_PHOTO_RESULTS_MESSAGE = 'No matches found. Try a clearer photo or a different angle.';
+export { EMPTY_PHOTO_RESULTS_MESSAGE, EMPTY_TEXT_RESULTS_MESSAGE };
 
 type Props = {
   visible: boolean;
@@ -78,102 +75,17 @@ export const guessBrand = (source: string): string | undefined => brandFromHost(
 
 const WishlistSearchModal: React.FC<Props> = ({ visible, onClose, onAdded }) => {
   const [mode, setMode] = useState<Mode>('text');
-  const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [response, setResponse] = useState<LensSearchResponse | null>(null);
   const [addingId, setAddingId] = useState<string | null>(null);
-  // Kept while the modal stays mounted, so closing and reopening it does not
-  // turn resale back off.
-  const [includeResale, setIncludeResale] = useState(false);
-  // A search that was started later (or the modal closing) makes an earlier
-  // one's answer stale: it must not replace what is on screen.
-  const searchSeq = useRef(0);
-  // The text search the results on screen came from, so flipping "Include
-  // resale" can repeat it. Null after a photo search, which already holds the
-  // resale listings and only needs filtering.
-  const shownTextQuery = useRef<string | null>(null);
-  // Which kind of search the answer on screen came from: the tabs can be flipped
-  // while it is showing, and its empty-state advice has to fit the search that ran.
-  const [answerMode, setAnswerMode] = useState<Mode>('text');
-
-  const resetState = useCallback(() => {
-    searchSeq.current += 1;
-    shownTextQuery.current = null;
-    setQuery('');
-    setPhotoUri(null);
-    setResponse(null);
-    setAddingId(null);
-    setLoading(false);
-  }, []);
+  // The searching is shared with "Search a look". It also holds the words typed in the
+  // search box and the refine box, so flipping between the tabs never loses them.
+  const search = useProductSearch();
+  const { response, results, loading, kind, reset: resetSearch } = search;
 
   const handleClose = useCallback(() => {
-    resetState();
+    resetSearch();
+    setAddingId(null);
     onClose();
-  }, [onClose, resetState]);
-
-  const searchText = useCallback(async (text: string, resale: boolean) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    const seq = ++searchSeq.current;
-    shownTextQuery.current = trimmed;
-    setAnswerMode('text');
-    setLoading(true);
-    setResponse(null);
-    try {
-      const result = await searchProductsByText(trimmed, { includeResale: resale });
-      if (seq === searchSeq.current) setResponse(result);
-    } catch (err: any) {
-      if (seq === searchSeq.current) {
-        setResponse({ query: trimmed, bestGuessLabels: [], results: [], error: SEARCH_FAILED_MESSAGE });
-      }
-    } finally {
-      if (seq === searchSeq.current) setLoading(false);
-    }
-  }, []);
-
-  const runTextSearch = useCallback(() => searchText(query, includeResale), [searchText, query, includeResale]);
-
-  const runImageSearch = useCallback(async () => {
-    const picked = await pickImageFromLibrary();
-    if (!picked) return;
-    const seq = ++searchSeq.current;
-    shownTextQuery.current = null;
-    setAnswerMode('image');
-    setPhotoUri(picked.uri);
-    setLoading(true);
-    setResponse(null);
-    try {
-      const result = await searchByImage(picked.uri);
-      if (seq === searchSeq.current) setResponse(result);
-    } catch (err: any) {
-      if (seq === searchSeq.current) {
-        setResponse({
-          query: '',
-          bestGuessLabels: [],
-          results: [],
-          error: SEARCH_FAILED_MESSAGE,
-        });
-      }
-    } finally {
-      if (seq === searchSeq.current) setLoading(false);
-    }
-  }, []);
-
-  const toggleResale = useCallback(
-    (value: boolean) => {
-      setIncludeResale(value);
-      if (shownTextQuery.current) searchText(shownTextQuery.current, value);
-    },
-    [searchText],
-  );
-
-  // A text search has already left resale out (or in); a photo search returns
-  // everything, so the same rule is applied here to both.
-  const results = useMemo(
-    () => (response ? selectVisibleResults(response.results, includeResale) : []),
-    [response, includeResale],
-  );
+  }, [onClose, resetSearch]);
 
   const addToWishlist = useCallback(
     async (r: LensResult) => {
@@ -186,8 +98,8 @@ const WishlistSearchModal: React.FC<Props> = ({ visible, onClose, onAdded }) => 
         // Counts toward who the wardrobe is for; no question here, the confirmation below is enough for one tap.
         noteAddedItem({ category: item.category, subcategory: item.subcategory, name: item.name }, { ask: false });
         onAdded?.();
-        const kind = [categoryLabel(item.category), item.subcategory].filter(Boolean).join(' · ');
-        Alert.alert('Added to Wishlist', `"${r.title.substring(0, 50)}" saved as ${kind}. You can change this from the item.`, [
+        const savedAs = [categoryLabel(item.category), item.subcategory].filter(Boolean).join(' · ');
+        Alert.alert('Added to Wishlist', `"${r.title.substring(0, 50)}" saved as ${savedAs}. You can change this from the item.`, [
           { text: 'Keep Searching', style: 'default' },
           { text: 'Done', onPress: handleClose },
         ]);
@@ -211,7 +123,13 @@ const WishlistSearchModal: React.FC<Props> = ({ visible, onClose, onAdded }) => 
       <SafeAreaView style={styles.container} edges={['top']}>
         {/* Header */}
         <View style={styles.header}>
-          <Pressable onPress={handleClose} hitSlop={16} style={styles.headerIconBtn}>
+          <Pressable
+            onPress={handleClose}
+            hitSlop={16}
+            style={styles.headerIconBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
             <Icon name="close" size={24} color={theme.colors.text} />
           </Pressable>
           <Text style={styles.headerTitle}>Add from the web</Text>
@@ -252,52 +170,70 @@ const WishlistSearchModal: React.FC<Props> = ({ visible, onClose, onAdded }) => 
           </Pressable>
         </View>
 
-        {/* Search input or photo picker */}
+        {/* Search input, or the photo picker with a box to refine its answer */}
         {mode === 'text' ? (
-          <View style={styles.searchBar}>
-            <Icon name="search" size={18} color={theme.colors.mediumGray} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Try 'burgundy clutch' or 'white sneakers'"
-              placeholderTextColor={theme.colors.mediumGray}
-              value={query}
-              onChangeText={setQuery}
-              onSubmitEditing={runTextSearch}
-              returnKeyType="search"
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoFocus
-              accessibilityLabel="Search for a product"
-            />
-            {query.length > 0 && (
-              <Pressable onPress={() => setQuery('')} hitSlop={12}>
-                <Icon name="close-circle" size={18} color={theme.colors.mediumGray} />
-              </Pressable>
-            )}
-          </View>
+          <RefineSearchBar
+            style={styles.searchBar}
+            value={search.query}
+            onChangeText={search.setQuery}
+            onSubmit={search.searchText}
+            placeholder="Try 'burgundy clutch' or 'white sneakers'"
+            accessibilityLabel="Search for a product"
+            autoFocus
+          />
         ) : (
-          <Pressable style={styles.photoPicker} onPress={runImageSearch}>
-            {photoUri ? (
-              <Image source={{ uri: photoUri }} style={styles.photoPickerImage} />
-            ) : (
-              <View style={{ alignItems: 'center' }}>
-                <Icon name="image-outline" size={32} color={theme.colors.accent} />
-                <Text style={styles.photoPickerTitle}>Pick an inspiration photo</Text>
-                <Text style={styles.photoPickerSubtitle}>
-                  We'll find visually similar items online
-                </Text>
-              </View>
-            )}
-          </Pressable>
+          <>
+            <Pressable
+              style={styles.photoPicker}
+              onPress={search.searchPhoto}
+              accessibilityRole="button"
+              accessibilityLabel={search.photoUri ? 'Change the inspiration photo' : 'Pick an inspiration photo'}
+            >
+              {search.photoUri ? (
+                <Image source={{ uri: search.photoUri }} style={styles.photoPickerImage} />
+              ) : (
+                <View style={{ alignItems: 'center' }}>
+                  <Icon name="image-outline" size={32} color={theme.colors.accent} />
+                  <Text style={styles.photoPickerTitle}>Pick an inspiration photo</Text>
+                  <Text style={styles.photoPickerSubtitle}>
+                    We'll find visually similar items online
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+            {search.photoAnswer ? (
+              <RefineSearchBar
+                style={styles.searchBar}
+                value={search.refineText}
+                onChangeText={search.setRefineText}
+                onSubmit={search.refine}
+                placeholder="Add words: black leather, ankle, Coach..."
+                accessibilityLabel="Add words to refine the photo results"
+              />
+            ) : null}
+          </>
         )}
 
-        <IncludeResaleToggle value={includeResale} onValueChange={toggleResale} />
+        <IncludeResaleToggle value={search.includeResale} onValueChange={search.setIncludeResale} />
 
         {/* Results: scroll clear of the keyboard that the search box opens */}
         <KeyboardSafeScrollView
           style={styles.scroll}
           contentContainerStyle={{ paddingBottom: 40 }}
         >
+          {kind === 'refined' && (
+            <Pressable
+              onPress={search.backToPhoto}
+              hitSlop={8}
+              style={styles.backLink}
+              accessibilityRole="button"
+              accessibilityLabel="Back to photo results"
+            >
+              <Icon name="arrow-back" size={16} color={theme.colors.accent} />
+              <Text style={styles.backLinkText}>Back to photo results</Text>
+            </Pressable>
+          )}
+
           {loading && (
             <View style={styles.loadingWrap}>
               <ActivityIndicator size="large" color={theme.colors.accent} />
@@ -336,6 +272,8 @@ const WishlistSearchModal: React.FC<Props> = ({ visible, onClose, onAdded }) => 
             </Text>
           )}
 
+          {!loading && <RefineChips words={search.suggestions} onPick={search.addWord} style={styles.chips} />}
+
           {!loading &&
             response &&
             results.length === 0 &&
@@ -344,7 +282,7 @@ const WishlistSearchModal: React.FC<Props> = ({ visible, onClose, onAdded }) => 
               <View style={styles.emptyBox}>
                 <Icon name="search-outline" size={40} color={theme.colors.lightGray} />
                 <Text style={[styles.mutedText, styles.emptyMessage]}>
-                  {answerMode === 'image' ? EMPTY_PHOTO_RESULTS_MESSAGE : EMPTY_TEXT_RESULTS_MESSAGE}
+                  {kind === 'photo' ? EMPTY_PHOTO_RESULTS_MESSAGE : EMPTY_TEXT_RESULTS_MESSAGE}
                 </Text>
               </View>
             )}
@@ -379,7 +317,7 @@ const WishlistSearchModal: React.FC<Props> = ({ visible, onClose, onAdded }) => 
               <Text style={styles.emptyBody}>
                 {mode === 'text'
                   ? 'Find clothes by name, brand, color, or style from real retailers.'
-                  : 'Use a screenshot of something you saw online and we\'ll find it.'}
+                  : 'Use a screenshot of something you saw online and we\'ll find it. Then add words like a color or a brand to narrow it down.'}
               </Text>
             </View>
           )}
@@ -493,21 +431,8 @@ const styles = StyleSheet.create({
   modeLabelActive: { color: '#FFFFFF' },
 
   searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.colors.mutedBackground,
     marginHorizontal: 16,
     marginTop: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 12,
-    gap: 10,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: theme.colors.text,
-    padding: 0,
   },
 
   photoPicker: {
@@ -567,6 +492,17 @@ const styles = StyleSheet.create({
     color: theme.colors.mediumGray,
     lineHeight: 18,
   },
+
+  chips: { marginHorizontal: 16, marginBottom: 12 },
+  backLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginHorizontal: 16,
+    marginTop: 12,
+  },
+  backLinkText: { fontSize: 14, fontWeight: '500', color: theme.colors.accent },
 
   resultsCount: {
     paddingHorizontal: 20,

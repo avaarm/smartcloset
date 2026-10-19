@@ -2,10 +2,17 @@
  * ItemQualityCard: how the person rates one piece, on Item Details under the value card
  * (documentation/design/quality-ratings.md, 3.3 and 3.7).
  *
- * An owned piece gets "How is it?" with five stars: one tap saves a private overall rating at once, "Say more"
- * opens the full sheet. A rated piece shows the rating, a line of what was chosen, whether it counts toward
- * brand insights, and Edit and Remove. A wishlist piece only gets the brand line. The card also nudges, once,
- * when the wear count reaches 3 (rate it) or 10 (is it still holding up) while the screen is open.
+ * An owned piece gets "How is it?" with the rating questions in plain view, nothing to open first: five stars
+ * (one tap saves a private overall rating at once), "Hand feel" and "How it wears" word chips, and "Fit". Once a
+ * piece is rated, a tap on a star or a chip saves that change at once (a save replaces the whole rating, so the
+ * stored rating is sent again with the one change; a quick run of taps is sent as one save). Words chosen before
+ * a star wait for it: nothing is rated by a word alone. A rated piece also shows a labelled breakdown of what was
+ * chosen, whether it counts toward brand insights, and Edit and Remove; "Say more" opens the full sheet.
+ *
+ * Any piece with a brand also gets the person's own rating of the brand: "Rate <Brand>", or their stored stars
+ * with Edit. That works with brand insights off; the report of what members say is a separate link that only
+ * exists when insights are on. A wishlist piece only gets the brand line. The card also nudges, once, when the
+ * wear count reaches 3 (rate it) or 10 (is it still holding up) while the screen is open.
  *
  * Flag wrapper (design 6.1): with ratings off nothing renders and no hook runs. The consent hook only runs
  * when brand insights are on too, so a build with ratings alone makes no consent request.
@@ -15,17 +22,27 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { brandInsightsActive, ratingsActive } from '../config/ratingFlags';
 import {
+  COMFORT_TAGS,
   FIT_LABELS,
+  FIT_VERDICTS,
+  MAX_TAGS_PER_GROUP,
   OVERALL_LABELS,
   TAG_LABELS,
-  type BuyAgain,
+  TOUCH_TAGS,
+  type ComfortTag,
+  type FitVerdict,
   type Score,
+  type TouchTag,
 } from '../config/ratingVocabulary';
 import { deleteItemRating, loadMyBrandSummary, loadMyItemRating, saveItemRating } from '../services/ratingService';
 import theme from '../styles/theme';
 import type { ClothingItem } from '../types';
-import type { ItemRating, Loaded, MyBrandSummary } from '../types/rating';
+import type { ItemRating, ItemRatingInput, Loaded, MyBrandSummary } from '../types/rating';
+import BrandRatingRow from './BrandRatingRow';
+import RateBrandSheet, { blockedLine, type BrandSaveOutcome } from './RateBrandSheet';
 import RateItemSheet, { REMOVE_MESSAGE, REMOVE_TITLE } from './RateItemSheet';
+import { ChipGroup } from './RatingChips';
+import RatingBreakdown from './RatingBreakdown';
 import { useRatingConsent, type RatingConsentApi } from './RatingConsentSheet';
 import RatingScale from './RatingScale';
 
@@ -34,11 +51,23 @@ export interface ItemQualityCardProps {
   wearCount: number;
   onOpenBrand: (brand: string) => void;
   onRatingChange?: (hasRating: boolean) => void;
+  /**
+   * Changes each time the screen comes back into view. The rating is read again then, so one made on the edit form
+   * shows up here instead of a stale copy that a tap would save over.
+   */
+  reloadKey?: number;
+  /**
+   * The brand badge at the top of the screen opens the same brand rating sheet. The card hands over the opener
+   * while the person can rate the brand (signed in, a brand, the server can take it) and null when they cannot.
+   */
+  onBrandRatingOpener?: (open: (() => void) | null) => void;
 }
 
 export const TITLE_UNRATED = 'How is it?';
 export const TITLE_RATED = 'Your rating';
 export const STAR_HELPER = 'Tap a star. It’s saved right away.';
+export const WORDS_WAIT_HELPER = 'Pick a star to save the words you chose.';
+export const WORDS_SAVED_HELPER = 'Tap a word to add or change it. It’s saved right away.';
 export const GUEST_LINE = 'Sign in to rate your pieces and see what members say about brands.';
 export const LOAD_FAILED = 'Couldn’t load your rating.';
 export const SAVE_FAILED = 'Couldn’t save your rating. Check your connection and try again.';
@@ -49,31 +78,51 @@ export const NUDGE_THREE = 'Worn 3 times. How is it holding up?';
 export const NUDGE_TEN = 'Worn 10 times. Still holding up?';
 
 /** What the card needs from useRatingConsent. */
-type CardConsent = Pick<RatingConsentApi, 'granted' | 'requestConsent' | 'sheet'>;
+type CardConsent = Pick<RatingConsentApi, 'granted' | 'requestConsent' | 'sheet' | 'refresh'>;
 
 /** Used when brand insights are off: nothing to ask, nothing to show. */
-const NO_CONSENT: CardConsent = { granted: null, requestConsent: async () => false, sheet: null };
+const NO_CONSENT: CardConsent = { granted: null, requestConsent: async () => false, sheet: null, refresh: async () => {} };
 
 const messageOf = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message ? error.message : fallback;
 
-const BUY_AGAIN_PHRASES: Record<BuyAgain, string> = {
-  yes: 'Would buy again',
-  maybe: 'Might buy again',
-  no: 'Wouldn’t buy again',
-};
+// ─── Quick inputs ───────────────────────────────────────────────────────────
 
-/** "Soft, True to size, Would buy again": the words the person picked, at most three descriptors. */
-export const ratingSummary = (rating: ItemRating): string => {
-  const words = [...rating.touchTags, ...rating.comfortTags, ...rating.holdsUpTags].slice(0, 3).map(tag => TAG_LABELS[tag]);
-  if (rating.fit) {
-    words.push(FIT_LABELS[rating.fit]);
-  }
-  if (rating.wouldBuyAgain) {
-    words.push(BUY_AGAIN_PHRASES[rating.wouldBuyAgain]);
-  }
-  return words.join(', ');
-};
+/** The words the chips hold: a few for hand feel and for how it wears, one fit. */
+interface Words {
+  touchTags: TouchTag[];
+  comfortTags: ComfortTag[];
+  fit: FitVerdict | null;
+}
+
+const NO_WORDS: Words = { touchTags: [], comfortTags: [], fit: null };
+
+const hasWords = (words: Words): boolean => words.touchTags.length > 0 || words.comfortTags.length > 0 || words.fit !== null;
+
+/** What a tap on a chip did to the list: chosen words are removed, new ones are added up to the group limit. */
+const toggled = <T extends string>(list: readonly T[], tag: T): T[] =>
+  list.includes(tag) ? list.filter(t => t !== tag) : list.length >= MAX_TAGS_PER_GROUP ? [...list] : [...list, tag];
+
+/** The fields a quick tap can change on a stored rating. */
+type QuickChange = Partial<Pick<ItemRating, 'overall' | 'touchTags' | 'comfortTags' | 'fit'>>;
+
+/**
+ * A save replaces the whole rating, so one changed word sends everything the stored rating holds, the note
+ * included. `contribute` is left out: the server then keeps the choice the person made in the sheet.
+ */
+const ratedInput = (rating: ItemRating, change: QuickChange): ItemRatingInput => ({
+  overall: rating.overall,
+  touch: rating.touch,
+  touchTags: rating.touchTags,
+  comfort: rating.comfort,
+  comfortTags: rating.comfortTags,
+  holdsUp: rating.holdsUp,
+  holdsUpTags: rating.holdsUpTags,
+  fit: rating.fit,
+  wouldBuyAgain: rating.wouldBuyAgain,
+  note: rating.note,
+  ...change,
+});
 
 // ─── What the card knows ────────────────────────────────────────────────────
 
@@ -225,22 +274,33 @@ const TextButton = ({
 
 type OwnedProps = ItemQualityCardProps & { consent: CardConsent };
 
-function OwnedCard({ item, wearCount, onOpenBrand, onRatingChange, consent }: OwnedProps) {
+function OwnedCard({ item, wearCount, onOpenBrand, onRatingChange, reloadKey, onBrandRatingOpener, consent }: OwnedProps) {
   const itemId = item.id;
   const brand = (item.brand ?? '').trim();
 
   const [view, setView] = useState<CardView>({ kind: 'loading' });
   const [pending, setPending] = useState<Score | null>(null);
+  // Words chosen before there is a star to save them with.
+  const [words, setWords] = useState<Words>(NO_WORDS);
+  // What a tap on a rated piece asked for and is still being saved: shown at once, dropped when it is read back.
+  const [draft, setDraft] = useState<QuickChange | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [nudge, setNudge] = useState<'three' | 'ten' | null>(null);
   const [justRated, setJustRated] = useState(false);
   const [summaryKey, setSummaryKey] = useState(0);
   const [removing, setRemoving] = useState(false);
+  const [brandOpen, setBrandOpen] = useState(false);
+  const [brandNotice, setBrandNotice] = useState<string | null>(null);
+  // Learned from a save the server answered with "not worn"; it lasts as long as this card does.
+  const [brandNotWorn, setBrandNotWorn] = useState(false);
 
   const mounted = useRef(true);
   const loadId = useRef(0);
   const busy = useRef(false);
+  const draftRef = useRef<QuickChange | null>(null);
+  const draftVersion = useRef(0);
+  const flushing = useRef(false);
   const viewRef = useRef(view);
   viewRef.current = view;
 
@@ -271,6 +331,17 @@ function OwnedCard({ item, wearCount, onOpenBrand, onRatingChange, consent }: Ow
       loadId.current += 1;
     };
   }, [reload]);
+
+  // The screen came back into view (the edit form may have rated the piece): read it again, keeping what is shown.
+  const seenReloadKey = useRef(reloadKey);
+  useEffect(() => {
+    if (reloadKey === seenReloadKey.current) {
+      return;
+    }
+    seenReloadKey.current = reloadKey;
+    setSummaryKey(key => key + 1);
+    reload().catch(() => {});
+  }, [reloadKey, reload]);
 
   // Tell the screen whether a rating exists (for the delete message).
   const hasRating = view.kind === 'ready' && view.rating !== null;
@@ -308,6 +379,26 @@ function OwnedCard({ item, wearCount, onOpenBrand, onRatingChange, consent }: Ow
   }, [wearCount]);
 
   const summary = useBrandSummary(brand, view.kind === 'ready', summaryKey);
+  const brandRating = summary.kind === 'ready' ? summary.value.brandRating : null;
+  // The server allows a brand rating for a brand the person owns something from, or has already rated.
+  const canRateBrand =
+    brand !== '' && summary.kind === 'ready' && (summary.value.canRateBrand || brandRating !== null);
+
+  const openBrandSheet = useCallback(() => {
+    setBrandNotice(null);
+    setBrandOpen(true);
+  }, []);
+
+  // The brand badge at the top of the screen opens the same sheet, while there is something it can open.
+  const brandOpenerRef = useRef(onBrandRatingOpener);
+  brandOpenerRef.current = onBrandRatingOpener;
+  useEffect(() => {
+    if (!canRateBrand) {
+      return undefined;
+    }
+    brandOpenerRef.current?.(openBrandSheet);
+    return () => brandOpenerRef.current?.(null);
+  }, [canRateBrand, openBrandSheet]);
 
   const openSheet = () => {
     setJustRated(false);
@@ -326,10 +417,17 @@ function OwnedCard({ item, wearCount, onOpenBrand, onRatingChange, consent }: Ow
     setNudge(null);
     try {
       // createOnly: a card that is out of date can never overwrite a fuller rating made elsewhere.
-      await saveItemRating(itemId, { overall, createOnly: true });
+      await saveItemRating(itemId, {
+        overall,
+        createOnly: true,
+        ...(words.touchTags.length > 0 ? { touchTags: words.touchTags } : {}),
+        ...(words.comfortTags.length > 0 ? { comfortTags: words.comfortTags } : {}),
+        ...(words.fit ? { fit: words.fit } : {}),
+      });
       const next = await reload();
       if (mounted.current) {
         setPending(null);
+        setWords(NO_WORDS);
         if (next?.kind === 'ready' && next.rating) {
           setJustRated(true);
         }
@@ -344,6 +442,91 @@ function OwnedCard({ item, wearCount, onOpenBrand, onRatingChange, consent }: Ow
       busy.current = false;
     }
   };
+
+  const storedRating = (): ItemRating | null => {
+    const current = viewRef.current;
+    return current.kind === 'ready' ? current.rating : null;
+  };
+
+  /** The stored rating with the taps that are still on their way to the server laid over it. */
+  const latestRating = (): ItemRating | null => {
+    const stored = storedRating();
+    return stored ? { ...stored, ...draftRef.current } : null;
+  };
+
+  /**
+   * Sends the taps made on a rated piece. A tap made while a save is running is folded into the draft and goes
+   * out as one more save, so no tap is lost and a quick run of taps is not a write each.
+   */
+  const flushDraft = async (): Promise<void> => {
+    flushing.current = true;
+    let overallChanged = false;
+    try {
+      while (draftRef.current) {
+        const base = storedRating();
+        if (!base) {
+          draftRef.current = null;
+          break;
+        }
+        const version = draftVersion.current;
+        overallChanged = overallChanged || draftRef.current.overall !== undefined;
+        await saveItemRating(itemId, ratedInput(base, draftRef.current));
+        if (!mounted.current) {
+          return;
+        }
+        if (version !== draftVersion.current) {
+          continue;
+        }
+        await reload();
+        if (!mounted.current) {
+          return;
+        }
+        if (version === draftVersion.current) {
+          draftRef.current = null;
+        }
+      }
+      if (overallChanged) {
+        setSummaryKey(key => key + 1);
+      }
+    } catch (thrown) {
+      draftRef.current = null;
+      if (mounted.current) {
+        setError(messageOf(thrown, SAVE_FAILED));
+      }
+    } finally {
+      flushing.current = false;
+      if (mounted.current) {
+        setDraft(draftRef.current);
+      }
+    }
+  };
+
+  const requestChange = (change: QuickChange) => {
+    if (!storedRating() || busy.current) {
+      return;
+    }
+    draftVersion.current += 1;
+    draftRef.current = { ...draftRef.current, ...change };
+    setDraft(draftRef.current);
+    setError(null);
+    setNudge(null);
+    if (!flushing.current) {
+      flushDraft().catch(() => {});
+    }
+  };
+
+  /** A tap on a word: saved at once for a rated piece, held until a star is chosen for one that is not. */
+  const changeWords = (apply: (current: Words) => Partial<Words>) => {
+    const latest = latestRating();
+    if (latest) {
+      requestChange(apply(latest));
+    } else {
+      setWords(current => ({ ...current, ...apply(current) }));
+    }
+  };
+  const toggleTouch = (tag: TouchTag) => changeWords(current => ({ touchTags: toggled(current.touchTags, tag) }));
+  const toggleComfort = (tag: ComfortTag) => changeWords(current => ({ comfortTags: toggled(current.comfortTags, tag) }));
+  const toggleFit = (verdict: FitVerdict) => changeWords(current => ({ fit: current.fit === verdict ? null : verdict }));
 
   const remove = async () => {
     if (busy.current) {
@@ -388,6 +571,27 @@ function OwnedCard({ item, wearCount, onOpenBrand, onRatingChange, consent }: Ow
     reload().catch(() => {});
   };
 
+  const brandSaved = (outcome: BrandSaveOutcome) => {
+    setBrandOpen(false);
+    setBrandNotice(blockedLine(outcome.blocked));
+    if (outcome.blocked === 'not_worn') {
+      setBrandNotWorn(true);
+    } else if (outcome.contributed) {
+      setBrandNotWorn(false);
+    }
+    // The cached agreement was out of date: read it again so the sheet offers the right row next time.
+    if (outcome.blocked === 'no_consent') {
+      consent.refresh().catch(() => {});
+    }
+    setSummaryKey(key => key + 1);
+  };
+
+  const brandRemoved = () => {
+    setBrandOpen(false);
+    setBrandNotice(null);
+    setSummaryKey(key => key + 1);
+  };
+
   if (view.kind === 'guest') {
     return (
       <View style={styles.quiet}>
@@ -401,7 +605,11 @@ function OwnedCard({ item, wearCount, onOpenBrand, onRatingChange, consent }: Ow
   }
 
   const rating = view.kind === 'ready' ? view.rating : null;
+  const shown: ItemRating | null = rating ? { ...rating, ...draft } : null;
+  const picked: Words = shown ?? words;
+  const saving = draft !== null;
   const counts = !!rating && rating.contributed && brandInsightsActive() && consent.granted !== false;
+  const brandCounts = !!brandRating && brandRating.contributed && brandInsightsActive() && consent.granted !== false;
 
   const banner = nudge ? (
     <View style={styles.nudge} accessibilityRole="alert">
@@ -419,6 +627,41 @@ function OwnedCard({ item, wearCount, onOpenBrand, onRatingChange, consent }: Ow
     </Text>
   ) : null;
 
+  // The same questions whether or not the piece is rated yet: only what a tap does differs (see changeWords).
+  const chips = (
+    <>
+      <ChipGroup
+        title="Hand feel"
+        options={TOUCH_TAGS}
+        labelOf={tag => TAG_LABELS[tag]}
+        selected={picked.touchTags}
+        onToggle={toggleTouch}
+        max={MAX_TAGS_PER_GROUP}
+        actionLabel="Rate hand feel"
+        busy={removing || pending !== null}
+      />
+      <ChipGroup
+        title="How it wears"
+        options={COMFORT_TAGS}
+        labelOf={tag => TAG_LABELS[tag]}
+        selected={picked.comfortTags}
+        onToggle={toggleComfort}
+        max={MAX_TAGS_PER_GROUP}
+        actionLabel="Rate how it wears"
+        busy={removing || pending !== null}
+      />
+      <ChipGroup
+        title="Fit"
+        options={FIT_VERDICTS}
+        labelOf={verdict => FIT_LABELS[verdict]}
+        selected={picked.fit ? [picked.fit] : []}
+        onToggle={toggleFit}
+        actionLabel="Rate fit"
+        busy={removing || pending !== null}
+      />
+    </>
+  );
+
   let body: React.ReactNode;
   if (view.kind === 'loading') {
     body = <View style={styles.skeleton} accessibilityLabel="Loading your rating" />;
@@ -429,7 +672,7 @@ function OwnedCard({ item, wearCount, onOpenBrand, onRatingChange, consent }: Ow
         <TextButton label="Try again" onPress={retry} />
       </View>
     );
-  } else if (!rating) {
+  } else if (!rating || !shown) {
     body = (
       <View>
         {banner}
@@ -442,22 +685,28 @@ function OwnedCard({ item, wearCount, onOpenBrand, onRatingChange, consent }: Ow
           accessibilityLabel="Rate this piece"
           valueLabels={OVERALL_LABELS}
         />
-        {pending === null ? <Text style={styles.helper}>{STAR_HELPER}</Text> : null}
+        {pending === null ? <Text style={styles.helper}>{hasWords(words) ? WORDS_WAIT_HELPER : STAR_HELPER}</Text> : null}
+        {chips}
+        <View style={styles.actions}>
+          <TextButton label="Say more" onPress={openSheet} disabled={pending !== null} />
+        </View>
         {errorLine}
       </View>
     );
   } else {
-    const chosen = ratingSummary(rating);
     body = (
       <View>
         {banner}
         <RatingScale
-          value={rating.overall}
-          readOnly
+          value={shown.overall}
+          onChange={overall => requestChange({ overall })}
+          readOnly={removing}
+          adjustable={false}
           accessibilityLabel="Your overall rating"
-          valueLabels={OVERALL_LABELS}
         />
-        {chosen ? <Text style={styles.chosen}>{chosen}</Text> : null}
+        <RatingBreakdown rating={shown} />
+        <Text style={[styles.helper, styles.helperBlock]}>{WORDS_SAVED_HELPER}</Text>
+        {chips}
         <Text style={styles.status}>{counts ? STATUS_COUNTS : STATUS_PRIVATE}</Text>
         {justRated ? (
           <Pressable
@@ -470,8 +719,8 @@ function OwnedCard({ item, wearCount, onOpenBrand, onRatingChange, consent }: Ow
           </Pressable>
         ) : null}
         <View style={styles.actions}>
-          <TextButton label="Edit" onPress={openSheet} disabled={removing} />
-          <TextButton label="Remove" onPress={confirmRemove} danger disabled={removing} />
+          <TextButton label="Edit" onPress={openSheet} disabled={removing || saving} />
+          <TextButton label="Remove" onPress={confirmRemove} danger disabled={removing || saving} />
         </View>
         {errorLine}
       </View>
@@ -486,7 +735,20 @@ function OwnedCard({ item, wearCount, onOpenBrand, onRatingChange, consent }: Ow
         {title}
       </Text>
       <View style={styles.card}>{body}</View>
-      {view.kind === 'ready' && brand ? <BrandLine brand={brand} summary={summary} onOpenBrand={onOpenBrand} /> : null}
+      {view.kind === 'ready' && brand ? (
+        <>
+          {canRateBrand ? (
+            <BrandRatingRow
+              brand={brand}
+              rating={brandRating}
+              counts={brandCounts}
+              onPress={openBrandSheet}
+              notice={brandNotice}
+            />
+          ) : null}
+          <BrandLine brand={brand} summary={summary} onOpenBrand={onOpenBrand} />
+        </>
+      ) : null}
       <RateItemSheet
         visible={sheetOpen}
         item={{ id: itemId, name: item.name, brand: item.brand, size: item.size }}
@@ -510,6 +772,21 @@ function OwnedCard({ item, wearCount, onOpenBrand, onRatingChange, consent }: Ow
         }}
         consentSheet={consent.sheet}
       />
+      {canRateBrand ? (
+        <RateBrandSheet
+          visible={brandOpen}
+          brand={brand}
+          initial={brandRating}
+          consentGranted={consent.granted}
+          onRequestConsent={consent.requestConsent}
+          hasWornPiece={brandNotWorn ? false : undefined}
+          onClose={() => setBrandOpen(false)}
+          onSaved={brandSaved}
+          onRemoved={brandRemoved}
+        />
+      ) : null}
+      {/* The brand sheet steps aside while the person agrees, so the agreement is shown from here, only then. */}
+      {brandOpen ? consent.sheet : null}
     </View>
   );
 }
@@ -545,8 +822,8 @@ const styles = StyleSheet.create({
   skeleton: { height: 28, borderRadius: 8, backgroundColor: theme.colors.mutedBackground },
   failedText: { fontSize: 15, color: theme.colors.text },
   helper: { marginTop: 4, fontSize: 13, color: theme.colors.textMuted },
-  chosen: { marginTop: 8, fontSize: 14, lineHeight: 20, color: theme.colors.text },
-  status: { marginTop: 4, fontSize: 12, color: theme.colors.mediumGray, textTransform: 'uppercase', letterSpacing: 0.5 },
+  helperBlock: { marginTop: 14 },
+  status: { marginTop: 14, fontSize: 12, color: theme.colors.mediumGray, textTransform: 'uppercase', letterSpacing: 0.5 },
   error: { marginTop: 8, fontSize: 13, lineHeight: 18, color: theme.colors.error },
   actions: { flexDirection: 'row', gap: 8, marginTop: 8, marginLeft: -6 },
   textButton: { minHeight: 44, paddingHorizontal: 6, justifyContent: 'center' },

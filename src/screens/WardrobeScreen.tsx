@@ -26,6 +26,7 @@ import { GRID_LAYOUTS } from '../utils/clothingGrid';
 import { CATEGORY_LABELS, SEASON_LABELS, normalizeSeasons } from '../utils/clothingOptions';
 import { itemCountLabel } from '../utils/itemCountLabel';
 import { keyboardListProps } from '../utils/keyboardListProps';
+import { buildSearchIndex, searchTokens, searchWardrobe } from '../utils/wardrobeSearch';
 import { totalValue } from '../utils/itemValue';
 import LoadError from '../components/LoadError';
 import { useLoadable } from '../hooks/useLoadable';
@@ -116,21 +117,13 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
   // Of the whole wardrobe, not of what a search or filter leaves showing.
   const wardrobeValue = useMemo(() => totalValue(clothes), [clothes]);
 
-  const filteredAndSortedClothes = useMemo(() => {
-    let result = [...clothes];
+  // Built the first time something is typed, and again only when the wardrobe changes.
+  const isSearching = searchTokens(searchQuery).length > 0;
+  const searchableClothes = useMemo(() => (isSearching ? buildSearchIndex(clothes) : null), [clothes, isSearching]);
 
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(
-        item =>
-          item.name.toLowerCase().includes(query) ||
-          item.brand?.toLowerCase().includes(query) ||
-          item.color?.toLowerCase().includes(query) ||
-          item.subcategory?.toLowerCase().includes(query) ||
-          item.tags?.some(tag => tag.toLowerCase().includes(query)) ||
-          item.retailer?.toLowerCase().includes(query),
-      );
-    }
+  const filteredAndSortedClothes = useMemo(() => {
+    // Every word of the search has to be found somewhere on the item (see utils/wardrobeSearch).
+    let result = searchableClothes ? searchWardrobe(searchableClothes, searchQuery) : [...clothes];
 
     if (filters.categories.length > 0) {
       result = result.filter(item =>
@@ -174,7 +167,7 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
     });
 
     return result;
-  }, [clothes, filters, searchQuery]);
+  }, [clothes, filters, searchQuery, searchableClothes]);
 
   const renderItem = useCallback(
     ({ item }: { item: ClothingItemType }) => (
@@ -202,7 +195,7 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
     }
     return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
   }, [clothes]);
-  const isNarrowed = activeFiltersCount > 0 || searchQuery.trim().length > 0;
+  const isNarrowed = activeFiltersCount > 0 || isSearching;
 
   const headerElement = (
     <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
@@ -279,7 +272,7 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
         <Icon name="search-outline" size={18} color={theme.colors.textSubtle} />
         <TextInput
           style={[styles.searchInput, { color: theme.colors.text }]}
-          placeholder="Search by name, brand, color..."
+          placeholder="Search name, brand, color, size, style..."
           placeholderTextColor={theme.colors.textSubtle}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -291,7 +284,12 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
           accessibilityRole="search"
         />
         {searchQuery.length > 0 && (
-          <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+          <Pressable
+            onPress={() => setSearchQuery('')}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
+          >
             <Icon name="close-circle" size={18} color={theme.colors.textSubtle} />
           </Pressable>
         )}
@@ -369,7 +367,7 @@ const WardrobeScreen = ({ navigation }: WardrobeScreenProps) => {
                     body={
                       clothes.length === 0
                         ? 'Add some clothing items to get started.'
-                        : 'Try a different search or clear your filters.'
+                        : 'Try fewer or different words, or clear your filters.'
                     }
                   />
                 </View>

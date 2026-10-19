@@ -343,3 +343,82 @@ describe('WardrobeScreen item type', () => {
     expect(shown(tree)).toEqual(['Chelsea']);
   });
 });
+
+describe('WardrobeScreen search', () => {
+  const names = ['Biker', 'Wool Coat', 'Silk Blouse', 'Denim Shorts', 'Mens Tee', 'Womens Tee'];
+  const shown = (tree: renderer.ReactTestRenderer) => names.filter(name => text(tree).includes(name));
+
+  beforeEach(() => {
+    mockGetItems.mockResolvedValue([
+      item('Biker', { category: 'outerwear', subcategory: 'Jacket', color: 'black', materials: [{ name: 'leather' }] }),
+      item('Wool Coat', { category: 'outerwear', color: 'camel', size: 'M', condition: 'like_new', tags: ['boho'] }),
+      item('Silk Blouse', { color: 'black', brand: 'Equipment', occasion: 'formal', season: ['summer'] }),
+      item('Denim Shorts', { category: 'bottoms', color: 'blue', careInstructions: ['Machine wash cold'] }),
+      item('Mens Tee', { color: 'white', tags: ['mens'] }),
+      item('Womens Tee', { color: 'white', tags: ["women's"] }),
+    ]);
+  });
+
+  it('hints at the fields it searches', async () => {
+    const tree = await mount();
+    const input = tree.root.find(n => n.props.accessibilityLabel === 'Search wardrobe' && !!n.props.onChangeText);
+    expect(input.props.placeholder).toBe('Search name, brand, color, size, style...');
+  });
+
+  it('finds the item that has every word, wherever each word is', async () => {
+    const tree = await mount();
+    await search(tree, 'black leather jacket');
+    expect(shown(tree)).toEqual(['Biker']);
+    await search(tree, 'black');
+    expect(shown(tree)).toEqual(['Biker', 'Silk Blouse']);
+    await search(tree, 'black formal summer');
+    expect(shown(tree)).toEqual(['Silk Blouse']);
+  });
+
+  it('searches size, condition, style tags and care, not just the name', async () => {
+    const tree = await mount();
+    await search(tree, 'size m like new');
+    expect(shown(tree)).toEqual(['Wool Coat']);
+    await search(tree, 'boho coats');
+    expect(shown(tree)).toEqual(['Wool Coat']);
+    await search(tree, 'wash cold');
+    expect(shown(tree)).toEqual(['Denim Shorts']);
+  });
+
+  it('does not find women when looking for men', async () => {
+    const tree = await mount();
+    await search(tree, 'men tee');
+    expect(shown(tree)).toEqual(['Mens Tee']);
+    await search(tree, 'women tee');
+    expect(shown(tree)).toEqual(['Womens Tee']);
+  });
+
+  it('counts what it found, and says how to widen a search that found nothing', async () => {
+    const tree = await mount();
+    await search(tree, 'black leather jacket');
+    expect(text(tree)).toMatch(/1\s+of\s+6\s+items/);
+    await search(tree, 'black leather boots');
+    expect(text(tree)).toContain('No matches');
+    expect(text(tree)).toContain('Try fewer or different words, or clear your filters.');
+    await search(tree, '');
+    expect(shown(tree)).toHaveLength(6);
+  });
+
+  it('works together with the filters', async () => {
+    const tree = await mount();
+    await applyFilters(tree, { categories: ['outerwear'] });
+    await search(tree, 'black');
+    expect(shown(tree)).toEqual(['Biker']);
+    await applyFilters(tree, { categories: ['bottoms'] });
+    expect(shown(tree)).toEqual([]);
+  });
+
+  it('can be cleared with the button, which names itself', async () => {
+    const tree = await mount();
+    await search(tree, 'coat');
+    expect(shown(tree)).toEqual(['Wool Coat']);
+    const clear = tree.root.find(n => n.props.accessibilityLabel === 'Clear search' && typeof n.props.onPress === 'function');
+    await act(async () => clear.props.onPress());
+    expect(shown(tree)).toHaveLength(6);
+  });
+});
