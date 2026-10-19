@@ -810,7 +810,7 @@ begin
        select 1 from public.swap_meta where last_janitor_at > now() - interval '15 minutes') then
     return;
   end if;
-  update public.swap_meta set last_janitor_at = now();
+  update public.swap_meta set last_janitor_at = now() where id;
 
   -- Half-done swaps (one side tapped "We swapped!" more than 14 days ago) finish before anything expires.
   for r in
