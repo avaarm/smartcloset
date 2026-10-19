@@ -33,12 +33,22 @@ describe('Info.plist', () => {
     expect(usage.NSPhotoLibraryAddUsageDescription).toBe('SmartCloset only saves a photo to your library if you ask it to.');
   });
 
+  it('never claims background location and never declares a location background mode', () => {
+    expect(usage.NSLocationAlwaysAndWhenInUseUsageDescription).toContain('only while the app is open');
+    expect(usage.NSLocationAlwaysUsageDescription).toContain('only while the app is open');
+    expect(plist).not.toMatch(/<string>location<\/string>/);
+  });
+
   it('asks for no permission the privacy page does not explain', () => {
     // Camera, photo library (read and add) and approximate location are described on docs/privacy.html.
+    // The two "Always" location keys are not a request for background location: the app only asks while in use
+    // (the location library references the Always calls, so Apple wants the strings present; ITMS-90683).
     // A new key here (contacts, microphone, tracking, notifications text...) needs the page, the manifest and
     // the App Store label reviewed first; add it to this list when that is done.
     expect(Object.keys(usage).sort()).toEqual([
       'NSCameraUsageDescription',
+      'NSLocationAlwaysAndWhenInUseUsageDescription',
+      'NSLocationAlwaysUsageDescription',
       'NSLocationWhenInUseUsageDescription',
       'NSPhotoLibraryAddUsageDescription',
       'NSPhotoLibraryUsageDescription',

@@ -34,6 +34,10 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>SmartCloset uses your camera to photograph clothing items and their care labels, and add them to your wardrobe.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>SmartCloset uses your location only while the app is open, to show the weather for outfit suggestions. It does not track you in the background.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>SmartCloset uses your location only while the app is open, to show the weather for outfit suggestions. It does not track you in the background.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>SmartCloset uses your location to provide weather-appropriate outfit suggestions.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
