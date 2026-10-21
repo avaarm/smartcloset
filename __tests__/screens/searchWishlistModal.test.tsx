@@ -9,6 +9,8 @@ jest.mock('../../src/services/lensSearchService', () => ({
   searchProductsByText: jest.fn(),
   searchByImage: jest.fn(),
 }));
+// Nor does adding an item read the shop's page for more pictures: no network from a unit test.
+jest.mock('../../src/services/productUrlService', () => ({ fetchProductImages: jest.fn(async () => []) }));
 // The photo analysis is its own suite (wishlistItemBuilder.test.ts); here it is unavailable, as for a guest.
 jest.mock('../../src/services/imageRecognition', () => ({
   ...jest.requireActual('../../src/services/imageRecognition'),

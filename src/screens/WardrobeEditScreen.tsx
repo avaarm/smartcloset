@@ -21,6 +21,7 @@ import { useTheme } from '../styles/ThemeProvider';
 import { getClothingItems } from '../services/storage';
 import { ClothingItem } from '../types';
 import { categoryLabel } from '../utils/clothingOptions';
+import { coverImage } from '../utils/itemImages';
 
 type Decision = 'keep' | 'donate' | 'store' | 'skip';
 
@@ -150,9 +151,9 @@ const WardrobeEditScreen: React.FC = () => {
                   <View style={{ flexDirection: 'row', gap: 10 }}>
                     {group.map(r => (
                       <View key={r.item.id} style={[styles.thumbCard, { borderColor: theme.colors.border, backgroundColor: theme.colors.cardBackground ?? '#fff' }]}>
-                        {(r.item.userImage || r.item.retailerImage) ? (
+                        {coverImage(r.item) ? (
                           <Image
-                            source={{ uri: r.item.userImage || r.item.retailerImage }}
+                            source={{ uri: coverImage(r.item) }}
                             style={styles.thumb}
                           />
                         ) : (
@@ -181,7 +182,7 @@ const WardrobeEditScreen: React.FC = () => {
   }
 
   // ── Main audit card ───────────────────────────────────────────────────────
-  const imageUri = current.userImage || current.retailerImage;
+  const imageUri = coverImage(current);
 
   return (
     <Screen padded={false}>

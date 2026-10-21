@@ -27,6 +27,7 @@ import {
   CLOTHING_CATEGORIES,
   categoryLabel,
 } from '../utils/clothingOptions';
+import { coverImage } from '../utils/itemImages';
 
 const { width } = Dimensions.get('window');
 
@@ -122,7 +123,7 @@ const CreateOutfitScreen: React.FC = () => {
     <View style={styles.selectedItemCard}>
       <Image
         source={{
-          uri: item.userImage || item.retailerImage || undefined,
+          uri: coverImage(item),
         }}
         style={styles.selectedItemImage}
       />
@@ -147,7 +148,7 @@ const CreateOutfitScreen: React.FC = () => {
       >
         <Image
           source={{
-            uri: item.userImage || item.retailerImage || undefined,
+            uri: coverImage(item),
           }}
           style={styles.availableItemImage}
         />

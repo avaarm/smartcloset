@@ -7,6 +7,8 @@ import type { BodyProfile } from '../services/profileService';
 import { getColorMatch } from './clothingColorMatch';
 import { COMPACT_DETAILS, GRID_LAYOUTS, gridCardWidth } from '../utils/clothingGrid';
 import { categoryLabel } from '../utils/clothingOptions';
+import { itemImages } from '../utils/itemImages';
+import PhotoCountBadge from './PhotoCountBadge';
 
 // The label alone is a short line of text; this brings the tap target to iOS's 44pt.
 const MOVE_HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 };
@@ -44,9 +46,13 @@ const ClothingItem: React.FC<Props> = ({
   const [imageError, setImageError] = useState(false);
   // Read per render, not at module load, so the card follows the real window.
   const { width: windowWidth } = useWindowDimensions();
+  // The card shows the cover; any further photos only add the count badge.
+  const photos = itemImages(item);
+  const cover = photos[0];
+  const photoCount = photos.length;
   useEffect(() => {
     setImageError(false);
-  }, [item.userImage, item.retailerImage]);
+  }, [cover]);
   const colorMatch = getColorMatch(bodyProfile, item.color);
 
   const handleDelete = () => {
@@ -88,19 +94,21 @@ const ClothingItem: React.FC<Props> = ({
 
   // The specific type ("Tote") says more than the category ("Bags") when the item has one.
   const kindLabel = item.subcategory?.trim() || categoryLabel(item.category);
-  const cardLabel = [item.name, kindLabel, item.brand].filter(Boolean).join(', ');
+  const cardLabel = [item.name, kindLabel, item.brand, photoCount > 1 ? `${photoCount} photos` : '']
+    .filter(Boolean)
+    .join(', ');
   const metaLine = [kindLabel, item.brand].filter(Boolean).join(' · ');
   const imageStyle = compact ? styles.imageSquare : styles.image;
   const colorMatchText = colorMatch === 'match' ? 'Great color for you' : 'Outside your palette';
   const colorMatchColor = colorMatch === 'match' ? '#2E8B57' : '#E57373';
 
-  const photo = imageError || !(item.userImage || item.retailerImage) ? (
+  const photo = imageError || !cover ? (
     <View style={[imageStyle, styles.imagePlaceholder]}>
       <Icon name="shirt-outline" size={compact ? 28 : 44} color="#C8BBA6" />
     </View>
   ) : (
     <Image
-      source={{ uri: item.userImage || item.retailerImage }}
+      source={{ uri: cover }}
       style={imageStyle}
       resizeMode="cover"
       onError={() => setImageError(true)}
@@ -134,25 +142,23 @@ const ClothingItem: React.FC<Props> = ({
         // The compact card shows the match as a bare dot; this is what the dot says.
         accessibilityValue={compact && colorMatch ? { text: colorMatchText } : undefined}
       >
-        {compact ? (
-          <View>
-            {photo}
-            {colorMatch ? (
-              <View
-                style={[
-                  styles.colorMatchDotCompact,
-                  // Filled = in your palette, hollow ring = outside it, so the two differ by shape
-                  // as well as colour (red and green look alike to some people).
-                  colorMatch === 'match'
-                    ? { backgroundColor: colorMatchColor }
-                    : { backgroundColor: '#FFFFFF', borderColor: colorMatchColor, borderWidth: 2 },
-                ]}
-              />
-            ) : null}
-          </View>
-        ) : (
-          photo
-        )}
+        <View>
+          {photo}
+          {compact && colorMatch ? (
+            <View
+              style={[
+                styles.colorMatchDotCompact,
+                // Filled = in your palette, hollow ring = outside it, so the two differ by shape
+                // as well as colour (red and green look alike to some people).
+                colorMatch === 'match'
+                  ? { backgroundColor: colorMatchColor }
+                  : { backgroundColor: '#FFFFFF', borderColor: colorMatchColor, borderWidth: 2 },
+              ]}
+            />
+          ) : null}
+          {/* Bottom-right of the photo: the one corner the season badge, buttons and match dot leave free. */}
+          <PhotoCountBadge count={photoCount} compact={compact} />
+        </View>
         {item.season && item.season.length > 0 && (
           <View style={[styles.seasonBadge, compact && styles.seasonBadgeCompact]}>
             <Icon name="sunny-outline" size={compact ? 10 : 12} color="#FFFFFF" />

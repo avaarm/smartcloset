@@ -30,6 +30,7 @@ import {
   CLOTHING_CATEGORIES,
   categoryLabel,
 } from '../utils/clothingOptions';
+import { coverImage } from '../utils/itemImages';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -315,7 +316,7 @@ const WardrobeInsightsScreen: React.FC = () => {
                 onPress={() => navigation.navigate('ItemDetails', { item })}
               >
                 <Image
-                  source={{ uri: item.userImage || item.retailerImage || undefined }}
+                  source={{ uri: coverImage(item) }}
                   style={s.thumb}
                 />
                 <View style={{ flex: 1, marginLeft: 12 }}>
@@ -359,7 +360,7 @@ const WardrobeInsightsScreen: React.FC = () => {
                 onPress={() => navigation.navigate('ItemDetails', { item })}
               >
                 <Image
-                  source={{ uri: item.userImage || item.retailerImage || undefined }}
+                  source={{ uri: coverImage(item) }}
                   style={s.thumb}
                 />
                 <View style={{ flex: 1, marginLeft: 12 }}>
@@ -392,7 +393,7 @@ const WardrobeInsightsScreen: React.FC = () => {
                 onPress={() => navigation.navigate('ItemDetails', { item })}
               >
                 <Image
-                  source={{ uri: item.userImage || item.retailerImage || undefined }}
+                  source={{ uri: coverImage(item) }}
                   style={s.thumb}
                 />
                 <View style={{ flex: 1, marginLeft: 12 }}>
@@ -423,7 +424,7 @@ const WardrobeInsightsScreen: React.FC = () => {
                 onPress={() => navigation.navigate('ItemDetails', { item })}
               >
                 <Image
-                  source={{ uri: item.userImage || item.retailerImage || undefined }}
+                  source={{ uri: coverImage(item) }}
                   style={s.thumb}
                 />
                 <View style={{ flex: 1, marginLeft: 12 }}>
@@ -447,7 +448,7 @@ const WardrobeInsightsScreen: React.FC = () => {
             onPress={() => navigation.navigate('ItemDetails', { item })}
           >
             <Image
-              source={{ uri: item.userImage || item.retailerImage || undefined }}
+              source={{ uri: coverImage(item) }}
               style={s.thumb}
             />
             <View style={{ flex: 1, marginLeft: 12 }}>

@@ -8,7 +8,11 @@ jest.mock('../../src/config/supabase', () => ({
   supabase: { auth: { getSession: jest.fn(async () => ({ data: { session: null } })) } },
 }));
 
-import { ANALYSIS_WAIT_MS, buildWishlistItem, parsePrice } from '../../src/services/wishlistItemBuilder';
+// The shop page's pictures are read over the network; here they are what each test says they are.
+jest.mock('../../src/services/productUrlService', () => ({ fetchProductImages: jest.fn(async () => []) }));
+
+import { ANALYSIS_WAIT_MS, EXTRA_IMAGES_WAIT_MS, buildWishlistItem, parsePrice } from '../../src/services/wishlistItemBuilder';
+import { fetchProductImages } from '../../src/services/productUrlService';
 import type { LensResult } from '../../src/services/lensSearchService';
 import type { RecognitionResult } from '../../src/services/imageRecognition';
 
@@ -37,6 +41,9 @@ const real = (over: Partial<RecognitionResult> = {}): RecognitionResult => ({
 
 const NOW = new Date('2026-10-11T12:00:00Z');
 const build = (r: LensResult, analyze: any) => buildWishlistItem(r, { analyze, id: 'wish_test', now: NOW });
+
+const mockImages = fetchProductImages as jest.Mock;
+beforeEach(() => mockImages.mockReset().mockResolvedValue([]));
 
 describe('what the photo says', () => {
   it('files a bag whose title names no product under bags, with its type and colour', async () => {
@@ -193,5 +200,131 @@ describe('the rest of the item', () => {
     const b = await buildWishlistItem(result(), { analyze: async () => ({ isReal: false, confidence: {} }) });
     expect(a.item.id).toMatch(/^wish_\d+_/);
     expect(a.item.id).not.toBe(b.item.id);
+  });
+});
+
+describe('the pictures', () => {
+  const off = async () => ({ isReal: false, confidence: {} });
+  const COVER = 'https://i.ebayimg.com/1.jpg';
+
+  it("starts with the result's photo as the cover, then the page's other pictures", async () => {
+    mockImages.mockResolvedValue(['https://i.ebayimg.com/2.jpg', 'https://i.ebayimg.com/3.jpg']);
+    const { item } = await build(result(), off);
+    expect(mockImages).toHaveBeenCalledWith('https://www.ebay.com/itm/1');
+    expect(item.images).toEqual([COVER, 'https://i.ebayimg.com/2.jpg', 'https://i.ebayimg.com/3.jpg']);
+    expect(item.retailerImage).toBe(COVER);
+    expect(item.images![0]).toBe(item.retailerImage);
+  });
+
+  it("does not repeat the result's photo when the page lists it too", async () => {
+    mockImages.mockResolvedValue([COVER, 'https://i.ebayimg.com/2.jpg', 'https://i.ebayimg.com/2.jpg']);
+    const { item } = await build(result(), off);
+    expect(item.images).toEqual([COVER, 'https://i.ebayimg.com/2.jpg']);
+  });
+
+  it('never holds more photos than an item may have', async () => {
+    mockImages.mockResolvedValue(Array.from({ length: 12 }, (_, i) => `https://i.ebayimg.com/x${i}.jpg`));
+    const { item } = await build(result(), off);
+    expect(item.images).toHaveLength(8);
+    expect(item.images![0]).toBe(COVER);
+  });
+
+  it('is the result photo alone when the page has no other pictures', async () => {
+    const { item } = await build(result(), off);
+    expect(item.images).toEqual([COVER]);
+    expect(item.retailerImage).toBe(COVER);
+  });
+
+  it("makes the page's first picture the cover when the result has none", async () => {
+    mockImages.mockResolvedValue(['https://i.ebayimg.com/2.jpg', 'https://i.ebayimg.com/3.jpg']);
+    const { item } = await build(result({ imageUrl: '' }), off);
+    expect(item.images).toEqual(['https://i.ebayimg.com/2.jpg', 'https://i.ebayimg.com/3.jpg']);
+    expect(item.retailerImage).toBe('https://i.ebayimg.com/2.jpg');
+  });
+
+  it('does not read a page when the result has no address', async () => {
+    const { item } = await build(result({ url: '' }), off);
+    expect(mockImages).not.toHaveBeenCalled();
+    expect(item.images).toEqual([COVER]);
+  });
+
+  it('still adds the item, with the result photo, when reading the page fails', async () => {
+    mockImages.mockRejectedValue(new Error('offline'));
+    const { item, fromPhoto } = await build(result(), async () => real());
+    expect(item.images).toEqual([COVER]);
+    expect(item.category).toBe('bags');
+    expect(fromPhoto).toBe(true);
+  });
+
+  it('survives a reader that throws before it even returns a promise', async () => {
+    mockImages.mockImplementation(() => { throw new Error('boom'); });
+    const { item } = await build(result(), off);
+    expect(item.images).toEqual([COVER]);
+  });
+
+  it('reads the page while the photo is analysed, not after it', async () => {
+    const order: string[] = [];
+    mockImages.mockImplementation(async () => { order.push('page'); return []; });
+    const analyze = jest.fn(async () => { order.push('analysis-start'); await Promise.resolve(); order.push('analysis-end'); return real(); });
+    await build(result(), analyze);
+    expect(order).toEqual(['analysis-start', 'page', 'analysis-end']);
+  });
+
+  it('does not wait for a slow page: the item is added with the result photo after the page wait', async () => {
+    jest.useFakeTimers();
+    try {
+      expect(EXTRA_IMAGES_WAIT_MS).toBe(5000);
+      mockImages.mockReturnValue(new Promise<string[]>(() => {})); // never answers
+      let done = false;
+      const pending = build(result(), off).then(built => { done = true; return built; });
+
+      await jest.advanceTimersByTimeAsync(EXTRA_IMAGES_WAIT_MS - 1);
+      expect(done).toBe(false);
+      await jest.advanceTimersByTimeAsync(2);
+      const { item } = await pending;
+      expect(done).toBe(true);
+      expect(item.images).toEqual([COVER]);
+      expect(item.retailerImage).toBe(COVER);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('keeps the page wait and the analysis wait separate: a page that never answers does not shorten the analysis wait', async () => {
+    jest.useFakeTimers();
+    try {
+      mockImages.mockReturnValue(new Promise<string[]>(() => {}));
+      const never = () => new Promise<RecognitionResult>(() => {});
+      let done = false;
+      const pending = build(result(), never).then(built => { done = true; return built; });
+      await jest.advanceTimersByTimeAsync(EXTRA_IMAGES_WAIT_MS + 10);
+      expect(done).toBe(false); // the analysis still has its own, longer, wait
+      await jest.advanceTimersByTimeAsync(ANALYSIS_WAIT_MS);
+      await pending;
+      expect(done).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('takes pictures that arrive just before the wait ends', async () => {
+    jest.useFakeTimers();
+    try {
+      mockImages.mockImplementation(() => new Promise<string[]>(resolve => setTimeout(() => resolve(['https://i.ebayimg.com/2.jpg']), EXTRA_IMAGES_WAIT_MS - 100)));
+      const pending = build(result(), off);
+      await jest.advanceTimersByTimeAsync(EXTRA_IMAGES_WAIT_MS);
+      const { item } = await pending;
+      expect(item.images).toEqual([COVER, 'https://i.ebayimg.com/2.jpg']);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('can be handed another page reader and wait', async () => {
+    const fetchImages = jest.fn(async () => ['https://i.ebayimg.com/9.jpg']);
+    const { item } = await buildWishlistItem(result(), { analyze: off, fetchImages, extraImagesWaitMs: 50, id: 'w', now: NOW });
+    expect(fetchImages).toHaveBeenCalledWith('https://www.ebay.com/itm/1');
+    expect(mockImages).not.toHaveBeenCalled();
+    expect(item.images).toEqual([COVER, 'https://i.ebayimg.com/9.jpg']);
   });
 });

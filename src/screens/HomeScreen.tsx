@@ -54,6 +54,7 @@ import {
   type WardrobeFor,
 } from '../services/wardrobeAudience';
 import WardrobeForPicker from '../components/WardrobeForPicker';
+import { coverImage } from '../utils/itemImages';
 
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -243,7 +244,7 @@ const HomeScreen: React.FC = () => {
 
   const renderRecentItem = ({ item }: { item: ClothingItem }) => {
     // The user's own photo first, as on the wardrobe card.
-    const uri = item.userImage || item.retailerImage;
+    const uri = coverImage(item);
     return (
       <Pressable
         onPress={() => navigation.navigate('ItemDetails', { item })}

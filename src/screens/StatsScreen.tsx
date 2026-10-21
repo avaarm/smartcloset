@@ -12,6 +12,7 @@ import { getClothingItems } from '../services/storage';
 import { StatsService } from '../services/statsService';
 import { ClothingItem, WardrobeStats } from '../types';
 import { theme } from '../styles/theme';
+import { coverImage } from '../utils/itemImages';
 
 // The category grid sits in a section padded SECTION_PADDING on each side, with
 // CATEGORY_GAP between its three cards.
@@ -136,7 +137,7 @@ export const StatsScreen = () => {
             {mostWornItems.map(item => (
               <View key={item.id} style={styles.itemCard}>
                 <Image
-                  source={{ uri: item.retailerImage || item.userImage }}
+                  source={{ uri: coverImage(item) }}
                   style={styles.itemImage}
                 />
                 <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
@@ -156,7 +157,7 @@ export const StatsScreen = () => {
             {bestValueItems.map(item => (
               <View key={item.id} style={styles.itemCard}>
                 <Image
-                  source={{ uri: item.retailerImage || item.userImage }}
+                  source={{ uri: coverImage(item) }}
                   style={styles.itemImage}
                 />
                 <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
@@ -190,7 +191,7 @@ export const StatsScreen = () => {
           <Text style={styles.sectionTitle}>Your MVP</Text>
           <View style={styles.mvpCard}>
             <Image
-              source={{ uri: stats.mostWornItem.retailerImage || stats.mostWornItem.userImage }}
+              source={{ uri: coverImage(stats.mostWornItem) }}
               style={styles.mvpImage}
             />
             <View style={styles.mvpInfo}>

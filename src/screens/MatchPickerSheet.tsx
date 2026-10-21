@@ -56,6 +56,12 @@ export type PickedMatch = {
   retailCost?: number;
   sourceUrl?: string;
   imageUrl?: string;
+  /**
+   * The card's pictures, the one on the card first. The form adds them to the item as optional photos (more of the
+   * product's pictures are read from `sourceUrl` once it is picked). Empty when the card has no picture that loads;
+   * cards that do not carry the field fall back to `imageUrl`.
+   */
+  images?: string[];
   /** Where did this candidate come from. */
   source: 'kb_match' | 'lens_match';
 };
@@ -444,6 +450,8 @@ const LensCard: React.FC<{
           retailCost: sourceKindOf(result) === 'resale' ? undefined : parsedCost,
           sourceUrl: result.url,
           imageUrl: imageUri || undefined,
+          // A picture that would not load on the card is not offered as a photo either.
+          images: imageUri && !imageFailed ? [imageUri] : [],
           source: 'lens_match',
         })
       }

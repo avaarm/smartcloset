@@ -20,6 +20,7 @@ import { saveOutfit } from '../services/outfitService';
 import theme from '../styles/theme';
 import { KeyboardSafeView, singleLineDoneProps } from '../components/KeyboardSafe';
 import { CLOTHING_CATEGORIES, SEASONS, categoryLabel, isAllSeasons, toggleSeasonChoice } from '../utils/clothingOptions';
+import { coverImage } from '../utils/itemImages';
 
 const ManualOutfitBuilderScreen = () => {
   const navigation = useNavigation();
@@ -140,7 +141,7 @@ const ManualOutfitBuilderScreen = () => {
       >
         <Image
           source={{
-            uri: item.retailerImage || item.userImage || undefined,
+            uri: coverImage(item),
           }}
           style={styles.itemImage}
           resizeMode="cover"
@@ -180,7 +181,7 @@ const ManualOutfitBuilderScreen = () => {
               <View key={item.id} style={styles.selectedItemPreview}>
                 <Image
                   source={{
-                    uri: item.retailerImage || item.userImage || undefined,
+                    uri: coverImage(item),
                   }}
                   style={styles.selectedItemImage}
                   resizeMode="cover"
@@ -325,10 +326,7 @@ const ManualOutfitBuilderScreen = () => {
                     <View key={item.id} style={styles.previewItem}>
                       <Image
                         source={{
-                          uri:
-                            item.retailerImage ||
-                            item.userImage ||
-                            undefined,
+                          uri: coverImage(item),
                         }}
                         style={styles.previewItemImage}
                         resizeMode="cover"

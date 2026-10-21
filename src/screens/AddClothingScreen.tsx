@@ -16,7 +16,9 @@ import {
   formatPrice,
   RecognitionResult,
 } from '../services/imageRecognition';
-import { copyImageToPermanentStorage } from '../services/imageStorage';
+import { copyImageToPermanentStorage, deleteImageFromStorage } from '../services/imageStorage';
+import { storagePathFromUrl } from '../services/imageUrls';
+import { fetchProductImages } from '../services/productUrlService';
 import {
   searchByImage,
   refineLensResults,
@@ -36,6 +38,17 @@ import {
 } from '../services/productContributions';
 import MatchPickerSheet, { type PickedMatch } from './MatchPickerSheet';
 import MaterialsEditor from '../components/MaterialsEditor';
+import PhotoStrip from '../components/PhotoStrip';
+import {
+  addOwnPhotos,
+  appendShopPhotos,
+  makeCover,
+  removePhoto,
+  replaceCover,
+  replaceShopPhotos,
+  type Gallery,
+} from '../utils/photoGallery';
+import { MAX_ITEM_IMAGES, imageFieldsFor, itemImages, normalizeImages } from '../utils/itemImages';
 import ScanTagSection, { ScanTagFormCard, useTagFields } from '../components/ScanTagSection';
 import BrandInsightStrip from '../components/BrandInsightStrip';
 import { ratingsActive, tagScanActive } from '../config/ratingFlags';
@@ -234,7 +247,16 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   const [size, setSize] = useState<string>(editItem?.size || '');
   const [condition, setCondition] = useState<ItemCondition | null>(editItem?.condition || null);
   const [brand, setBrand] = useState<string>(editItem?.brand || '');
-  const [imageUri, setImageUri] = useState(editItem?.userImage || editItem?.imageUrl || editItem?.retailerImage || '');
+  // Every photo of the piece, cover first. The cover is what the AI reads and what the big photo shows.
+  const [photos, setPhotos] = useState<string[]>(() => itemImages(editItem ?? {}));
+  // The photos in the list that came from a picked match (labelled "From the shop"), not from the person.
+  // On an edit, a picture that is a web address outside our own storage is one a match brought in, so it keeps its label.
+  const [shopPhotos, setShopPhotos] = useState<string[]>(() =>
+    itemImages(editItem ?? {}).filter(u => /^https?:\/\//i.test(u) && storagePathFromUrl(u) === null),
+  );
+  const imageUri = photos[0] ?? '';
+  // Photos picked at once upload one after another; the add buttons wait until they are all in.
+  const [addingPhotos, setAddingPhotos] = useState(false);
   const [color, setColor] = useState<string>(editItem?.color || '');
   // Every season the item suits, exactly as saved: "All seasons" is just all
   // four listed, which is how existing season filters expect it, so an edit
@@ -299,6 +321,16 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   const [authChecked, setAuthChecked] = useState(false);
   // Identifies the latest photo analysis; results of an older one are dropped.
   const analysisId = useRef(0);
+  // The photo list as of now, for work that finishes later (uploads, the product page) and must not act on a stale render.
+  const photosRef = useRef<string[]>(photos);
+  const shopRef = useRef<string[]>([]);
+  // Photos stored while this form has been open and not saved yet: taking one out deletes it again.
+  const storedHere = useRef(new Set<string>());
+  // Shop pictures the person took out, so a page that answers late does not put them back.
+  const removedShop = useRef(new Set<string>());
+  // Identifies the latest picked match; the product pictures of an older one are dropped.
+  const matchToken = useRef(0);
+  const mounted = useRef(true);
   // Care, country of origin and tag text. State only; nothing is read or sent until a scan or an edit.
   const tag = useTagFields(editItem);
 
@@ -347,13 +379,16 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   };
 
   useEffect(() => {
+    mounted.current = true;
     getAuthUserId().then(id => {
       setIsGuestUser(!id);
       setAuthChecked(true);
     });
-    // Leaving the screen invalidates any analysis still running.
+    // Leaving the screen invalidates any analysis still running, and any product pictures still on their way.
     return () => {
+      mounted.current = false;
       analysisId.current += 1;
+      matchToken.current += 1;
     };
   }, []);
 
@@ -447,6 +482,126 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
     if (imageUri && !analyzing && hint) analyzeImage(imageUri, { redetect: true, hint });
   };
 
+  // ── The photo list ──
+  // Every change goes through commitGallery so the refs and the state never disagree, and a late answer
+  // (an upload, a product page) works on the list as it is then, not as it was when it started.
+  const gallery = (): Gallery => ({ photos: photosRef.current, shop: shopRef.current });
+
+  const commitGallery = useCallback((next: Gallery) => {
+    photosRef.current = next.photos;
+    shopRef.current = next.shop;
+    setPhotos(next.photos);
+    setShopPhotos(next.shop);
+  }, []);
+
+  /** Deletes the stored copy of photos this form stored itself and no longer needs. Photos already saved are the data layer's to clean up. */
+  const discardStored = useCallback((uris: string[]) => {
+    for (const uri of uris) {
+      if (!storedHere.current.delete(uri)) continue;
+      Promise.resolve()
+        .then(() => deleteImageFromStorage(uri))
+        .catch(() => {});
+    }
+  }, []);
+
+  /** The photo in the big area is replaced (taken, or picked from the library); the other photos stay. */
+  const setCoverPhoto = (uri: string) => {
+    const before = photosRef.current;
+    const next = replaceCover(gallery(), uri);
+    commitGallery(next);
+    discardStored(before.filter(p => !next.photos.includes(p)));
+  };
+
+  const makeCoverPhoto = (uri: string) => {
+    commitGallery(makeCover(gallery(), uri));
+  };
+
+  const removePhotoFromList = (uri: string) => {
+    const before = gallery();
+    if (!before.photos.includes(uri)) return;
+    if (before.shop.includes(uri)) removedShop.current.add(uri);
+    commitGallery(removePhoto(before, uri));
+    discardStored([uri]);
+  };
+
+  /**
+   * Stores photos the person just picked, one after another (each name is made from the clock), and adds the ones
+   * that made it. A photo that fails does not stop the others; one message says how many did not. Extra photos are
+   * never read by the AI, except the first photo of an item that had none: that one is the cover.
+   */
+  const addPickedPhotos = async (picked: ReadonlyArray<string | undefined>) => {
+    const tempUris = picked.filter((u): u is string => !!u);
+    if (tempUris.length === 0) return;
+    setAddingPhotos(true);
+    const stored: string[] = [];
+    let failed = 0;
+    let firstProblem = '';
+    for (const tempUri of tempUris) {
+      try {
+        const permanentUri = await copyImageToPermanentStorage(tempUri);
+        // A link that was already a cloud photo comes back unchanged: nothing was stored here.
+        if (permanentUri !== tempUri) storedHere.current.add(permanentUri);
+        stored.push(permanentUri);
+      } catch (error) {
+        console.warn('Error saving image:', error);
+        failed += 1;
+        if (!firstProblem && error instanceof Error) firstProblem = error.message;
+      }
+    }
+    if (!mounted.current) {
+      discardStored(stored);
+      return;
+    }
+    setAddingPhotos(false);
+    if (stored.length > 0) {
+      const before = gallery();
+      const next = addOwnPhotos(before, stored);
+      commitGallery(next);
+      // Room ran out while they uploaded.
+      discardStored(stored.filter(u => !next.photos.includes(u)));
+      if (before.photos.length === 0 && next.photos[0]) analyzeImage(next.photos[0]);
+    }
+    if (failed > 0) {
+      const problem = firstProblem || 'Please try again.';
+      if (tempUris.length === 1) Alert.alert("Couldn't add that photo", problem);
+      else if (failed === tempUris.length) Alert.alert("Couldn't add those photos", `None of the ${failed} photos could be added. ${problem}`);
+      else Alert.alert("Some photos weren't added", `${failed === 1 ? '1 photo' : `${failed} photos`} could not be added. ${problem}`);
+    }
+  };
+
+  /** The Add photos button: the library, several at once, as many as there is room for. */
+  const addMorePhotos = () => {
+    const room = MAX_ITEM_IMAGES - photosRef.current.length;
+    if (room <= 0 || addingPhotos) return;
+    ImagePicker.launchImageLibrary({
+      mediaType: 'photo',
+      quality: 0.8,
+      maxWidth: PHOTO_MAX_SIZE,
+      maxHeight: PHOTO_MAX_SIZE,
+      selectionLimit: room,
+    }, async (response) => {
+      if (response.didCancel) return;
+      reportPickerError(response, 'library');
+      await addPickedPhotos((response.assets ?? []).map(asset => asset.uri));
+    });
+  };
+
+  /** The Take photo button under the big photo: one more photo, from the camera. */
+  const takeMorePhoto = () => {
+    if (photosRef.current.length >= MAX_ITEM_IMAGES || addingPhotos) return;
+    ImagePicker.launchCamera({
+      mediaType: 'photo',
+      quality: 0.8,
+      maxWidth: PHOTO_MAX_SIZE,
+      maxHeight: PHOTO_MAX_SIZE,
+      saveToPhotos: false,
+    }, async (response) => {
+      if (response.didCancel) return;
+      reportPickerError(response, 'camera');
+      await addPickedPhotos((response.assets ?? []).slice(0, 1).map(asset => asset.uri));
+    });
+  };
+
   const showImageOptions = () => {
     Alert.alert(
       'Add Photo',
@@ -506,7 +661,8 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         const tempUri = response.assets[0].uri;
         try {
           const permanentUri = await copyImageToPermanentStorage(tempUri);
-          setImageUri(permanentUri);
+          if (permanentUri !== tempUri) storedHere.current.add(permanentUri);
+          setCoverPhoto(permanentUri);
           analyzeImage(permanentUri);
         } catch (error) {
           console.error('Error saving image:', error);
@@ -534,7 +690,8 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         const tempUri = response.assets[0].uri;
         try {
           const permanentUri = await copyImageToPermanentStorage(tempUri);
-          setImageUri(permanentUri);
+          if (permanentUri !== tempUri) storedHere.current.add(permanentUri);
+          setCoverPhoto(permanentUri);
           analyzeImage(permanentUri);
         } catch (error) {
           console.error('Error saving image:', error);
@@ -548,6 +705,38 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
   };
   
   /**
+   * The picked match's pictures become optional photos of the item: the one on its card at once, the rest of the
+   * product's pictures when its page has been read (the form never waits for that). They replace what the
+   * previous match brought and leave the person's own photos where they are; with no photo of their own, the
+   * card's picture is the cover. A page that fails, or answers after another match was picked, adds nothing.
+   */
+  const attachMatchPhotos = useCallback(
+    (match: PickedMatch) => {
+      const token = ++matchToken.current;
+      removedShop.current = new Set();
+      const cardImages = normalizeImages(match.images ?? (match.imageUrl ? [match.imageUrl] : []));
+      commitGallery(replaceShopPhotos({ photos: photosRef.current, shop: shopRef.current }, cardImages, removedShop.current));
+
+      if (!match.sourceUrl) return;
+      let pending: Promise<string[]>;
+      try {
+        pending = Promise.resolve(fetchProductImages(match.sourceUrl));
+      } catch {
+        return;
+      }
+      pending
+        .then(extras => {
+          if (!mounted.current || token !== matchToken.current || !Array.isArray(extras)) return;
+          const current = { photos: photosRef.current, shop: shopRef.current };
+          const merged = appendShopPhotos(current, normalizeImages(extras), removedShop.current);
+          if (merged !== current) commitGallery(merged);
+        })
+        .catch(() => {});
+    },
+    [commitGallery],
+  );
+
+  /**
    * Apply a user-picked match (from KB or Lens) — auto-fills the form.
    * Only fills fields the user hasn't already edited.
    */
@@ -555,6 +744,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
     (match: PickedMatch) => {
       setPickedMatch(match);
       setMatchSheetDismissed(true);
+      attachMatchPhotos(match);
 
       if (!name.trim()) setName(match.name);
       // A category the user picked (or an item being edited) is theirs to keep.
@@ -591,7 +781,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         setNotes(prev => (prev && !prev.includes(match.sourceUrl!) ? `${prev}\n${line}` : prev || line));
       }
     },
-    [brand, color, cost, name, retailer, retailCost, tags],
+    [attachMatchPhotos, brand, color, cost, name, retailer, retailCost, tags],
   );
 
   const dismissMatchSheet = useCallback(() => {
@@ -614,6 +804,7 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
     setAnalyzing(true);
     if (!redetect) {
       // A new photo starts over, including the words said about the last one.
+      matchToken.current += 1;
       setDetectHint('');
       setMatchSheetDismissed(false);
       setPickedMatch(null);
@@ -928,6 +1119,10 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
 
   const handleSave = async () => {
     if (saving) return;
+    if (addingPhotos) {
+      Alert.alert('Still adding photos', 'Wait a moment while your photos finish uploading, then save.');
+      return;
+    }
     if (!validateForm()) {
       Alert.alert('Validation Error', 'Please fill in all required fields correctly.');
       return;
@@ -960,8 +1155,8 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
         // null (not undefined) for the same reason: an edit that clears the condition clears it.
         condition: condition ?? null,
         brand: brand.trim(),
-        userImage: imageUri,
-        retailerImage: imageUri,
+        // The whole gallery, cover first; userImage and retailerImage hold the cover.
+        ...imageFieldsFor(photos),
         color: color.trim(),
         occasion: occasion || undefined,
         // Always sent, even when empty, so clearing every season on an edit clears them.
@@ -1112,6 +1307,18 @@ const AddClothingScreen = ({ navigation, route }: AddClothingScreenProps) => {
               </View>
             )}
           </TouchableOpacity>
+
+          {/* Every photo of the piece: the first is the cover above. Adding or moving photos here never runs the analysis. */}
+          <PhotoStrip
+            photos={photos}
+            shopPhotos={shopPhotos}
+            adding={addingPhotos}
+            disabled={analyzing}
+            onAdd={addMorePhotos}
+            onTakePhoto={takeMorePhoto}
+            onMakeCover={makeCoverPhoto}
+            onRemove={removePhotoFromList}
+          />
 
           {/* Re-run the analysis on the photo the item already has (e.g. an item added from a search result). */}
           {!!imageUri && !analyzing && !isGuestUser && (

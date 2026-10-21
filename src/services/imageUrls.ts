@@ -115,13 +115,23 @@ export const resolveImageUrl = async (url: string): Promise<string> => {
   return signed.get(path) ?? url;
 };
 
-/** Replace bucket photo links on items with signed links (everything else untouched). */
-export const withSignedImages = async <T extends Pick<ClothingItem, 'userImage' | 'retailerImage'>>(
+/** Every photo link an item carries: the two single-photo fields and each entry of its gallery. */
+const photoLinksOf = (it: Pick<ClothingItem, 'userImage' | 'retailerImage'> & { images?: string[] }): Array<string | undefined> => [
+  it.userImage,
+  it.retailerImage,
+  ...(Array.isArray(it.images) ? it.images : []),
+];
+
+/**
+ * Replace bucket photo links on items with signed links (everything else untouched). That covers the whole
+ * gallery (`images`) as well as `userImage` and `retailerImage`; all of an item's links are signed in one batch.
+ */
+export const withSignedImages = async <T extends Pick<ClothingItem, 'userImage' | 'retailerImage'> & { images?: string[] }>(
   items: T[],
 ): Promise<T[]> => {
   const paths: string[] = [];
   for (const it of items) {
-    for (const u of [it.userImage, it.retailerImage]) {
+    for (const u of photoLinksOf(it)) {
       const p = storagePathFromUrl(u);
       if (p) paths.push(p);
     }
@@ -132,7 +142,13 @@ export const withSignedImages = async <T extends Pick<ClothingItem, 'userImage' 
     const p = storagePathFromUrl(u);
     return (p && signed.get(p)) || u;
   };
-  return items.map(it => ({ ...it, userImage: swap(it.userImage), retailerImage: swap(it.retailerImage) }));
+  return items.map(it => ({
+    ...it,
+    userImage: swap(it.userImage),
+    retailerImage: swap(it.retailerImage),
+    // Only items that have a gallery get one back; the rest stay exactly as they were.
+    ...(Array.isArray(it.images) ? { images: it.images.map(u => swap(u) ?? u) } : {}),
+  }));
 };
 
 /** Forget cached signed links (call on sign-out). */

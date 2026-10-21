@@ -22,6 +22,12 @@ export interface ClothingItem {
   tagText?: string;
   retailerImage?: string;
   userImage?: string;
+  /**
+   * Every photo of the piece, cover first (at most MAX_ITEM_IMAGES; see utils/itemImages). `userImage` and
+   * `retailerImage` keep holding the cover, so anything that shows one picture is unchanged. Items saved
+   * before this field existed have no list: itemImages() builds it from the cover.
+   */
+  images?: string[];
   brand?: string;
   color: string;
   season: Season[];

@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, Image, StyleSheet, Pressable } from 'react-native';
 import { ClothingItem } from '../types';
+import { itemImages } from '../utils/itemImages';
+import PhotoCountBadge from './PhotoCountBadge';
 
 interface ClothingCardProps {
   item: ClothingItem;
@@ -9,15 +11,24 @@ interface ClothingCardProps {
 
 const ClothingCard = ({ item, onPress }: ClothingCardProps) => {
   const [imageError, setImageError] = useState(false);
-  
+  // The card shows the cover (the same picture the wardrobe grid shows); more photos only add the count badge.
+  const photos = itemImages(item);
+  const cover = photos[0];
+  useEffect(() => {
+    setImageError(false);
+  }, [cover]);
+
   return (
     <Pressable onPress={onPress} style={styles.card}>
-      <Image
-        source={imageError ? undefined : { uri: item.retailerImage || item.userImage || undefined }}
-        style={styles.image}
-        resizeMode="cover"
-        onError={() => setImageError(true)}
-      />
+      <View>
+        <Image
+          source={imageError ? undefined : { uri: cover }}
+          style={styles.image}
+          resizeMode="cover"
+          onError={() => setImageError(true)}
+        />
+        <PhotoCountBadge count={photos.length} />
+      </View>
       <View style={styles.details}>
         <Text style={styles.name}>{item.name}</Text>
         <Text style={styles.brand}>{item.brand}</Text>

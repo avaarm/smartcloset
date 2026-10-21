@@ -19,9 +19,12 @@ export const rehomeLocalImage = (uri?: string): string | undefined => {
   return `file://${RNFS.DocumentDirectoryPath}/${tail}`;
 };
 
-export const rehomeItemImages = <T extends { userImage?: string; retailerImage?: string }>(item: T): T => {
+export const rehomeItemImages = <T extends { userImage?: string; retailerImage?: string; images?: string[] }>(item: T): T => {
   const userImage = rehomeLocalImage(item.userImage);
   const retailerImage = rehomeLocalImage(item.retailerImage);
-  if (userImage === item.userImage && retailerImage === item.retailerImage) return item;
-  return { ...item, userImage, retailerImage };
+  // The gallery's paths live in the same per-install folder as the cover, so they move with it.
+  const images = Array.isArray(item.images) ? item.images.map(u => rehomeLocalImage(u) ?? u) : undefined;
+  const galleryMoved = !!images && images.some((u, i) => u !== item.images![i]);
+  if (userImage === item.userImage && retailerImage === item.retailerImage && !galleryMoved) return item;
+  return { ...item, userImage, retailerImage, ...(galleryMoved ? { images } : {}) };
 };

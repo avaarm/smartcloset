@@ -70,3 +70,13 @@ export const pickImageFromLibrary = (): Promise<PickedImage | null> => {
     input.click();
   });
 };
+
+/**
+ * Several photos at once. The browser picker here hands back one file, so this returns at most one;
+ * [] when nothing was picked or there is no room (`limit` below 1).
+ */
+export const pickImagesFromLibrary = async ({ limit }: { limit: number }): Promise<PickedImage[]> => {
+  if (!(Math.floor(limit) >= 1)) return [];
+  const picked = await pickImageFromLibrary();
+  return picked ? [picked] : [];
+};

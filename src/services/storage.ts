@@ -9,6 +9,7 @@ import { rehomeItemImages } from './localImagePaths';
 import { removeCloudImages } from './imageStorage';
 import { refreshLegacySampleData } from './sampleDataRefresh';
 import { cleanCareInstructions, cleanSize, isItemCondition } from '../utils/itemCondition';
+import { normalizeImages } from '../utils/itemImages';
 
 const STORAGE_KEY = '@smartcloset_items';
 const INITIALIZED_KEY = '@smartcloset_initialized_v6';
@@ -23,6 +24,15 @@ const valueForDb = (v: unknown): number | undefined =>
 const valueSourceOf = (v: unknown): ClothingItem['valueSource'] =>
   v === 'user' || v === 'estimate' ? v : undefined;
 
+/** The gallery as stored: trimmed, in the stable bucket form (never an expiring link), without repeats, at most the cap. */
+const imagesForDb = (list: ReadonlyArray<string | null | undefined> | null | undefined): string[] =>
+  normalizeImages(normalizeImages(list, Number.POSITIVE_INFINITY).map(u => canonicalizeImageUrl(u)));
+
+const nonEmpty = <T>(list: T[]): T[] | undefined => (list.length > 0 ? list : undefined);
+
+/** The gallery of a row: undefined for a row with no list (older items, or the column not there yet), so the cover alone stands in. */
+const imagesFromDb = (v: unknown): string[] | undefined => nonEmpty(Array.isArray(v) ? normalizeImages(v) : []);
+
 export const mapDbToClothingItem = (row: any): ClothingItem => ({
   id: row.id,
   name: row.name,
@@ -35,6 +45,7 @@ export const mapDbToClothingItem = (row: any): ClothingItem => ({
   tagText: row.tag_text || undefined,
   retailerImage: row.retailer_image,
   userImage: row.user_image,
+  images: imagesFromDb(row.images),
   brand: row.brand,
   color: row.color,
   season: row.season || [],
@@ -70,6 +81,8 @@ const mapClothingItemToDb = (item: Partial<ClothingItem>, userId: string) => ({
   season: item.season || [],
   retailer_image: canonicalizeImageUrl(item.retailerImage),
   user_image: canonicalizeImageUrl(item.userImage),
+  // Left out when there is no list (the column then takes its empty default, and a database without the column is never asked).
+  images: nonEmpty(imagesForDb(item.images)),
   brand: item.brand,
   is_wishlist: item.isWishlist || false,
   wear_count: item.wearCount || 0,
@@ -194,6 +207,7 @@ const MIGRATION_COLUMNS: string[][] = [
   ['estimated_value', 'value_source'],
   ['subcategory'],
   ['size', 'condition', 'care_instructions', 'origin_country', 'tag_text'],
+  ['images'],
 ];
 
 const writeWithoutMissingColumns = async (
@@ -212,6 +226,21 @@ const writeWithoutMissingColumns = async (
     console.warn(`[storage] clothing_items.${group.join(', ')} missing (migration not applied) — ${verb} without it`);
     current = Object.fromEntries(Object.entries(current).filter(([column]) => !group.includes(column)));
   }
+};
+
+type RowPhotos = { user_image?: string | null; retailer_image?: string | null; images?: string[] | null };
+
+/**
+ * Every photo a row points at right now, or null if the row isn't there. A database without the images
+ * column rejects the wider select, so it is asked again for the two single-photo columns.
+ */
+const photosOfRow = async (id: string, userId: string): Promise<RowPhotos | null> => {
+  const ask = (columns: string) =>
+    supabase.from('clothing_items').select(columns).eq('id', id).eq('user_id', userId).maybeSingle();
+  const first = await ask('user_image, retailer_image, images');
+  if (!first.error) return (first.data as RowPhotos | null) ?? null;
+  const { data } = await ask('user_image, retailer_image');
+  return (data as RowPhotos | null) ?? null;
 };
 
 export const saveClothingItem = async (item: ClothingItem): Promise<void> => {
@@ -385,14 +414,12 @@ export const updateClothingItem = async (
     if (updatedItem.subcategory !== undefined) {
       payload.subcategory = updatedItem.subcategory.trim() ? updatedItem.subcategory.trim().slice(0, 60) : null;
     }
+    // The gallery follows the same rule: undefined leaves the saved list alone, an empty list clears it
+    // (the column cannot be null, so it is written as an empty list).
+    if (updatedItem.images !== undefined) payload.images = imagesForDb(updatedItem.images);
 
     // Remember the photos this row used so ones that were replaced can be removed.
-    const { data: before } = await supabase
-      .from('clothing_items')
-      .select('user_image, retailer_image')
-      .eq('id', updatedItem.id)
-      .eq('user_id', userId)
-      .maybeSingle();
+    const before = await photosOfRow(updatedItem.id, userId);
 
     await writeWithoutMissingColumns(
       payload,
@@ -400,9 +427,10 @@ export const updateClothingItem = async (
       'updating',
     );
     if (before) {
-      const keep = [payload.user_image, payload.retailer_image];
+      // A caller that sent no gallery left the saved one in place, so those photos are still in use.
+      const keep = [payload.user_image, payload.retailer_image, ...(payload.images ?? before.images ?? [])];
       await removeCloudImages(
-        [before.user_image, before.retailer_image].filter(u => u && !keep.includes(u)),
+        [before.user_image, before.retailer_image, ...(before.images ?? [])].filter(u => u && !keep.includes(u)),
       );
     }
   } catch (error) {
@@ -416,12 +444,7 @@ export const deleteClothingItem = async (id: string): Promise<void> => {
     const userId = await getAuthUserId();
     if (!userId) return deleteLocalItem(id);
 
-    const { data: row } = await supabase
-      .from('clothing_items')
-      .select('user_image, retailer_image')
-      .eq('id', id)
-      .eq('user_id', userId)
-      .maybeSingle();
+    const row = await photosOfRow(id, userId);
 
     const { error } = await supabase
       .from('clothing_items')
@@ -430,7 +453,7 @@ export const deleteClothingItem = async (id: string): Promise<void> => {
     if (error) throw error;
 
     // The row is gone, so its photos are unreferenced: remove them too.
-    if (row) await removeCloudImages([row.user_image, row.retailer_image]);
+    if (row) await removeCloudImages([row.user_image, row.retailer_image, ...(row.images ?? [])]);
   } catch (error) {
     console.error('Error deleting clothing item:', error);
     throw error;

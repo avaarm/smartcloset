@@ -30,6 +30,7 @@ import {
 import { useTheme } from '../styles/ThemeProvider';
 import { getClothingItems } from '../services/storage';
 import { ClothingItem } from '../types';
+import { coverImage } from '../utils/itemImages';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -140,7 +141,7 @@ const LookbookScreen: React.FC = () => {
   };
 
   const pickItem = (item: ClothingItem) => {
-    const imageUri = item.userImage || item.retailerImage;
+    const imageUri = coverImage(item);
     setDraftLook(d => ({ ...d, itemId: item.id, imageUri, title: d.title || item.name }));
     setShowItemPicker(false);
   };
@@ -181,7 +182,7 @@ const LookbookScreen: React.FC = () => {
         </View>
         <ScrollView contentContainerStyle={styles.pickerGrid}>
           {items.map(item => {
-            const img = item.userImage || item.retailerImage;
+            const img = coverImage(item);
             return (
               <Pressable
                 key={item.id}

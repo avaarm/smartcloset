@@ -7,6 +7,11 @@ const BUCKET = 'wardrobe-images';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/**
+ * A file-name stem that is different on every call, even within the same millisecond: several photos
+ * of one item are copied and uploaded together, and the bucket refuses a name that already exists.
+ */
+const uniqueStem = (): string => `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 /**
  * Upload an image to Supabase Storage and return its public URL.
@@ -19,7 +24,7 @@ const uploadToCloud = async (localPath: string): Promise<string | null> => {
 
     const sourcePath = localPath.replace('file://', '');
     const base64 = await RNFS.readFile(sourcePath, 'base64');
-    const fileName = `${userId}/${Date.now()}.jpg`;
+    const fileName = `${userId}/${uniqueStem()}.jpg`;
 
     const { error } = await supabase.storage
       .from(BUCKET)
@@ -122,8 +127,7 @@ export const copyImageToPermanentStorage = async (tempUri: string): Promise<stri
     return cloudUrl || tempUri;
   }
 
-  const timestamp = Date.now();
-  const filename = `clothing_${timestamp}.jpg`;
+  const filename = `clothing_${uniqueStem()}.jpg`;
   const destPath = `${RNFS.DocumentDirectoryPath}/${filename}`;
   const localUri = `file://${destPath}`;
 

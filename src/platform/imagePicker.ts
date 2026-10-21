@@ -4,4 +4,4 @@
  * This `.ts` file re-exports the native variant for TypeScript.
  */
 
-export { pickImageFromLibrary, type PickedImage } from './imagePicker.native';
+export { pickImageFromLibrary, pickImagesFromLibrary, type PickedImage } from './imagePicker.native';

@@ -5,6 +5,7 @@ import { Outfit } from '../services/outfitService';
 import Icon from 'react-native-vector-icons/Ionicons';
 import theme from '../styles/theme';
 import { categoryLabel } from '../utils/clothingOptions';
+import { coverImage } from '../utils/itemImages';
 
 interface OutfitCardProps {
   outfit: Outfit;
@@ -97,7 +98,7 @@ const OutfitCard: React.FC<OutfitCardProps> = ({ outfit, onSave, onDelete, onMar
         {outfit.items.map((item, index) => (
           <View key={item.id + index} style={styles.itemCard}>
             <Image 
-              source={{ uri: item.retailerImage || item.userImage || undefined }} 
+              source={{ uri: coverImage(item) }} 
               style={styles.itemImage} 
               resizeMode="cover"
             />

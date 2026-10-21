@@ -19,6 +19,7 @@ import { Badge, Button, Card, Screen, Text } from '../ui';
 import { useTheme } from '../styles/ThemeProvider';
 import { getClothingItems } from '../services/storage';
 import { ClothingItem } from '../types';
+import { coverImage } from '../utils/itemImages';
 
 const TOPS = ['tops', 'shirts', 'blouses', 'sweaters', 'jackets', 'outerwear'];
 const BOTTOMS = ['bottoms', 'pants', 'jeans', 'skirts', 'shorts'];
@@ -227,7 +228,7 @@ const CapsuleWardrobeScreen: React.FC = () => {
       <ScrollView contentContainerStyle={styles.grid}>
         {filtered.map(item => {
           const isSelected = selectedIds.has(item.id);
-          const img = item.userImage || item.retailerImage;
+          const img = coverImage(item);
           return (
             <Pressable
               key={item.id}

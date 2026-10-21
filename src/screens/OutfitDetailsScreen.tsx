@@ -25,6 +25,7 @@ import {
   keyboardDoneProps,
   singleLineDoneProps,
 } from '../components/KeyboardSafe';
+import { coverImage } from '../utils/itemImages';
 
 type RouteParams = {
   OutfitDetails: {
@@ -199,7 +200,7 @@ const OutfitDetailsScreen = () => {
               <View key={item.id + index} style={styles.itemCard}>
                 <Image
                   source={{
-                    uri: item.retailerImage || item.userImage || undefined,
+                    uri: coverImage(item),
                   }}
                   style={styles.itemImage}
                   resizeMode="cover"

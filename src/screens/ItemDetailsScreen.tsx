@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
   ScrollView,
   TouchableOpacity,
   Animated,
@@ -31,8 +30,14 @@ import ItemLabelBlock from '../components/ItemLabelBlock';
 import ScanTagCard from '../components/ScanTagCard';
 import { brandInsightsActive } from '../config/ratingFlags';
 import { tagsWithoutStyles } from '../utils/styleOptions';
+import { itemImages } from '../utils/itemImages';
+import ItemImageGallery from '../components/ItemImageGallery';
 
 const { width, height } = Dimensions.get('window');
+
+const HERO_HEIGHT = height * 0.5;
+// The content sheet is pulled up over the bottom of the hero by this much.
+const SHEET_OVERLAP = 24;
 
 type ItemDetailsRouteProp = RouteProp<{ ItemDetails: { item: ClothingItem } }, 'ItemDetails'>;
 
@@ -183,6 +188,8 @@ const ItemDetailsScreen: React.FC = () => {
   const [item, setItem] = useState<ClothingItem>(route.params.item);
 
   const [scrollY] = useState(new Animated.Value(0));
+  // The faded-out top bar is still on top of the floating buttons; it only takes taps once it is visible.
+  const [headerTappable, setHeaderTappable] = useState(false);
   const [isFavorite, setIsFavorite] = useState(item.favorite || false);
   const [wearCount, setWearCount] = useState(item.wearCount || 0);
   const [lastWorn, setLastWorn] = useState<string | undefined>(item.lastWorn);
@@ -359,7 +366,10 @@ const ItemDetailsScreen: React.FC = () => {
       <StatusBar barStyle="light-content" />
       
       {/* Animated Header */}
-      <Animated.View style={[styles.header, { opacity: headerOpacity }]}>
+      <Animated.View
+        style={[styles.header, { opacity: headerOpacity }]}
+        pointerEvents={headerTappable ? 'box-none' : 'none'}
+      >
         <LinearGradient
           colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.6)']}
           style={styles.headerGradient}
@@ -380,7 +390,7 @@ const ItemDetailsScreen: React.FC = () => {
       </Animated.View>
 
       {/* Floating Action Buttons */}
-      <View style={styles.floatingButtons}>
+      <View style={styles.floatingButtons} pointerEvents="box-none">
         <TouchableOpacity
           style={styles.floatingButton}
           onPress={() => navigation.goBack()}
@@ -409,22 +419,26 @@ const ItemDetailsScreen: React.FC = () => {
         scrollEventThrottle={16}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
+          {
+            useNativeDriver: true,
+            listener: (e: any) => {
+              const tappable = (e?.nativeEvent?.contentOffset?.y ?? 0) > 120;
+              setHeaderTappable(prev => (prev === tappable ? prev : tappable));
+            },
+          }
         )}
       >
-        {/* Hero Image */}
+        {/* Hero: the item's photos, swiped through; one photo is just the picture */}
         <Animated.View style={[styles.imageContainer, { transform: [{ scale: imageScale }] }]}>
-          <Image
-            source={{
-              uri:
-                item.retailerImage ||
-                item.userImage ||
-                undefined,
-            }}
-            style={styles.image}
-            resizeMode="cover"
+          <ItemImageGallery
+            images={itemImages(item)}
+            height={HERO_HEIGHT}
+            // Dots and counter sit above the content sheet that covers the hero's lowest edge.
+            bottomInset={SHEET_OVERLAP + 12}
           />
+          {/* Lets swipes and taps through to the photos beneath it. */}
           <LinearGradient
+            pointerEvents="none"
             colors={['transparent', 'rgba(0,0,0,0.3)']}
             style={styles.imageGradient}
           />
@@ -878,12 +892,8 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: width,
-    height: height * 0.5,
+    height: HERO_HEIGHT,
     backgroundColor: theme.colors.mutedBackground,
-  },
-  image: {
-    width: '100%',
-    height: '100%',
   },
   imageGradient: {
     position: 'absolute',
@@ -896,8 +906,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    marginTop: -24,
-    paddingTop: 24,
+    marginTop: -SHEET_OVERLAP,
+    paddingTop: SHEET_OVERLAP,
     paddingBottom: 40,
   },
   titleSection: {

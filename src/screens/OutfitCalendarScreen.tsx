@@ -21,6 +21,7 @@ import { useTheme } from '../styles/ThemeProvider';
 import { ClothingItem } from '../types';
 import { getOwnedClothingItems } from '../services/storage';
 import { getSavedOutfits, Outfit } from '../services/outfitService';
+import { coverImage } from '../utils/itemImages';
 
 // ─── Date helpers ───────────────────────────────────────────────────────────
 
@@ -228,7 +229,7 @@ const OutfitCalendarScreen: React.FC = () => {
                     {outfit.items.slice(0, 4).map((item: any, idx: number) => (
                       <Image
                         key={idx}
-                        source={{ uri: item.userImage || item.retailerImage || item.imageUrl }}
+                        source={{ uri: coverImage(item) }}
                         style={s.outfitThumb}
                       />
                     ))}
@@ -255,7 +256,7 @@ const OutfitCalendarScreen: React.FC = () => {
                       onPress={() => navigation.navigate('ItemDetails', { item })}
                     >
                       <Image
-                        source={{ uri: item.userImage || item.retailerImage }}
+                        source={{ uri: coverImage(item) }}
                         style={s.itemThumb}
                       />
                       <View style={{ flex: 1, marginLeft: 12 }}>
