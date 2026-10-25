@@ -140,7 +140,7 @@ const initializeLocalStorage = async (): Promise<void> => {
       await AsyncStorage.setItem(SAVED_OUTFITS_KEY, JSON.stringify(seededOutfits));
       await AsyncStorage.setItem(INITIALIZED_KEY, 'true');
 
-      // Also seed all other modes (stylist, client, marketplace, messaging)
+      // Also seed the demo body profile, outfit history and wishlist
       await seedAllDemoData();
     }
   } catch (error) {

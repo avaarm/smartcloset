@@ -10,3 +10,6 @@ verify_jwt = true
 
 [functions.swap-media]
 verify_jwt = true
+
+[functions.pro-photo]
+verify_jwt = true

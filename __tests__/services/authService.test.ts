@@ -8,6 +8,7 @@ const mockClearPersonal = jest.fn();
 const mockStash = jest.fn();
 const mockAdopt = jest.fn();
 const mockUserId = jest.fn();
+const mockClearProPhotos = jest.fn();
 
 jest.mock('../../src/config/supabase', () => ({
   supabase: {
@@ -21,6 +22,7 @@ jest.mock('../../src/config/supabase', () => ({
   },
 }));
 jest.mock('../../src/services/imageUrls', () => ({ clearSignedImageCache: () => mockClearCache() }));
+jest.mock('../../src/services/proPhotoUrls', () => ({ clearProPhotoCache: () => mockClearProPhotos() }));
 jest.mock('../../src/services/localData', () => ({
   clearPersonalLocalData: () => mockClearPersonal(),
   stashPersonalLocalData: (...a: any[]) => mockStash(...a),
@@ -29,9 +31,11 @@ jest.mock('../../src/services/localData', () => ({
 jest.mock('../../src/services/authUser', () => ({ getAuthUserId: () => mockUserId() }));
 
 import { requestPasswordReset, resetPasswordWithCode, signInWithApple, signInWithGoogle, signOut } from '../../src/services/authService';
+import { resetProEntry, setProEntry, takeProEntry } from '../../src/services/proEntry';
 
 beforeEach(() => {
-  [mockResetForEmail, mockVerifyOtp, mockUpdateUser, mockSignOut, mockClearCache, mockSignInWithIdToken, mockClearPersonal, mockStash, mockAdopt, mockUserId].forEach(m => m.mockReset());
+  [mockResetForEmail, mockVerifyOtp, mockUpdateUser, mockSignOut, mockClearCache, mockSignInWithIdToken, mockClearPersonal, mockStash, mockAdopt, mockUserId, mockClearProPhotos].forEach(m => m.mockReset());
+  resetProEntry();
   mockClearPersonal.mockResolvedValue(undefined);
   mockStash.mockResolvedValue(undefined);
   mockAdopt.mockResolvedValue(undefined);
@@ -77,6 +81,21 @@ describe('signOut', () => {
     mockSignOut.mockResolvedValue({ error: new Error('network') });
     await expect(signOut()).rejects.toThrow('network');
     expect(mockClearCache).toHaveBeenCalledTimes(1);
+  });
+
+  it('forgets the stylist photo requests and the first-run choice, also when sign-out reports an error', async () => {
+    mockSignOut.mockResolvedValue({ error: null });
+    setProEntry('client');
+    await signOut();
+    expect(mockClearProPhotos).toHaveBeenCalledTimes(1);
+    expect(takeProEntry()).toBeNull();
+
+    mockClearProPhotos.mockClear();
+    setProEntry('stylist');
+    mockSignOut.mockResolvedValue({ error: new Error('network') });
+    await expect(signOut()).rejects.toThrow('network');
+    expect(mockClearProPhotos).toHaveBeenCalledTimes(1);
+    expect(takeProEntry()).toBeNull();
   });
 
   it("files the person's on-device data under their id after the session is gone", async () => {

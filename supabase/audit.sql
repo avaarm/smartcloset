@@ -51,9 +51,25 @@ with
       and p.tablename in (select tablename from user_owned_tables)
       and p.cmd = 'SELECT'
       and p.qual not like '%auth.uid%'
+  ),
+  -- The nine legacy stylist tables were closed to app users by 20261023000000_pro_lockdown_legacy_tables.sql and are
+  -- reached by nothing but the service role. This is not an owner-table check (they are deliberately not in the list
+  -- above): it reports any privilege that anon, authenticated or PUBLIC holds on one that exists.
+  legacy_pro_grants as (
+    select c.relname::text as tablename,
+           format('%s holds privilege %s on a legacy stylist table (it must be closed)',
+                  case when a.grantee = 0 then 'PUBLIC' else (select r.rolname from pg_roles r where r.oid = a.grantee) end,
+                  a.privilege_type) as issue
+    from pg_class c
+    cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a
+    where c.relnamespace = 'public'::regnamespace and c.relkind = 'r'
+      and c.relname in ('stylist_profiles', 'stylist_clients', 'appointments', 'recommendations', 'styling_recommendations',
+                        'message_threads', 'messages', 'booking_requests', 'stylist_reviews')
+      and (a.grantee = 0 or a.grantee in (select o.oid from pg_roles o where o.rolname in ('anon', 'authenticated')))
   )
 select * from rls_off
 union all select * from no_policies
 union all select * from permissive_policies
 union all select * from missing_user_filter
+union all select * from legacy_pro_grants
 order by tablename, issue;

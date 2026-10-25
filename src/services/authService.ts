@@ -2,6 +2,8 @@ import { supabase } from '../config/supabase';
 import { Session, User } from '@supabase/supabase-js';
 import { clearSignedImageCache } from './imageUrls';
 import { clearSwapPhotoCache } from './swapPhotoUrls';
+import { clearProPhotoCache } from './proPhotoUrls';
+import { resetProEntry } from './proEntry';
 import { adoptPersonalLocalData, clearPersonalLocalData, stashPersonalLocalData } from './localData';
 import { getAuthUserId } from './authUser';
 
@@ -179,6 +181,8 @@ export const signOut = async () => {
   }
   await clearSignedImageCache();
   clearSwapPhotoCache();
+  clearProPhotoCache();
+  resetProEntry();
   // When sign-out fails (e.g. offline) the session is kept and it is still the
   // same person's device, so only wipe their local data if no login remains.
   if (!error || !(await getAuthUserId())) {

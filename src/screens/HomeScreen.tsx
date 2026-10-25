@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSwapBadge } from '../hooks/useSwapBadge';
+import { useProBadge } from '../hooks/useProBadge';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {
   Badge,
@@ -39,6 +40,8 @@ import { ClothingItem } from '../types';
 import { getClothingItems } from '../services/storage';
 import { getSavedOutfits } from '../services/outfitService';
 import { supabase } from '../config/supabase';
+import { PRO_MODES_ENABLED } from '../config/features';
+import { takeProEntry } from '../services/proEntry';
 import { signOut } from '../services/authService';
 import { getBodyProfile } from '../services/profileService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -154,8 +157,23 @@ const HomeScreen: React.FC = () => {
     }
   }, []);
 
-  // Before Home's own focus effect below: Home's tests keep only the last registered focus callback.
+  // Both badges and the first-run hand-off come before Home's own focus effect below: Home's tests keep only the
+  // last registered focus callback, and their refocus cases call it to reload the wardrobe.
   const swapBadge = useSwapBadge(isAuthenticated);
+  const proBadge = useProBadge(isAuthenticated && PRO_MODES_ENABLED);
+
+  // The first-run prompt left a choice in memory (stylist or client): take it once and open the matching sheet on
+  // the Stylists screen.
+  useFocusEffect(
+    useCallback(() => {
+      if (PRO_MODES_ENABLED) {
+        const intent = takeProEntry();
+        if (intent) {
+          navigation.navigate('ProHome', { open: intent === 'stylist' ? 'stylist_setup' : 'redeem' });
+        }
+      }
+    }, [navigation]),
+  );
 
   // Runs on mount and on every return to this tab.
   useFocusEffect(
@@ -238,6 +256,16 @@ const HomeScreen: React.FC = () => {
             icon: 'swap-horizontal-outline',
             onPress: () => navigation.navigate('SwapBoard'),
           },
+          ...(PRO_MODES_ENABLED
+            ? [
+                {
+                  label: 'Stylists',
+                  sub: proBadge > 0 ? `${proBadge} need${proBadge === 1 ? 's' : ''} you` : 'Work with a stylist',
+                  icon: 'color-wand-outline',
+                  onPress: () => navigation.navigate('ProHome'),
+                },
+              ]
+            : []),
         ]
       : []),
   ];

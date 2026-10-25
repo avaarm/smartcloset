@@ -31,13 +31,6 @@ jest.mock('@react-navigation/native', () => {
   };
 });
 
-// The setup file's picker mock has no <Picker.Item>, which the recommendation form renders.
-jest.mock('@react-native-picker/picker', () => {
-  const Picker: any = () => null;
-  Picker.Item = () => null;
-  return { Picker };
-});
-
 const mockAuth = {
   signInWithGoogle: jest.fn(),
   signInWithApple: jest.fn(),
@@ -89,32 +82,6 @@ jest.mock('../../src/services/lensSearchService', () => ({
   ...jest.requireActual('../../src/services/lensSearchService'),
   searchProductsByText: jest.fn(),
   searchByImage: jest.fn(),
-}));
-
-const client = { id: 'c1', name: 'Ava Lee', email: 'ava@example.com', status: 'active' };
-jest.mock('../../src/services/stylistService', () => ({
-  getClients: jest.fn(async () => [client]),
-  getActiveClients: jest.fn(async () => [client]),
-  getStylistProfile: jest.fn(async () => null),
-  getRecommendations: jest.fn(async () => []),
-  createAppointment: jest.fn(),
-  createRecommendation: jest.fn(),
-  addClient: jest.fn(),
-  updateClient: jest.fn(),
-}));
-jest.mock('../../src/services/marketplaceService', () => ({
-  getCurrentClientAccount: jest.fn(async () => null),
-  createClientAccount: jest.fn(),
-  createBookingRequest: jest.fn(),
-  getStylistListings: jest.fn(async () => []),
-  getFeaturedStylists: jest.fn(async () => []),
-  searchStylists: jest.fn(async () => []),
-}));
-jest.mock('../../src/services/messagingService', () => ({
-  getThreads: jest.fn(async () => []),
-  getMessages: jest.fn(async () => []),
-  sendMessage: jest.fn(),
-  markThreadAsRead: jest.fn(async () => undefined),
 }));
 
 // Swap (appended by pass B): a signed-in member who can swap, one accepted swap, one open piece. Plain
@@ -201,6 +168,107 @@ jest.mock('../../src/services/swapPhotoUrls', () => ({
   clearSwapPhotoCache: () => undefined,
 }));
 
+// Professional accounts (appended by the cleanup pass): a signed-in adult who holds both roles, with every
+// terms version current, one active connection, one sent look and one message. Plain functions, as above.
+jest.mock('../../src/config/supabase', () => ({
+  supabase: { auth: { getSession: async () => ({ data: { session: null } }) } },
+}));
+jest.mock('../../src/services/proService', () => {
+  const rules = require('../../src/config/proRules');
+  const status = {
+    proEnabled: true,
+    suspended: false,
+    adultConfirmed: true,
+    stylistRemoved: false,
+    versions: {
+      stylistTerms: rules.PRO_STYLIST_TERMS_VERSION,
+      clientTerms: rules.PRO_CLIENT_TERMS_VERSION,
+      shareText: rules.PRO_SHARE_TEXT_VERSION,
+    },
+    stylist: {
+      termsCurrent: true,
+      accepting: true,
+      approved: true,
+      invitesHeld: false,
+      activeClients: 1,
+      clientLimit: 25,
+      liveInvites: 0,
+      inviteLimit: 5,
+    },
+    client: { termsCurrent: true, connections: 1, connectionLimit: 5 },
+    badge: 0,
+  };
+  const connection = {
+    id: 'c1',
+    myRole: 'client',
+    status: 'active',
+    endedBy: null,
+    startedAt: '2026-10-01T10:00:00Z',
+    otherLabel: 'Ann',
+    myAlias: 'Bea',
+    safetyOnly: false,
+    stylist: null,
+    closet: { shared: true, itemMode: 'all', itemCount: 8, expiresAt: null, expiresSoon: false, lastViewedAt: null, views30d: 0 },
+    counts: { looks: 1, upcoming: 0 },
+    actions: {
+      canMessage: true,
+      canPropose: true,
+      canRecommend: true,
+      canEnd: true,
+      canViewCloset: true,
+      canShare: true,
+      canStopSharing: true,
+      canRename: true,
+    },
+  };
+  const look = {
+    id: 'r1',
+    connectionId: 'c1',
+    status: 'sent',
+    title: 'Autumn layers',
+    body: 'Try the camel coat over the grey knit.',
+    sentAt: '2026-10-20T10:00:00Z',
+    items: [{ position: 0, itemId: 'i1', name: 'Camel coat', category: 'outerwear', hasPhoto: false, available: true }],
+    feedback: null,
+    actions: { canEdit: false, canSend: false, canDelete: false, canGiveFeedback: true, canMarkWorn: true },
+  };
+  const preview = {
+    inviteId: 'inv1',
+    alreadyConnected: false,
+    clientTermsCurrent: true,
+    stylist: { name: 'Ann', headline: 'Wardrobe edits', bio: '', services: [], languages: [], ratesText: '' },
+  };
+  return {
+    getProStatus: async () => status,
+    acceptProTerms: async () => undefined,
+    getProConnection: async () => connection,
+    getProThread: async () => ({
+      messages: [{ id: 1, from: 'them', body: 'Hello', at: '2026-10-02T10:00:00Z' }],
+      hasMore: false,
+      canSend: true,
+    }),
+    sendProMessage: async () => undefined,
+    getProLook: async () => look,
+    giveLookFeedback: async () => undefined,
+    saveProLook: async () => ({ id: 'r2' }),
+    sendProLook: async () => undefined,
+    deleteProLook: async () => undefined,
+    getClientCloset: async () => ({ items: [], total: 0 }),
+    previewProInvite: async () => preview,
+    redeemProInvite: async () => ({ connectionId: 'c1', alreadyConnected: false }),
+    getMyStylistProfile: async () => null,
+    saveStylistProfile: async () => undefined,
+    listMyProInvites: async () => [],
+    createProInvite: async () => undefined,
+    revokeProInvite: async () => undefined,
+    reportProContent: async () => undefined,
+    blockProMember: async () => undefined,
+    proposeProSession: async () => undefined,
+    respondProSession: async () => undefined,
+    cancelProSession: async () => undefined,
+  };
+});
+
 import { KEYBOARD_DONE_ID } from '../../src/components/KeyboardSafe';
 import { KeyboardLift } from '../../src/components/KeyboardLift';
 import { REPORT_REASONS } from '../../src/config/communityGuidelines';
@@ -212,15 +280,6 @@ import CreateOutfitScreen from '../../src/screens/CreateOutfitScreen';
 import ManualOutfitBuilderScreen from '../../src/screens/ManualOutfitBuilderScreen';
 import OutfitDetailsScreen from '../../src/screens/OutfitDetailsScreen';
 import LookbookScreen from '../../src/screens/LookbookScreen';
-import BookStylistScreen from '../../src/screens/BookStylistScreen';
-import CreateAppointmentScreen from '../../src/screens/CreateAppointmentScreen';
-import CreateRecommendationScreen from '../../src/screens/CreateRecommendationScreen';
-import AddClientScreen from '../../src/screens/AddClientScreen';
-import ChatScreen from '../../src/screens/ChatScreen';
-import MessagesListScreen from '../../src/screens/MessagesListScreen';
-import ClientsListScreen from '../../src/screens/ClientsListScreen';
-import RecommendationsScreen from '../../src/screens/RecommendationsScreen';
-import StylistMarketplaceScreen from '../../src/screens/StylistMarketplaceScreen';
 import UserSafetySheet from '../../src/components/UserSafetySheet';
 import RateItemSheet, { RATE_NOTE_ACCESSORY_ID } from '../../src/components/RateItemSheet';
 import SwapThreadScreen, { SWAP_MESSAGE_ACCESSORY_ID } from '../../src/screens/SwapThreadScreen';
@@ -230,6 +289,15 @@ import ListForSwapSheet from '../../src/components/ListForSwapSheet';
 import SwapSafetySheet from '../../src/components/SwapSafetySheet';
 import SwapJoinCommunitySheet from '../../src/components/SwapJoinCommunitySheet';
 import { SWAP_REPORT_REASONS } from '../../src/config/swapRules';
+import ProThreadScreen, { PRO_MESSAGE_ACCESSORY_ID } from '../../src/screens/ProThreadScreen';
+import ProRecommendationScreen, { PRO_COMMENT_ACCESSORY_ID } from '../../src/screens/ProRecommendationScreen';
+import ProLookEditorScreen from '../../src/screens/ProLookEditorScreen';
+import ProRedeemSheet from '../../src/components/ProRedeemSheet';
+import ProStylistProfileSheet from '../../src/components/ProStylistProfileSheet';
+import ProSafetySheet from '../../src/components/ProSafetySheet';
+import ProAppointmentSheet from '../../src/components/ProAppointmentSheet';
+import ProInvitesSheet from '../../src/components/ProInvitesSheet';
+import { PRO_REPORT_REASONS } from '../../src/config/proRules';
 
 type Tree = renderer.ReactTestRenderer;
 
@@ -296,7 +364,12 @@ type Case = {
   doneId?: string;
 };
 
-const nav = () => ({ goBack: jest.fn(), navigate: jest.fn(), setOptions: jest.fn() });
+/** Lets the reads a professional screen makes on opening (access, then the connection, then its data) finish. */
+const settle = async () => {
+  for (let i = 0; i < 5; i++) {
+    await act(async () => {});
+  }
+};
 
 const outfit = { id: 'o1', name: 'Brunch', items: [], createdAt: '2026-01-01T00:00:00Z' };
 
@@ -377,37 +450,6 @@ const CASES: Case[] = [
     open: tree => pressText(tree, '+ Add look'),
     safe: 'scroll',
   },
-  {
-    name: 'Book a stylist',
-    element: () => (
-      <BookStylistScreen
-        route={{ params: { stylistId: 's1', stylistName: 'Sam', consultationFee: 100 } }}
-        navigation={nav()}
-      />
-    ),
-    safe: 'scroll',
-  },
-  {
-    name: 'New appointment',
-    element: () => <CreateAppointmentScreen navigation={nav() as any} route={{ params: {} } as any} />,
-    safe: 'scroll',
-  },
-  { name: 'New recommendation', element: () => <CreateRecommendationScreen navigation={nav()} />, safe: 'scroll' },
-  { name: 'Add client', element: () => <AddClientScreen navigation={nav()} />, safe: 'scroll' },
-  {
-    name: 'Chat',
-    element: () => (
-      <ChatScreen
-        route={{ params: { threadId: 't1', contactName: 'Sam', stylistId: 's1', clientId: 'c1' } }}
-        navigation={nav()}
-      />
-    ),
-    safe: 'avoiding',
-  },
-  { name: 'Messages list', element: () => <MessagesListScreen navigation={nav()} route={{}} />, safe: 'below' },
-  { name: 'Clients list', element: () => <ClientsListScreen navigation={nav() as any} />, safe: 'below' },
-  { name: 'Recommendations list', element: () => <RecommendationsScreen navigation={nav() as any} />, safe: 'below' },
-  { name: 'Stylist marketplace', element: () => <StylistMarketplaceScreen navigation={nav()} />, safe: 'below' },
   {
     name: 'Report details sheet',
     element: () => (
@@ -520,6 +562,87 @@ const CASES: Case[] = [
     safe: 'lift',
   },
   { name: 'Swap board search', element: () => <SwapBoardScreen />, safe: 'below' },
+  // Appended by the cleanup pass, for the professional accounts (documentation/design/pro-accounts.md 9.3).
+  // The thread composer and the look comment field have accessory ids of their own: the report sheet that the
+  // same screen opens renders the shared Done bar.
+  {
+    name: 'Pro thread composer',
+    element: () => <ProThreadScreen />,
+    params: { connectionId: 'c1' },
+    open: settle,
+    safe: 'avoiding',
+    doneId: PRO_MESSAGE_ACCESSORY_ID,
+  },
+  {
+    name: 'Pro look comment',
+    element: () => <ProRecommendationScreen />,
+    params: { recId: 'r1', connectionId: 'c1' },
+    open: settle,
+    safe: 'scroll',
+    doneId: PRO_COMMENT_ACCESSORY_ID,
+  },
+  {
+    name: 'Pro look editor',
+    element: () => <ProLookEditorScreen />,
+    params: { connectionId: 'c1' },
+    open: settle,
+    safe: 'scroll',
+  },
+  {
+    name: 'Pro connect with a stylist sheet, code step',
+    element: () => <ProRedeemSheet visible onClose={jest.fn()} onConnected={jest.fn()} onReport={jest.fn()} />,
+    open: settle,
+    safe: 'lift',
+  },
+  {
+    name: 'Pro connect with a stylist sheet, name step',
+    element: () => <ProRedeemSheet visible onClose={jest.fn()} onConnected={jest.fn()} onReport={jest.fn()} />,
+    open: async tree => {
+      await settle();
+      await act(async () => placeholderOf(tree, 'XXXXX-XXXXX').props.onChangeText('ABCDE-FGHJK'));
+      await pressText(tree, 'Continue');
+      await settle();
+      await pressText(tree, 'Continue');
+      await settle();
+    },
+    safe: 'lift',
+  },
+  {
+    name: 'Pro stylist profile sheet',
+    element: () => <ProStylistProfileSheet visible onClose={jest.fn()} onSaved={jest.fn()} />,
+    open: settle,
+    safe: 'lift',
+  },
+  {
+    name: 'Pro report details sheet',
+    element: () => (
+      <ProSafetySheet
+        visible
+        refType="connection"
+        refId="c1"
+        label="Ann"
+        connectionId="c1"
+        onClose={jest.fn()}
+        onBlocked={jest.fn()}
+      />
+    ),
+    open: async tree => {
+      await pressLabel(tree, 'Report');
+      await pressLabel(tree, PRO_REPORT_REASONS[0].label);
+    },
+    safe: 'lift',
+  },
+  {
+    name: 'Pro propose a session sheet',
+    element: () => <ProAppointmentSheet visible mode="propose" connectionId="c1" onClose={jest.fn()} onChanged={jest.fn()} />,
+    safe: 'lift',
+  },
+  {
+    name: 'Pro invite codes sheet',
+    element: () => <ProInvitesSheet visible onClose={jest.fn()} />,
+    open: settle,
+    safe: 'lift',
+  },
 ];
 
 beforeEach(() => {
@@ -658,19 +781,6 @@ describe('Return keys do something', () => {
     await act(async () => placeholderOf(tree, 'New password').props.onChangeText('newpass1'));
     await act(async () => placeholderOf(tree, 'New password').props.onSubmitEditing());
     expect(mockAuth.resetPasswordWithCode).toHaveBeenCalledWith('a@b.co', '123456', 'newpass1');
-  });
-});
-
-describe('Chat input bar', () => {
-  it('is lifted by the keyboard height alone: nothing sits above the screen, so no offset', async () => {
-    const tree = await mount(
-      <ChatScreen
-        route={{ params: { threadId: 't1', contactName: 'Sam', stylistId: 's1', clientId: 'c1' } }}
-        navigation={nav()}
-      />,
-    );
-    const lifter = tree.root.findByType(KeyboardAvoidingView);
-    expect(lifter.props.keyboardVerticalOffset ?? 0).toBe(0);
   });
 });
 

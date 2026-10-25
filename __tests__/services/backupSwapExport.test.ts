@@ -36,6 +36,7 @@ describe('exportData and swaps', () => {
     mockExportSwaps.mockRejectedValue(new Error('not_authenticated'));
     const backup = await exportData();
     expect('swap' in backup).toBe(false);
+    expect('pro' in backup).toBe(false);
     expect(backup.items).toEqual([]);
   });
 

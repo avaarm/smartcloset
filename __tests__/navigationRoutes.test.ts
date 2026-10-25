@@ -144,7 +144,7 @@ const audit = (mode: string): { problems: Problem[]; visited: string[] } => {
 
 describe('navigator registrations', () => {
   it('parses every navigator out of App.tsx', () => {
-    expect(Object.keys(tabSets).sort()).toEqual(['client', 'stylist', 'user']);
+    expect(Object.keys(tabSets).sort()).toEqual(['stylist', 'user']);
     expect(tabSets.user.map(t => t.name)).toEqual(['Home', 'Wardrobe', 'Outfits', 'Wishlist', 'Settings']);
     for (const name of ['HomeStack', 'WardrobeStack', 'OutfitStack', 'WishlistStack']) {
       expect(stacks[name]?.length).toBeGreaterThan(1);
@@ -155,11 +155,29 @@ describe('navigator registrations', () => {
     expect(stacks.HomeStack.map(r => r.name)).toContain('AddClothing');
   });
 
-  it.each(['user', 'stylist', 'client'])('every navigate() reachable in %s mode resolves', mode => {
+  it.each(['user', 'stylist'])('every navigate() reachable in %s mode resolves', mode => {
     const { problems, visited } = audit(mode);
     // The walk really covered screens, not just the tab roots.
     expect(visited.length).toBeGreaterThan(tabSets[mode].length);
     expect(problems).toEqual([]);
+  });
+
+  it('walks stylist mode through the workspace stacks', () => {
+    const { visited } = audit('stylist');
+    expect(visited).toEqual(
+      expect.arrayContaining([
+        'stylist/ProClientsStack/ProClients',
+        'stylist/ProClientsStack/ProClientDetail',
+        'stylist/ProClientsStack/ProClientCloset',
+        'stylist/ProClientsStack/ProLookEditor',
+        'stylist/ProClientsStack/ProRecommendation',
+        'stylist/ProClientsStack/ProThread',
+        'stylist/ProScheduleStack/ProSchedule',
+        'stylist/ProScheduleStack/ProThread',
+        'stylist/ProInboxStack/ProInbox',
+        'stylist/ProInboxStack/ProThread',
+      ]),
+    );
   });
 
   it('walks user mode through the screens the tabs lead to', () => {

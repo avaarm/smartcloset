@@ -3,7 +3,9 @@
  * published before either build is submitted (documentation/design/swap.md 10.1, quality-ratings.md 8.2).
  * These checks read docs/privacy.html as text. They assert the combined wording by landmark and the
  * statements that must follow the state of the code (the legacy friends policy, the optional model step).
- * Swap's manifest and storage-claim checks are in __tests__/privacyManifest.test.ts.
+ * Swap's manifest and storage-claim checks are in __tests__/privacyManifest.test.ts. The professional accounts
+ * wording (documentation/design/pro-accounts.md 6.8) is checked here by landmark and, in detail, in
+ * __tests__/docs/proPolicy.test.ts.
  */
 import fs from 'fs';
 import path from 'path';
@@ -54,6 +56,7 @@ describe('docs/privacy.html', () => {
       'Shared product database (optional)',
       'Quality ratings and brand insights (optional)',
       'Clothing swaps (optional)',
+      'Working with a stylist (optional)',
       'How long we keep it',
       'Where your data is stored',
       'Community & safety',
@@ -75,14 +78,45 @@ describe('docs/privacy.html', () => {
     expect(wardrobe!.what).toBe('Photos of clothing; brand, color, material, price, size, condition, care instructions and country of origin you enter or scan; the text of a tag you scan; your notes');
   });
 
-  it('adds the new rows after Social & marketplace, in the agreed order, and no crash-report row', () => {
+  it('adds the new rows after Friends, in the agreed order, and no crash-report row', () => {
     const names = rows.map(r => r.category.replace(/ \(.*\)$/, ''));
-    const at = names.indexOf('Social & marketplace');
+    const at = names.indexOf('Friends');
     expect(at).toBeGreaterThan(-1);
-    expect(names.slice(at + 1, at + 5)).toEqual(['Label scans', 'Quality ratings', 'Your agreement', 'Clothing swaps']);
+    expect(names.slice(at + 1, at + 6)).toEqual(['Label scans', 'Quality ratings', 'Your agreement', 'Clothing swaps', 'Working with a stylist']);
     expect(names).toContain('Shared product details');
+    expect(names).not.toContain('Social & marketplace');
     expect(text).not.toMatch(/crash/i);
     expect(names).not.toContain('Usage & diagnostics');
+  });
+
+  it('has no marketplace claim: stylists are reached by invite code only', () => {
+    expect(text).not.toMatch(/marketplace|directory/i);
+    expect(text).toContain('You connect only through a one-time invite code that the stylist gives you');
+    expect(text).toContain('stylists are not listed anywhere in the app');
+  });
+
+  it('adds the stylist row to the table, and the section where people look for it', () => {
+    const stylist = row('Working with a stylist');
+    expect(stylist).toBeDefined();
+    expect(stylist!.what).toContain('If you become a stylist: your professional profile');
+    expect(stylist!.what).toContain('If you work with a stylist: the name you choose to show them, the pieces of your closet you choose to share and when');
+    expect(stylist!.what).toContain('that you confirmed you are 18 or over and when');
+    expect(stylist!.why).toBe('Letting you work with a stylist you choose');
+    expect(row('Friends')!.what).not.toMatch(/appointment|stylist/i);
+    const section = text.slice(text.indexOf('Working with a stylist (optional)', text.indexOf('Clothing swaps (optional)', text.indexOf('Shared product database'))));
+    expect(section).toContain('Independent professionals.');
+    expect(section).toContain('Who can see what.');
+    expect(section).toContain('Your control.');
+    expect(section).toContain('Messages and sessions.');
+    expect(section).toContain('Age.');
+    expect(section).toContain('If you delete your account');
+  });
+
+  it('names limited stylist actions in the usage limits row', () => {
+    const usage = row('Usage limits');
+    expect(usage).toBeDefined();
+    expect(usage!.what).toContain('took limited swap actions or took limited stylist actions');
+    expect(usage!.what).toContain('Numbers only, never the content');
   });
 
   it('describes label scans in the words that match the state of the friends policy', () => {
@@ -162,8 +196,15 @@ describe('docs/privacy.html', () => {
     expect(text).toContain('Reports and blocks are deleted along with either account');
   });
 
+  it('adds the stylist and client reports, their evidence copy and the one shared block list to Community & safety', () => {
+    expect(text).toContain('stylists and clients can also report or block each other from a profile (including before connecting), a message, a look or a session');
+    expect(text).toContain('A report about a stylist or a client keeps a copy of the profile, of the last 30 messages, or of the look or session you reported');
+    expect(text).toContain('blocking ends any friend request, friendship or stylist connection between you');
+    expect(text).toContain('A block you make in Friends, Swaps or Stylists applies to all three');
+  });
+
   it('lists what deleting the account removes, without "immediately"', () => {
-    expect(text).toContain('(wardrobe items, outfits, ratings, style profile, friend connections, swap listings, offers and messages) from our systems. Copies in routine backups are overwritten on their normal schedule.');
+    expect(text).toContain('(wardrobe items, outfits, ratings, style profile, friend connections, swap listings, offers and messages, and, if you used the stylist features, your stylist profile, invites, connections, shared-closet settings, looks, sessions and messages) from our systems. Copies in routine backups are overwritten on their normal schedule.');
     expect(text).not.toMatch(/immediately/i);
   });
 
@@ -172,10 +213,22 @@ describe('docs/privacy.html', () => {
     expect(text).toContain('Settings → Export Data includes your ratings');
     expect(text).toContain('clear the stored tag text on the item\'s page (Label, then Tag text, then Clear tag text)');
     expect(text).toContain('Settings → Export Data includes your swap listings, your offers and your own messages');
+    expect(text).toContain('Settings → Export Data includes your stylist profile, your invites, your connections with their looks, sessions and sharing history, and your own messages, never the other person\'s messages');
   });
 
-  it('keeps the age lines for both features', () => {
-    expect(text).toContain('Community swaps are for people 18 and over. Adding ratings to brand insights is for people 18 or older.');
+  it('keeps the age lines for all three features', () => {
+    expect(text).toContain('Community swaps are for people 18 and over. Adding ratings to brand insights is for people 18 or older. Working with a stylist is for people 18 and over.');
+  });
+
+  it('points the general retention list at the stylist table and counts the stylist counters', () => {
+    expect(text).toContain('Working with a stylist — see the table under Working with a stylist.');
+    expect(text).toContain('Swap and stylist counters are deleted after 2 days');
+  });
+
+  it('says where a stylist can and cannot reach a photo, next to the friends statement', () => {
+    expect(text).toContain('A stylist can see a client\'s closet pieces only while the client has switched sharing on; each photo is fetched through our server, which checks that sharing is still on and removes location and camera details before sending it.');
+    // The friends exception is no longer "the one exception": the page says "except what you choose to share".
+    expect(text).not.toContain('with one exception: if you add a friend');
   });
 
   it('keeps the contact address', () => {

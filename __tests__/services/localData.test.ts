@@ -1,7 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { adoptPersonalLocalData, clearPersonalLocalData, stashPersonalLocalData } from '../../src/services/localData';
+import {
+  RETIRED_PRO_KEYS,
+  adoptPersonalLocalData,
+  clearPersonalLocalData,
+  purgeLegacyProData,
+  stashPersonalLocalData,
+} from '../../src/services/localData';
 
 // Per-person data with no account id in the key: filed per account on sign-out.
 const PERSONAL = [
@@ -11,8 +17,6 @@ const PERSONAL = [
   '@smartcloset_color_season',
   '@smartcloset_product_contributions',
   '@smartcloset_current_mode',
-  '@smartcloset_available_modes',
-  '@smartcloset_account_type',
 ];
 
 // Guest / demo content: belongs to the device's guest session, must survive.
@@ -24,21 +28,6 @@ const GUEST = [
   '@smartcloset_demo_seeded_v4',
   '@smartcloset_sample_photos_fix_v1',
   '@smartcloset_initialized',
-  '@smartcloset_user_profile',
-  '@smartcloset_stylist_profile',
-  '@smartcloset_stylist_clients',
-  '@smartcloset_stylist_appointments',
-  '@smartcloset_stylist_recommendations',
-  '@smartcloset_stylist_notes',
-  '@smartcloset_stylist_listings',
-  '@smartcloset_stylist_reviews',
-  '@smartcloset_booking_requests',
-  '@smartcloset_client_accounts',
-  '@smartcloset_current_client',
-  '@smartcloset_message_threads',
-  '@smartcloset_messages',
-  '@smartcloset_notifications',
-  '@smartcloset_relationships',
   // Unused legacy module (src/utils/storage.ts), still a guest wardrobe if present.
   '@smartcloset/wardrobe',
   '@smartcloset/outfits',
@@ -63,6 +52,29 @@ const DEVICE_OR_PER_ACCOUNT = [
 // Bookkeeping for the per-person slots: who they currently belong to.
 const INTERNAL = ['@smartcloset_personal_owner'];
 
+// Stores of the retired on-device Stylist and Client simulation. The demo seed no longer
+// fills them; purgeLegacyProData removes them and sign-out neither moves nor resets them. Written
+// out by hand (design 7.11) so the exported list cannot drift without this test noticing.
+const RETIRED = [
+  '@smartcloset_stylist_profile',
+  '@smartcloset_stylist_clients',
+  '@smartcloset_stylist_appointments',
+  '@smartcloset_stylist_recommendations',
+  '@smartcloset_stylist_notes',
+  '@smartcloset_stylist_listings',
+  '@smartcloset_stylist_reviews',
+  '@smartcloset_booking_requests',
+  '@smartcloset_client_accounts',
+  '@smartcloset_current_client',
+  '@smartcloset_message_threads',
+  '@smartcloset_messages',
+  '@smartcloset_notifications',
+  '@smartcloset_relationships',
+  '@smartcloset_user_profile',
+  '@smartcloset_account_type',
+  '@smartcloset_available_modes',
+];
+
 const seed = async (keys: string[]) => {
   for (const k of keys) await AsyncStorage.setItem(k, `value-of-${k}`);
 };
@@ -76,6 +88,7 @@ describe('clearPersonalLocalData', () => {
   it('removes exactly the per-person keys and nothing else', async () => {
     const keptBefore = [
       ...GUEST,
+      ...RETIRED,
       ...DEVICE_OR_PER_ACCOUNT,
       '@smartcloset_ai_consent_v1:user-1',
       '@smartcloset_wishlist_budget:u:user-1',
@@ -116,6 +129,105 @@ describe('clearPersonalLocalData', () => {
   });
 });
 
+describe('purgeLegacyProData', () => {
+  // What must outlive the purge: the mode preference, the guest closet and demo flags, the
+  // per-person slots with their stashed copies, and flags that are keyed by account.
+  const KEPT = [
+    ...PERSONAL,
+    ...GUEST,
+    ...DEVICE_OR_PER_ACCOUNT,
+    ...INTERNAL,
+    '@smartcloset_lookbooks:u:user-1',
+    '@smartcloset_mode_onboarded_user-1',
+    '@smartcloset_ai_consent_v1:user-1',
+    'sb-example-auth-token',
+  ];
+
+  it('retires exactly the seventeen stores of design 7.11, each once, and never the mode preference', () => {
+    expect([...RETIRED_PRO_KEYS].sort()).toEqual([...RETIRED].sort());
+    expect(new Set(RETIRED_PRO_KEYS).size).toBe(RETIRED_PRO_KEYS.length);
+    expect(RETIRED_PRO_KEYS).toHaveLength(17);
+    expect(RETIRED_PRO_KEYS).not.toContain('@smartcloset_current_mode');
+    const live = new Set([...PERSONAL, ...GUEST, ...DEVICE_OR_PER_ACCOUNT, ...INTERNAL]);
+    expect(RETIRED_PRO_KEYS.filter(k => live.has(k))).toEqual([]);
+  });
+
+  it('removes every retired key and nothing else', async () => {
+    await seed([...RETIRED, ...KEPT]);
+
+    await purgeLegacyProData();
+
+    expect((await AsyncStorage.getAllKeys()).slice().sort()).toEqual([...KEPT].sort());
+  });
+
+  it('keeps the device mode preference and the guest closet as they were', async () => {
+    await AsyncStorage.setItem('@smartcloset_current_mode', 'stylist');
+    await AsyncStorage.setItem('@smartcloset_items', '[{"id":"1"}]');
+    await AsyncStorage.setItem('@smartcloset_stylist_profile', '{"name":"Emma"}');
+    await AsyncStorage.setItem('@smartcloset_messages', '[{"id":"m1"}]');
+
+    await purgeLegacyProData();
+
+    expect(await AsyncStorage.getItem('@smartcloset_current_mode')).toBe('stylist');
+    expect(await AsyncStorage.getItem('@smartcloset_items')).toBe('[{"id":"1"}]');
+    expect(await AsyncStorage.getItem('@smartcloset_stylist_profile')).toBeNull();
+    expect(await AsyncStorage.getItem('@smartcloset_messages')).toBeNull();
+  });
+
+  it('is idempotent, and keeps no completion flag of its own', async () => {
+    await seed([...RETIRED, ...KEPT]);
+    await purgeLegacyProData();
+    const afterFirst = (await AsyncStorage.getAllKeys()).slice().sort();
+
+    await purgeLegacyProData();
+    expect((await AsyncStorage.getAllKeys()).slice().sort()).toEqual(afterFirst);
+
+    // A retired store that somehow reappears is removed on the next call: nothing says "already done".
+    await AsyncStorage.setItem('@smartcloset_client_accounts', '[]');
+    await purgeLegacyProData();
+    expect(await AsyncStorage.getItem('@smartcloset_client_accounts')).toBeNull();
+    expect((await AsyncStorage.getAllKeys()).slice().sort()).toEqual(afterFirst);
+  });
+
+  it('does nothing, and writes nothing, on a device that never had the old stores', async () => {
+    await purgeLegacyProData();
+    expect(await AsyncStorage.getAllKeys()).toEqual([]);
+
+    await seed(KEPT);
+    await purgeLegacyProData();
+    expect((await AsyncStorage.getAllKeys()).slice().sort()).toEqual([...KEPT].sort());
+  });
+
+  it('removes whichever of them are present when only some are', async () => {
+    await seed([RETIRED[0], RETIRED[8], RETIRED[16], ...KEPT]);
+    await purgeLegacyProData();
+    expect((await AsyncStorage.getAllKeys()).slice().sort()).toEqual([...KEPT].sort());
+  });
+
+  it('never throws and never calls console.error if storage fails, and the next call finishes the job', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(AsyncStorage, 'multiRemove').mockRejectedValueOnce(new Error('disk'));
+    await seed(RETIRED);
+
+    await expect(purgeLegacyProData()).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(error).not.toHaveBeenCalled();
+    expect(await AsyncStorage.getAllKeys()).toHaveLength(RETIRED.length);
+
+    await purgeLegacyProData();
+    expect(await AsyncStorage.getAllKeys()).toEqual([]);
+  });
+
+  it('is not part of signing out: sign-out neither moves nor removes the retired stores', async () => {
+    await seed(RETIRED);
+    await adoptPersonalLocalData('A');
+    await stashPersonalLocalData('A');
+    await clearPersonalLocalData();
+    expect((await AsyncStorage.getAllKeys()).slice().sort()).toEqual([...RETIRED].sort());
+  });
+});
+
 describe('key classification', () => {
   const walk = (dir: string): string[] =>
     fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => {
@@ -125,9 +237,9 @@ describe('key classification', () => {
     });
 
   // Fails when someone adds a storage key without deciding whether it is
-  // per-person data (add it to PERSONAL_KEYS in localData.ts) or safe to keep.
+  // per-person data (add it to PERSONAL_KEYS in localData.ts), retired, or safe to keep.
   it('every @smartcloset storage key in src is classified', () => {
-    const known = new Set([...PERSONAL, ...GUEST, ...DEVICE_OR_PER_ACCOUNT, ...INTERNAL]);
+    const known = new Set([...PERSONAL, ...GUEST, ...RETIRED, ...DEVICE_OR_PER_ACCOUNT, ...INTERNAL]);
     const found = new Set<string>();
     for (const file of walk(path.join(__dirname, '../../src'))) {
       const text = fs.readFileSync(file, 'utf8');

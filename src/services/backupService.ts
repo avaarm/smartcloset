@@ -9,6 +9,9 @@ import { exportMyRatings } from './ratingService';
 import type { RatingsExport } from '../types/rating';
 import { exportMySwapData } from './swapService';
 import type { SwapExport } from '../types/swap';
+import { exportMyProData } from './proService';
+import { toProError } from './proErrors';
+import type { ProExport } from '../types/pro';
 
 const STORAGE_KEY = '@smartcloset_items';
 const OUTFITS_KEY = '@smartcloset_saved_outfits';
@@ -23,6 +26,11 @@ export interface BackupData {
   ratings?: RatingsExport;
   /** What the member did in swaps (their listings, swaps and own messages). Absent for guests, offline, or before swaps existed. */
   swap?: SwapExport;
+  /**
+   * What the member did as a stylist or with a stylist (profile, invites, connections, looks, sessions and their own
+   * messages). Absent for guests and before the server had the feature; `{ unavailable: true }` when it could not be read.
+   */
+  pro?: ProExport | { unavailable: true };
   metadata: {
     /** Items the user owns; wishlist entries are counted in wishlistCount instead. */
     totalItems: number;
@@ -60,6 +68,16 @@ export const exportData = async (): Promise<BackupData> => {
       swap = undefined;
     }
 
+    // Stylist data comes from the server too. A guest, or a server that has no such functions, has none and the
+    // section is left out; any other failure is written into the file, so a missing section is never silent.
+    let pro: BackupData['pro'];
+    try {
+      pro = await exportMyProData();
+    } catch (error) {
+      const { code } = toProError(error);
+      pro = code === 'not_authenticated' || code === 'not_deployed' ? undefined : { unavailable: true };
+    }
+
     const backupData: BackupData = {
       version: BACKUP_VERSION,
       timestamp: new Date().toISOString(),
@@ -67,6 +85,7 @@ export const exportData = async (): Promise<BackupData> => {
       outfits,
       ...(ratings ? { ratings } : {}),
       ...(swap ? { swap } : {}),
+      ...(pro ? { pro } : {}),
       metadata: {
         totalItems: ownedCount,
         wishlistCount: items.length - ownedCount,
@@ -104,6 +123,16 @@ export const importData = async (backupData: BackupData): Promise<void> => {
 };
 
 /**
+ * The line that travels with the shared file. It names a section that could not be read.
+ */
+export const backupSummary = (backupData: BackupData): string => {
+  const created = `Backup created on ${backupData.metadata.exportDate}`;
+  return backupData.pro && 'unavailable' in backupData.pro
+    ? `${created}. Your stylist data could not be included.`
+    : created;
+};
+
+/**
  * Save backup to file and share
  */
 export const saveAndShareBackup = async (): Promise<void> => {
@@ -120,7 +149,7 @@ export const saveAndShareBackup = async (): Promise<void> => {
     // Share file
     const shareOptions = {
       title: 'SmartCloset Backup',
-      message: `Backup created on ${backupData.metadata.exportDate}`,
+      message: backupSummary(backupData),
       url: Platform.OS === 'ios' ? path : `file://${path}`,
       type: 'application/json',
     };

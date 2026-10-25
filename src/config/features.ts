@@ -1,17 +1,22 @@
 /**
- * Stylist and Client modes (client lists, bookings, the stylist marketplace,
- * messaging) are a simulation: their data lives in AsyncStorage on this device,
- * nothing is shared between accounts, and there is no payment. Offering them as
- * real features would mislead people, so they stay off until a real backend
- * exists.
+ * Professional accounts: a person can be a stylist, and/or the client of a stylist,
+ * between two real people on two real phones (documentation/design/pro-accounts.md).
+ *
+ * This flag means "this build contains the feature and shows it". It is the build
+ * switch; the server switch is `pro_enabled` in `pro_config` (seeded off), and both
+ * must be on for anything to appear.
  *
  * While false:
+ *  - Home has no Stylists cell and Settings has no Professional section,
  *  - the first-run "How will you use the app?" prompt is skipped,
- *  - Settings has no account-mode switcher,
- *  - a device that last saved the stylist or client mode is returned to the
- *    personal mode on launch, so nobody is stranded in an unreachable one.
+ *  - the Stylist workspace tab set cannot be opened, and a device that last saved the
+ *    stylist mode is returned to the personal mode on launch, so nobody is stranded
+ *    in an unreachable one.
  *
- * The stylist/client screens and navigators are still compiled in, but nothing
- * can open them.
+ * While true, the stylist mode is honoured only while the server confirms an active
+ * stylist role (AccountModeContext).
+ *
+ * It is flipped to true last, in one commit, after the migrations are applied, the
+ * privacy page is published and the two-phone walkthrough has passed.
  */
 export const PRO_MODES_ENABLED = false;

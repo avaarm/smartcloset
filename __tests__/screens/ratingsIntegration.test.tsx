@@ -777,16 +777,17 @@ describe('Settings', () => {
 
   it('names ratings in both places that list what account deletion removes', async () => {
     const tree = await renderSettings();
-    // Pass B then added the swap words to both strings (swap.md 7.7); ratings stays named in each.
+    // Pass B then added the swap words to both strings (swap.md 7.7), and the professional accounts pass the stylist
+    // words (pro-accounts.md 7.10); ratings stays named in each.
     expect(textsOf(tree)).toContain(
-      'Permanently deletes your account, wardrobe, ratings, body profile, swap listings and messages, and all uploaded images. Cannot be undone.',
+      'Permanently deletes your account, wardrobe, ratings, body profile, swap listings and messages, stylist connections, and all uploaded images. Cannot be undone.',
     );
     alertSpy.mockClear();
     await pressText(tree, 'Delete Account');
     const [title, message] = alertSpy.mock.calls[0];
     expect(title).toBe('Delete Account');
     expect(message).toContain(
-      'all clothing items, outfits, ratings, body profile, stylist data, swap listings, offers and messages, and any uploaded images',
+      'all clothing items, outfits, ratings, body profile, stylist and client data, swap listings, offers and messages, and any uploaded images',
     );
     expect(message).toContain('To confirm, you\'ll be asked to type DELETE.');
   });

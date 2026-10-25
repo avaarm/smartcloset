@@ -35,20 +35,11 @@ import { getAiConsent, setAiConsent } from '../services/aiConsent';
 import { getWardrobeFor, setWardrobeFor, markAsked, type WardrobeFor } from '../services/wardrobeAudience';
 import WardrobeForPicker from '../components/WardrobeForPicker';
 import { signOut } from '../services/authService';
-import {
-  getCurrentMode,
-  getAvailableModes,
-  setCurrentMode,
-  getModeName,
-  getModeIcon,
-  getModeDescription,
-} from '../services/accountService';
-import { AccountType } from '../types/stylist';
-import { useAccountMode } from '../context/AccountModeContext';
 import { PRO_MODES_ENABLED } from '../config/features';
 import { TAG_MODEL_FALLBACK_ENABLED } from '../config/ratingFlags';
 import RatingSharingRows from '../components/RatingSharingRows';
 import SwapSettingsSection from '../components/SwapSettingsSection';
+import ProSettingsSection from '../components/ProSettingsSection';
 
 // What the permission prompt (services/aiConsent.ts) says about tag photos; the wording only promises what the build does.
 const TAG_AI_SENTENCE = TAG_MODEL_FALLBACK_ENABLED
@@ -85,8 +76,6 @@ const SettingsScreen = () => {
   const [userName, setUserName] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const { currentMode, switchMode } = useAccountMode();
-  const [availableModes, setAvailableModesState] = useState<AccountType[]>(['user']);
   const [contributions, setContributions] = useState<ProductContribution[]>([]);
   const [shareProductData, setShareProductData] = useState(false);
   const [aiPhotoAnalysis, setAiPhotoAnalysis] = useState(false);
@@ -125,19 +114,6 @@ const SettingsScreen = () => {
       setUserName(null);
       setUserEmail(null);
     }
-    if (PRO_MODES_ENABLED) {
-      await getCurrentMode();
-      if (session?.user) {
-        setAvailableModesState(['user', 'stylist', 'client']);
-      } else {
-        const modes = await getAvailableModes();
-        setAvailableModesState(modes);
-      }
-    }
-  };
-
-  const handleModeSwitch = async (mode: AccountType) => {
-    await switchMode(mode);
   };
 
   const handleSignOut = async () => {
@@ -266,7 +242,7 @@ const SettingsScreen = () => {
   const handleDeleteAccount = async () => {
     Alert.alert(
       'Delete Account',
-      'This permanently deletes your account, all clothing items, outfits, ratings, body profile, stylist data, swap listings, offers and messages, and any uploaded images. This cannot be undone.\n\nTo confirm, you\'ll be asked to type DELETE.',
+      'This permanently deletes your account, all clothing items, outfits, ratings, body profile, stylist and client data, swap listings, offers and messages, and any uploaded images. This cannot be undone.\n\nTo confirm, you\'ll be asked to type DELETE.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -313,7 +289,7 @@ const SettingsScreen = () => {
   const handleReseedDemoData = async () => {
     Alert.alert(
       'Reset Demo Data',
-      'This will replace your current wardrobe and sample data with a fresh seed — wishlist, outfits, body profile, stylist clients, appointments, recommendations, booking requests, and outfit history will all be regenerated. Your account and login are preserved.',
+      'This will replace your current wardrobe and sample data with a fresh seed — wishlist, outfits, body profile, and outfit history will all be regenerated. Your account and login are preserved.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -385,46 +361,8 @@ const SettingsScreen = () => {
                 <View style={styles.profileInfo}>
                   <Text style={styles.profileName}>{userName}</Text>
                   <Text style={styles.profileEmail}>{userEmail}</Text>
-                  {PRO_MODES_ENABLED && (
-                    <View style={styles.modePill}>
-                      <Icon name={getModeIcon(currentMode)} size={11} color={GOLD} />
-                      <Text style={styles.modePillText}>{getModeName(currentMode)}</Text>
-                    </View>
-                  )}
                 </View>
               </View>
-
-              {/* Mode switcher */}
-              {PRO_MODES_ENABLED && (
-                <>
-                  <Text style={styles.subsectionLabel}>Account Mode</Text>
-                  {availableModes.map((mode) => (
-                    <TouchableOpacity
-                      key={mode}
-                      style={[styles.modeCard, currentMode === mode && styles.modeCardActive]}
-                      onPress={() => handleModeSwitch(mode)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[styles.modeIconWrap, currentMode === mode && { backgroundColor: GOLD_SUBTLE }]}>
-                        <Icon
-                          name={getModeIcon(mode)}
-                          size={18}
-                          color={currentMode === mode ? GOLD : TEXT_SUBTLE}
-                        />
-                      </View>
-                      <View style={styles.modeTextWrap}>
-                        <Text style={[styles.modeName, currentMode === mode && { color: GOLD }]}>
-                          {getModeName(mode)}
-                        </Text>
-                        <Text style={styles.modeDesc}>{getModeDescription(mode)}</Text>
-                      </View>
-                      {currentMode === mode && (
-                        <Icon name="checkmark-circle" size={20} color={GOLD} />
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </>
-              )}
 
               <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.7}>
                 <Icon name="log-out-outline" size={18} color="#C0392B" />
@@ -529,6 +467,7 @@ const SettingsScreen = () => {
             </>
           )}
           {isAuthenticated && <SwapSettingsSection />}
+          {isAuthenticated && PRO_MODES_ENABLED && <ProSettingsSection />}
         </View>
 
         {/* ── Data & Backup ───────────────────────────────────────────────── */}
@@ -626,7 +565,7 @@ const SettingsScreen = () => {
                 <Text style={[styles.dangerButtonText, { color: GOLD }]}>Reset Demo Data</Text>
               </TouchableOpacity>
               <Text style={styles.dangerNote}>
-                Replaces all data with a fresh sample set — wardrobe, outfits, stylist & client content. Dev only.
+                Replaces all data with a fresh sample set — wardrobe and outfits. Dev only.
               </Text>
             </>
           )}
@@ -661,7 +600,7 @@ const SettingsScreen = () => {
                 <Text style={[styles.dangerButtonText, { color: '#922B21' }]}>Delete Account</Text>
               </TouchableOpacity>
               <Text style={styles.dangerNote}>
-                Permanently deletes your account, wardrobe, ratings, body profile, swap listings and messages, and all uploaded images. Cannot be undone.
+                Permanently deletes your account, wardrobe, ratings, body profile, swap listings and messages, stylist connections, and all uploaded images. Cannot be undone.
               </Text>
             </>
           )}
@@ -790,72 +729,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: TEXT_MUTED,
     marginBottom: 8,
-  },
-  modePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: GOLD_SUBTLE,
-    borderWidth: 1,
-    borderColor: GOLD_BORDER,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: 2,
-    gap: 5,
-  },
-  modePillText: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: GOLD,
-    letterSpacing: 0.3,
-  },
-
-  subsectionLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: TEXT_SUBTLE,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-    marginBottom: 12,
-  },
-
-  // Mode cards
-  modeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 2,
-    padding: 14,
-    marginBottom: 8,
-    backgroundColor: IVORY,
-    gap: 12,
-  },
-  modeCardActive: {
-    borderColor: GOLD_BORDER,
-    backgroundColor: GOLD_SUBTLE,
-  },
-  modeIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: WARM_MUTED,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modeTextWrap: {
-    flex: 1,
-  },
-  modeName: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: INK,
-    marginBottom: 2,
-  },
-  modeDesc: {
-    fontSize: 12,
-    color: TEXT_MUTED,
-    lineHeight: 16,
   },
 
   signOutButton: {

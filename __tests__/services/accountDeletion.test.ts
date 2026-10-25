@@ -12,17 +12,22 @@ jest.mock('../../src/config/supabase', () => ({
     functions: { invoke: (...a: any[]) => mockInvoke(...a) },
   },
 }));
+const mockClearProPhotos = jest.fn();
 jest.mock('../../src/services/imageUrls', () => ({ clearSignedImageCache: () => mockClearCache() }));
+jest.mock('../../src/services/proPhotoUrls', () => ({ clearProPhotoCache: () => mockClearProPhotos() }));
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { deleteAccount } from '../../src/services/accountDeletion';
+import { resetProEntry, setProEntry, takeProEntry } from '../../src/services/proEntry';
 
 beforeEach(async () => {
   mockSession = { user: { id: 'u1' } };
   mockInvoke.mockReset();
+  mockClearProPhotos.mockReset();
+  resetProEntry();
   mockSignOut.mockReset().mockResolvedValue({ error: null });
   mockClearCache.mockReset().mockResolvedValue(undefined);
   await AsyncStorage.clear();
@@ -67,6 +72,22 @@ describe('deleteAccount', () => {
   it('passes on that some photos could not be removed', async () => {
     mockInvoke.mockResolvedValue({ data: { ok: true, photosIncomplete: true }, error: null });
     expect((await deleteAccount()).photosIncomplete).toBe(true);
+  });
+
+  it('forgets the stylist photo requests and the first-run choice once the account is gone', async () => {
+    mockInvoke.mockResolvedValue({ data: { ok: true }, error: null });
+    setProEntry('stylist');
+    await deleteAccount();
+    expect(mockClearProPhotos).toHaveBeenCalledTimes(1);
+    expect(takeProEntry()).toBeNull();
+  });
+
+  it('leaves them alone when the server could not delete the account, since nothing local is touched then', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: new Error('500') });
+    setProEntry('client');
+    await expect(deleteAccount()).rejects.toThrow('500');
+    expect(mockClearProPhotos).not.toHaveBeenCalled();
+    expect(takeProEntry()).toBe('client');
   });
 
   it('refuses when nobody is signed in', async () => {

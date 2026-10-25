@@ -68,6 +68,12 @@ describe('exportData', () => {
     expect(backup.metadata.totalItems).toBe(0);
     expect(backup.metadata.wishlistCount).toBe(1);
   });
+
+  it('has no stylist section for a guest, and stays in the 1.1 file', async () => {
+    const backup = await exportData();
+    expect('pro' in backup).toBe(false);
+    expect(backup.version).toBe('1.1');
+  });
 });
 
 describe('getBackupStats', () => {

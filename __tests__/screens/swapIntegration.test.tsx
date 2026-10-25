@@ -270,13 +270,13 @@ describe('App routes', () => {
   };
   const SWAP_ROUTES = ['SwapBoard', 'SwapListing', 'MySwaps', 'SwapThread'];
 
-  it('registers the four swap screens in the Home stack, right after FriendCloset and before the stylist screens', () => {
+  it('registers the four swap screens in the Home stack, right after FriendCloset and before the professional screens', () => {
     const home = block('HomeStack');
     const at = SWAP_ROUTES.map(r => home.indexOf(`name="${r}"`));
     expect(at.every(i => i > -1)).toBe(true);
     expect([...at].sort((a, b) => a - b)).toEqual(at);
     expect(at[0]).toBeGreaterThan(home.indexOf('name="FriendCloset"'));
-    expect(at[3]).toBeLessThan(home.indexOf('name="StylistMarketplace"'));
+    expect(at[3]).toBeLessThan(home.indexOf('name="ProHome"'));
     for (const route of SWAP_ROUTES) {
       expect(home).toMatch(new RegExp(`name="${route}" component=\\{${route}Screen\\} options=\\{\\{ headerShown: false \\}\\}`));
     }
@@ -479,7 +479,7 @@ describe('Settings: community swaps and the account-deletion words', () => {
   it('names swap data in the Danger Zone note and in the delete-account alert, with ratings still named', async () => {
     const tree = await render();
     expect(textsOf(tree)).toContain(
-      'Permanently deletes your account, wardrobe, ratings, body profile, swap listings and messages, and all uploaded images. Cannot be undone.',
+      'Permanently deletes your account, wardrobe, ratings, body profile, swap listings and messages, stylist connections, and all uploaded images. Cannot be undone.',
     );
     const alert = Alert.alert as unknown as jest.Mock;
     alert.mockClear();
@@ -490,7 +490,7 @@ describe('Settings: community swaps and the account-deletion words', () => {
     const [title, message] = alert.mock.calls[0];
     expect(title).toBe('Delete Account');
     expect(message).toContain(
-      'all clothing items, outfits, ratings, body profile, stylist data, swap listings, offers and messages, and any uploaded images',
+      'all clothing items, outfits, ratings, body profile, stylist and client data, swap listings, offers and messages, and any uploaded images',
     );
     expect(message).toContain('To confirm, you\'ll be asked to type DELETE.');
   });

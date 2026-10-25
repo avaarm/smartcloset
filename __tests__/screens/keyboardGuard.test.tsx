@@ -121,7 +121,7 @@ describe('keyboard guard', () => {
     expect(options![0]).toMatch(/tabBarHideOnKeyboard:\s*Platform\.OS === 'android'/);
 
     const navigators = app.match(/<Tab\.Navigator\b[^>]*>/g) ?? [];
-    expect(navigators.length).toBeGreaterThanOrEqual(3);
+    expect(navigators.length).toBeGreaterThanOrEqual(2);
     for (const navigator of navigators) {
       expect(navigator).toContain('screenOptions={tabScreenOptions}');
     }

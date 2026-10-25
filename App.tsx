@@ -23,37 +23,15 @@ import { Session } from '@supabase/supabase-js';
 import { AccountModeProvider, useAccountMode } from './src/context/AccountModeContext';
 import { PRO_MODES_ENABLED } from './src/config/features';
 import { ThemeProvider } from './src/styles/ThemeProvider';
-import StylistDashboardScreen from './src/screens/StylistDashboardScreen';
-import ClientsListScreen from './src/screens/ClientsListScreen';
-import ClientDetailsScreen from './src/screens/ClientDetailsScreen';
-import CreateAppointmentScreen from './src/screens/CreateAppointmentScreen';
-import MessagesListScreen from './src/screens/MessagesListScreen';
-import ChatScreen from './src/screens/ChatScreen';
-import ClientDashboardScreen from './src/screens/ClientDashboardScreen';
-import MyStylistScreen from './src/screens/MyStylistScreen';
-import ClientAppointmentsScreen from './src/screens/ClientAppointmentsScreen';
-import RecommendationsScreen from './src/screens/RecommendationsScreen';
-import StylistMarketplaceScreen from './src/screens/StylistMarketplaceScreen';
-import StylistProfileViewScreen from './src/screens/StylistProfileViewScreen';
-import BookStylistScreen from './src/screens/BookStylistScreen';
-import ClientRecommendationsScreen from './src/screens/ClientRecommendationsScreen';
 import BodyProfileOnboardingScreen from './src/screens/BodyProfileOnboardingScreen';
 import BodyProfileScreen from './src/screens/BodyProfileScreen';
 import LensSearchScreen from './src/screens/LensSearchScreen';
 import { initCrashReporting, setUser as setCrashUser } from './src/services/crashReporting';
 import env from './src/config/env';
-import AddClientScreen from './src/screens/AddClientScreen';
-import RecommendationDetailsScreen from './src/screens/RecommendationDetailsScreen';
-import CreateRecommendationScreen from './src/screens/CreateRecommendationScreen';
-import AppointmentDetailsScreen from './src/screens/AppointmentDetailsScreen';
 import WardrobeInsightsScreen from './src/screens/WardrobeInsightsScreen';
 import OutfitCalendarScreen from './src/screens/OutfitCalendarScreen';
 import StyleQuizScreen from './src/screens/StyleQuizScreen';
 import ColorSeasonScreen from './src/screens/ColorSeasonScreen';
-import WardrobeEditScreen from './src/screens/WardrobeEditScreen';
-import LookbookScreen from './src/screens/LookbookScreen';
-import CapsuleWardrobeScreen from './src/screens/CapsuleWardrobeScreen';
-import AccountTypeOnboardingScreen from './src/screens/AccountTypeOnboardingScreen';
 import { hasCompletedModeOnboarding, markModeOnboardingComplete } from './src/services/accountService';
 import FriendsScreen from './src/screens/FriendsScreen';
 import FriendClosetScreen from './src/screens/FriendClosetScreen';
@@ -62,6 +40,20 @@ import SwapBoardScreen from './src/screens/SwapBoardScreen';
 import SwapListingScreen from './src/screens/SwapListingScreen';
 import MySwapsScreen from './src/screens/MySwapsScreen';
 import SwapThreadScreen from './src/screens/SwapThreadScreen';
+import ProHomeScreen from './src/screens/ProHomeScreen';
+import ProConnectionScreen from './src/screens/ProConnectionScreen';
+import ProShareScreen from './src/screens/ProShareScreen';
+import ProRecommendationScreen from './src/screens/ProRecommendationScreen';
+import ProThreadScreen from './src/screens/ProThreadScreen';
+import ProClientsScreen from './src/screens/ProClientsScreen';
+import ProClientDetailScreen from './src/screens/ProClientDetailScreen';
+import ProClientClosetScreen from './src/screens/ProClientClosetScreen';
+import ProLookEditorScreen from './src/screens/ProLookEditorScreen';
+import ProScheduleScreen from './src/screens/ProScheduleScreen';
+import ProInboxScreen from './src/screens/ProInboxScreen';
+import ProOnboardingScreen from './src/screens/ProOnboardingScreen';
+import { setProEntry } from './src/services/proEntry';
+import { purgeLegacyProData } from './src/services/localData';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -187,21 +179,11 @@ const HomeStack = () => {
       <Stack.Screen name="SwapListing" component={SwapListingScreen} options={{ headerShown: false }} />
       <Stack.Screen name="MySwaps" component={MySwapsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="SwapThread" component={SwapThreadScreen} options={{ headerShown: false }} />
-      <Stack.Screen
-        name="StylistMarketplace"
-        component={StylistMarketplaceScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="StylistProfileView"
-        component={StylistProfileViewScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="BookStylist"
-        component={BookStylistScreen}
-        options={{ headerShown: false, presentation: 'modal' }}
-      />
+      <Stack.Screen name="ProHome" component={ProHomeScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ProConnection" component={ProConnectionScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ProShare" component={ProShareScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ProRecommendation" component={ProRecommendationScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ProThread" component={ProThreadScreen} options={{ headerShown: false }} />
       <Stack.Screen
         name="WardrobeInsights"
         component={WardrobeInsightsScreen}
@@ -285,246 +267,37 @@ const WishlistStack = () => {
   );
 };
 
-// ==================== Stylist Mode Stacks ====================
+// ==================== Stylist workspace stacks ====================
+// The stylist tab set: Clients, Schedule, Messages, Settings. A client has no tab set of its own; the
+// connection is reached from Home > Stylists (ProHome and the routes after it in HomeStack).
 
-const StylistDashboardStack = () => {
+const ProClientsStack = () => {
   return (
     <Stack.Navigator>
-      <Stack.Screen
-        name="StylistDashboardMain"
-        component={StylistDashboardScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="CreateAppointment"
-        component={CreateAppointmentScreen as React.ComponentType<any>}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="AddClient"
-        component={AddClientScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="CreateRecommendation"
-        component={CreateRecommendationScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="AppointmentDetails"
-        component={AppointmentDetailsScreen as React.ComponentType<any>}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="WardrobeEdit"
-        component={WardrobeEditScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="Lookbook"
-        component={LookbookScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="CapsuleWardrobe"
-        component={CapsuleWardrobeScreen}
-        options={{ headerShown: false }}
-      />
+      <Stack.Screen name="ProClients" component={ProClientsScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ProClientDetail" component={ProClientDetailScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ProClientCloset" component={ProClientClosetScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ProLookEditor" component={ProLookEditorScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ProRecommendation" component={ProRecommendationScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ProThread" component={ProThreadScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 };
 
-const ClientsStack = () => {
+const ProScheduleStack = () => {
   return (
     <Stack.Navigator>
-      <Stack.Screen
-        name="ClientsListMain"
-        component={ClientsListScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="ClientDetails"
-        component={ClientDetailsScreen as React.ComponentType<any>}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="AddClient"
-        component={AddClientScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="CreateAppointment"
-        component={CreateAppointmentScreen as React.ComponentType<any>}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="CreateRecommendation"
-        component={CreateRecommendationScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="RecommendationDetails"
-        component={RecommendationDetailsScreen as React.ComponentType<any>}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="AppointmentDetails"
-        component={AppointmentDetailsScreen as React.ComponentType<any>}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="WardrobeEdit"
-        component={WardrobeEditScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="Lookbook"
-        component={LookbookScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="CapsuleWardrobe"
-        component={CapsuleWardrobeScreen}
-        options={{ headerShown: false }}
-      />
+      <Stack.Screen name="ProSchedule" component={ProScheduleScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ProThread" component={ProThreadScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 };
 
-const StylistMessagesStack = () => {
+const ProInboxStack = () => {
   return (
     <Stack.Navigator>
-      <Stack.Screen
-        name="MessagesMain"
-        component={MessagesListScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="Chat"
-        component={ChatScreen}
-        options={{ headerShown: false }}
-      />
-    </Stack.Navigator>
-  );
-};
-
-const StylistRecommendationsStack = () => {
-  return (
-    <Stack.Navigator>
-      <Stack.Screen
-        name="RecommendationsMain"
-        component={RecommendationsScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="RecommendationDetails"
-        component={RecommendationDetailsScreen as React.ComponentType<any>}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="CreateRecommendation"
-        component={CreateRecommendationScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="ClientDetails"
-        component={ClientDetailsScreen as React.ComponentType<any>}
-        options={{ headerShown: false }}
-      />
-    </Stack.Navigator>
-  );
-};
-
-// ==================== Client Mode Stacks ====================
-
-const ClientDashboardStack = () => {
-  return (
-    <Stack.Navigator>
-      <Stack.Screen
-        name="ClientDashboardMain"
-        component={ClientDashboardScreen}
-        options={{ headerShown: false }}
-      />
-    </Stack.Navigator>
-  );
-};
-
-const MyStylistStack = () => {
-  return (
-    <Stack.Navigator>
-      <Stack.Screen
-        name="MyStylistMain"
-        component={MyStylistScreen}
-        options={{ headerShown: false }}
-      />
-    </Stack.Navigator>
-  );
-};
-
-const ClientMessagesStack = () => {
-  return (
-    <Stack.Navigator>
-      <Stack.Screen
-        name="ClientMessagesMain"
-        component={MessagesListScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="Chat"
-        component={ChatScreen}
-        options={{ headerShown: false }}
-      />
-    </Stack.Navigator>
-  );
-};
-
-const ClientAppointmentsStack = () => {
-  return (
-    <Stack.Navigator>
-      <Stack.Screen
-        name="ClientAppointmentsMain"
-        component={ClientAppointmentsScreen}
-        options={{ headerShown: false }}
-      />
-    </Stack.Navigator>
-  );
-};
-
-const ClientRecommendationsStack = () => {
-  return (
-    <Stack.Navigator>
-      <Stack.Screen
-        name="ClientRecommendationsMain"
-        component={ClientRecommendationsScreen}
-        options={{ headerShown: false }}
-      />
-    </Stack.Navigator>
-  );
-};
-
-const ClientMyStylistStack = () => {
-  return (
-    <Stack.Navigator>
-      <Stack.Screen
-        name="MyStylistMainInner"
-        component={MyStylistScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="StylistMarketplace"
-        component={StylistMarketplaceScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="StylistProfileView"
-        component={StylistProfileViewScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="BookStylist"
-        component={BookStylistScreen}
-        options={{ headerShown: false, presentation: 'modal' }}
-      />
+      <Stack.Screen name="ProInbox" component={ProInboxScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ProThread" component={ProThreadScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 };
@@ -540,6 +313,11 @@ const App = (): React.JSX.Element => {
   // null = not yet checked, true = show the "how will you use Smart Closet?"
   // prompt, false = already onboarded (or guest) — skip straight to the app.
   const [needsModeOnboarding, setNeedsModeOnboarding] = useState<boolean | null>(null);
+
+  // The old on-device Stylist and Client simulation left its stores behind; remove them. Best effort, never throws.
+  useEffect(() => {
+    purgeLegacyProData();
+  }, []);
 
   useEffect(() => {
     if (!showSplash) {
@@ -608,9 +386,11 @@ const App = (): React.JSX.Element => {
     setSession(newSession);
   }, []);
 
-  const handleModeOnboardingComplete = useCallback(() => {
+  const handleModeOnboardingComplete = useCallback((choice: 'personal' | 'stylist' | 'client') => {
     const userId = session?.user?.id;
     if (userId) markModeOnboardingComplete(userId);
+    // Home reads this once it is up and opens the matching sheet (nothing is created here).
+    if (choice === 'stylist' || choice === 'client') setProEntry(choice);
     setNeedsModeOnboarding(false);
   }, [session?.user?.id]);
 
@@ -647,9 +427,8 @@ const App = (): React.JSX.Element => {
 
   if (needsModeOnboarding) {
     return (
-      <AccountTypeOnboardingScreen
+      <ProOnboardingScreen
         userName={session?.user?.user_metadata?.name}
-        userEmail={session?.user?.email || ''}
         onComplete={handleModeOnboardingComplete}
       />
     );
@@ -709,27 +488,17 @@ const tabScreenOptions = {
 
 const ModeAwareTabs = () => {
   const { currentMode: savedMode } = useAccountMode();
-  // Whatever a device last saved, the stylist/client tab sets are unreachable
-  // while the pro modes are off.
+  // Whatever a device last saved, the stylist tab set is unreachable while the
+  // pro modes are off (with them on, the context honours it only while the server
+  // confirms an active stylist role).
   const currentMode = PRO_MODES_ENABLED ? savedMode : 'user';
 
   if (currentMode === 'stylist') {
     return (
       <Tab.Navigator key="stylist" screenOptions={tabScreenOptions}>
         <Tab.Screen
-          name="Dashboard"
-          component={StylistDashboardStack}
-          options={{
-            tabBarLabel: 'Dashboard',
-            headerShown: false,
-            tabBarIcon: ({ color }) => (
-              <Icon name="grid-outline" size={24} color={color} />
-            ),
-          }}
-        />
-        <Tab.Screen
           name="Clients"
-          component={ClientsStack}
+          component={ProClientsStack}
           options={{
             tabBarLabel: 'Clients',
             headerShown: false,
@@ -739,83 +508,10 @@ const ModeAwareTabs = () => {
           }}
         />
         <Tab.Screen
-          name="Recommendations"
-          component={StylistRecommendationsStack}
+          name="Schedule"
+          component={ProScheduleStack}
           options={{
-            tabBarLabel: 'Recs',
-            headerShown: false,
-            tabBarIcon: ({ color }) => (
-              <Icon name="sparkles-outline" size={24} color={color} />
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="Messages"
-          component={StylistMessagesStack}
-          options={{
-            tabBarLabel: 'Messages',
-            headerShown: false,
-            tabBarIcon: ({ color }) => (
-              <Icon name="chatbubbles-outline" size={24} color={color} />
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="Settings"
-          component={SettingsScreen}
-          options={{
-            tabBarLabel: 'Profile',
-            headerShown: false,
-            tabBarIcon: ({ color }) => (
-              <Icon name="person-outline" size={24} color={color} />
-            ),
-          }}
-        />
-      </Tab.Navigator>
-    );
-  }
-
-  if (currentMode === 'client') {
-    return (
-      <Tab.Navigator key="client" screenOptions={tabScreenOptions}>
-        <Tab.Screen
-          name="Dashboard"
-          component={ClientDashboardStack}
-          options={{
-            tabBarLabel: 'Dashboard',
-            headerShown: false,
-            tabBarIcon: ({ color }) => (
-              <Icon name="grid-outline" size={24} color={color} />
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="MyStylist"
-          component={ClientMyStylistStack}
-          options={{
-            tabBarLabel: 'My Stylist',
-            headerShown: false,
-            tabBarIcon: ({ color }) => (
-              <Icon name="person-circle-outline" size={24} color={color} />
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="Recs"
-          component={ClientRecommendationsStack}
-          options={{
-            tabBarLabel: 'Recs',
-            headerShown: false,
-            tabBarIcon: ({ color }) => (
-              <Icon name="sparkles-outline" size={24} color={color} />
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="Appointments"
-          component={ClientAppointmentsStack}
-          options={{
-            tabBarLabel: 'Appts',
+            tabBarLabel: 'Schedule',
             headerShown: false,
             tabBarIcon: ({ color }) => (
               <Icon name="calendar-outline" size={24} color={color} />
@@ -824,7 +520,7 @@ const ModeAwareTabs = () => {
         />
         <Tab.Screen
           name="Messages"
-          component={ClientMessagesStack}
+          component={ProInboxStack}
           options={{
             tabBarLabel: 'Messages',
             headerShown: false,
@@ -837,7 +533,7 @@ const ModeAwareTabs = () => {
           name="Settings"
           component={SettingsScreen}
           options={{
-            tabBarLabel: 'Profile',
+            tabBarLabel: 'Settings',
             headerShown: false,
             tabBarIcon: ({ color }) => (
               <Icon name="person-outline" size={24} color={color} />

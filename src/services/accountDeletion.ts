@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../config/supabase';
 import { clearSignedImageCache } from './imageUrls';
 import { clearSwapPhotoCache } from './swapPhotoUrls';
+import { clearProPhotoCache } from './proPhotoUrls';
+import { resetProEntry } from './proEntry';
 
 /**
  * Permanently deletes the signed-in user's account: the server removes the data,
@@ -24,6 +26,8 @@ export const deleteAccount = async (): Promise<{ photosIncomplete: boolean }> =>
   try {
     await clearSignedImageCache();
     clearSwapPhotoCache();
+    clearProPhotoCache();
+    resetProEntry();
   } catch {}
   try {
     await supabase.auth.signOut({ scope: 'local' });
