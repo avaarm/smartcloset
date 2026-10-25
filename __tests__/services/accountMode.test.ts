@@ -33,10 +33,11 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-describe('with the pro modes off (shipping configuration)', () => {
-  it('ships off', () => {
-    expect(jest.requireActual('../../src/config/features').PRO_MODES_ENABLED).toBe(false);
-  });
+it('ships on (the professional accounts are in this build; the server switch pro_enabled is the other half)', () => {
+  expect(jest.requireActual('../../src/config/features').PRO_MODES_ENABLED).toBe(true);
+});
+
+describe('with the pro modes off (the build switch turned off for these cases)', () => {
 
   it.each(['stylist', 'client'])('puts a device saved in %s mode back to personal', async mode => {
     await AsyncStorage.setItem(CURRENT_MODE, mode);

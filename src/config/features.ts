@@ -19,4 +19,4 @@
  * It is flipped to true last, in one commit, after the migrations are applied, the
  * privacy page is published and the two-phone walkthrough has passed.
  */
-export const PRO_MODES_ENABLED = false;
+export const PRO_MODES_ENABLED = true;
